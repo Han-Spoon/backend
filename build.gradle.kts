@@ -17,31 +17,38 @@ repositories {
 	mavenCentral()
 }
 
-extra["springAiVersion"] = "2.0.0-M6"
-extra["springCloudAzureVersion"] = "7.2.0"
-
 dependencies {
-	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+	// Web & Validation & Security
+	implementation("org.springframework.boot:spring-boot-starter-web")
+	implementation("org.springframework.boot:spring-boot-starter-validation")
 	implementation("org.springframework.boot:spring-boot-starter-security")
-	implementation("org.springframework.boot:spring-boot-starter-webmvc")
-	implementation("com.azure.spring:spring-cloud-azure-starter-keyvault")
-	implementation("org.springframework.ai:spring-ai-starter-vector-store-pgvector")
-	compileOnly("org.projectlombok:lombok")
-	runtimeOnly("org.postgresql:postgresql")
-	annotationProcessor("org.projectlombok:lombok")
-	testImplementation("org.springframework.boot:spring-boot-starter-data-jpa-test")
-	testImplementation("org.springframework.boot:spring-boot-starter-security-test")
-	testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
-	testCompileOnly("org.projectlombok:lombok")
-	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-	testAnnotationProcessor("org.projectlombok:lombok")
-}
 
-dependencyManagement {
-	imports {
-		mavenBom("org.springframework.ai:spring-ai-bom:${property("springAiVersion")}")
-		mavenBom("com.azure.spring:spring-cloud-azure-dependencies:${property("springCloudAzureVersion")}")
-	}
+	// Light Database Layer (Spring Data JPA + PostgreSQL + pgvector)
+	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+	runtimeOnly("org.postgresql:postgresql")
+	implementation("com.pgvector:pgvector:0.7.0")
+
+	// Mini Azure Configuration (Key Vault만 단독 주입)
+	implementation("com.azure.spring:spring-cloud-azure-starter-keyvault-secrets:5.11.0")
+
+	// OpenAPI & Swagger 4+
+	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0")
+
+	// JWT Utilities (jjwt 0.12.5 - 최신 안정 버전)
+	implementation("io.jsonwebtoken:jjwt-api:0.12.5")
+	runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.5")
+	runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.5")
+
+	// Developer Tools (Lombok)
+	compileOnly("org.projectlombok:lombok")
+	annotationProcessor("org.projectlombok:lombok")
+
+	// Test
+	testImplementation("org.springframework.boot:spring-boot-starter-test")
+	testImplementation("org.springframework.security:spring-security-test")
+	testCompileOnly("org.projectlombok:lombok")
+	testAnnotationProcessor("org.projectlombok:lombok")
+	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 tasks.withType<Test> {
