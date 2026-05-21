@@ -1,3 +1,50 @@
 spring:
   application:
     name: backend-api
+  profiles:
+    default: local
+  mvc:
+    problemdetails:
+      enabled: true
+
+server:
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+app:
+  async:
+    core-pool-size: ${ASYNC_CORE_POOL_SIZE:4}
+    max-pool-size: ${ASYNC_MAX_POOL_SIZE:16}
+    queue-capacity: ${ASYNC_QUEUE_CAPACITY:100}
+  cache:
+    maximum-size: ${CACHE_MAXIMUM_SIZE:10000}
+    expire-after-write: ${CACHE_EXPIRE_AFTER_WRITE:10m}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+  rest-client:
+    connect-timeout: ${REST_CLIENT_CONNECT_TIMEOUT:3s}
+    read-timeout: ${REST_CLIENT_READ_TIMEOUT:10s}
+  ratelimit:
+    openai:
+      capacity: ${OPENAI_RATE_LIMIT_CAPACITY:30}
+      refill-period: ${OPENAI_RATE_LIMIT_REFILL_PERIOD:1m}
+  azure-ai:
+    endpoint: ${AZURE_AI_ENDPOINT:https://han-spoon-openai.openai.azure.com}
+    api-key: ${AZURE_AI_API_KEY:}
+  security:
+    google:
+      client-id: ${GOOGLE_CLIENT_ID:}
+      jwk-set-uri: ${GOOGLE_JWK_SET_URI:https://www.googleapis.com/oauth2/v3/certs}
+    jwt:
+      issuer: han-spoon
+      secret: ${JWT_SECRET:han-spoon-local-development-secret-key-must-be-at-least-32-bytes}
+      access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION:30m}
