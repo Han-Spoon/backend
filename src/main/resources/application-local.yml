@@ -1,0 +1,53 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+  datasource:
+    url: ${LOCAL_DB_URL:jdbc:postgresql://localhost:5432/hanspoon}
+    username: ${LOCAL_DB_USERNAME:hanspoon}
+    password: ${LOCAL_DB_PASSWORD:hanspoon}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      jakarta:
+        persistence:
+          database-product-name: PostgreSQL
+          database-major-version: ${POSTGRES_MAJOR_VERSION:16}
+          database-minor-version: ${POSTGRES_MINOR_VERSION:0}
+      hibernate:
+        boot:
+          allow_jdbc_metadata_access: false
+        format_sql: true
+        highlight_sql: true
+  docker:
+    compose:
+      enabled: false
+
+server:
+  port: ${SERVER_PORT:8080}
+
+logging:
+  file:
+    name: ${LOG_FILE:logs/han-spoon-api-local.log}
+  level:
+    root: info
+    com.hanspoon.backend_api: debug
+    org.hibernate.SQL: debug
+    org.springframework.security: info
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"
+
+springdoc:
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    display-request-duration: true
+    operations-sorter: method
+    tags-sorter: alpha
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
