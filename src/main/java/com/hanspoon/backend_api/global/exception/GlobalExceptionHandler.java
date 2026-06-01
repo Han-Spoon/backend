@@ -3,6 +3,9 @@ package com.hanspoon.backend_api.global.exception;
 import java.net.URI;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.UUID;
+
+import org.slf4j.MDC;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -94,7 +97,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 	private void enrich(ProblemDetail problemDetail, String code, WebRequest request) {
 		problemDetail.setProperty("code", code);
 		problemDetail.setProperty("timestamp", OffsetDateTime.now());
-		problemDetail.setProperty("path", requestPath(request));
+		problemDetail.setProperty("traceId", resolveTraceId());
+		problemDetail.setInstance(URI.create(requestPath(request)));
+	}
+
+	private String resolveTraceId() {
+		String traceId = MDC.get("traceId");
+		return (traceId != null && !traceId.isBlank()) ? traceId : UUID.randomUUID().toString();
 	}
 
 	private URI problemType(String code) {
