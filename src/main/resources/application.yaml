@@ -48,3 +48,4 @@ app:
       issuer: han-spoon
       secret: ${JWT_SECRET:han-spoon-local-development-secret-key-must-be-at-least-32-bytes}
       access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION:30m}
+      refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION:14d}
