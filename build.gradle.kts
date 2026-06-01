@@ -40,7 +40,8 @@ dependencies {
 	runtimeOnly("org.postgresql:postgresql")
 	implementation("com.pgvector:pgvector:0.1.6")
 
-	// DB Migration (Flyway)
+	// DB Migration (Flyway) — Spring Boot 4는 자동설정이 spring-boot-flyway 모듈에 분리됨
+	implementation("org.springframework.boot:spring-boot-flyway")
 	implementation("org.flywaydb:flyway-core")
 	implementation("org.flywaydb:flyway-database-postgresql")
 
@@ -69,6 +70,11 @@ dependencies {
 	testCompileOnly("org.projectlombok:lombok")
 	testAnnotationProcessor("org.projectlombok:lombok")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+
+	// Test - Testcontainers (통합 테스트용 PostgreSQL). Testcontainers 2.x 아티팩트 명명 사용
+	testImplementation("org.springframework.boot:spring-boot-testcontainers")
+	testImplementation("org.testcontainers:testcontainers-junit-jupiter")
+	testImplementation("org.testcontainers:testcontainers-postgresql")
 }
 
 tasks.withType<Test> {

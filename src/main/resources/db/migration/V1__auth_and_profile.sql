@@ -7,7 +7,7 @@ CREATE TABLE users (
     id              UUID         NOT NULL,
     email           VARCHAR(255) NOT NULL,
     nickname        VARCHAR(100) NOT NULL,
-    language_code   CHAR(2)      NOT NULL DEFAULT 'en', -- en/ko/ar (MVP), ISO 639-1
+    language_code   VARCHAR(2)   NOT NULL DEFAULT 'en', -- en/ko/ar (MVP), ISO 639-1
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
     CONSTRAINT pk_users PRIMARY KEY (id),
@@ -45,7 +45,7 @@ CREATE INDEX idx_user_sessions_user ON user_sessions (user_id);
 CREATE TABLE user_profiles (
     id                          UUID        NOT NULL,
     user_id                     UUID        NOT NULL,
-    nationality                 CHAR(2)     NULL,        -- ISO 3166-1 alpha-2 (예: SA/US/KR)
+    nationality                 VARCHAR(2)  NULL,        -- ISO 3166-1 alpha-2 (예: SA/US/KR)
     is_first_time_korean_food   BOOLEAN     NULL,
     is_vegetarian               BOOLEAN     NULL,
     vegetarian_type             VARCHAR(50) NULL,        -- vegan/lacto/ovo/lacto_ovo/pesco
