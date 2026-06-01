@@ -39,6 +39,10 @@ dependencies {
 	runtimeOnly("org.postgresql:postgresql")
 	implementation("com.pgvector:pgvector:0.1.6")
 
+	// DB Migration (Flyway)
+	implementation("org.flywaydb:flyway-core")
+	implementation("org.flywaydb:flyway-database-postgresql")
+
 	// Azure Configuration (Key Vault secrets)
 	implementation("com.azure.spring:spring-cloud-azure-starter-keyvault-secrets")
 
