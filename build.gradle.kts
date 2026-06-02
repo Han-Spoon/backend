@@ -81,6 +81,11 @@ tasks.withType<Test> {
 	useJUnitPlatform()
 }
 
+// Spring Boot 실행 가능 jar만 생성 (plain jar 비활성 → Docker COPY 글롭 모호성 제거)
+tasks.named<Jar>("jar") {
+	enabled = false
+}
+
 spotless {
 	java {
 		target("src/**/*.java")
