@@ -7,19 +7,6 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.oauth2.jwt.Jwt;
-
 import com.hanspoon.backend_api.domain.auth.entity.AuthProvider;
 import com.hanspoon.backend_api.domain.auth.entity.UserAuthIdentity;
 import com.hanspoon.backend_api.domain.auth.entity.UserSession;
@@ -33,140 +20,158 @@ import com.hanspoon.backend_api.global.exception.ErrorCode;
 import com.hanspoon.backend_api.global.security.GoogleIdTokenVerifier;
 import com.hanspoon.backend_api.global.security.JwtTokenProvider;
 import com.hanspoon.backend_api.global.security.RefreshTokenSupport;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
 
-	@Mock
-	private GoogleIdTokenVerifier googleIdTokenVerifier;
-	@Mock
-	private JwtTokenProvider jwtTokenProvider;
-	@Mock
-	private UserRepository userRepository;
-	@Mock
-	private UserAuthIdentityRepository userAuthIdentityRepository;
-	@Mock
-	private UserSessionRepository userSessionRepository;
-	@Mock
-	private UserProfileRepository userProfileRepository;
+    @Mock
+    private GoogleIdTokenVerifier googleIdTokenVerifier;
 
-	private final RefreshTokenSupport refreshTokenSupport = new RefreshTokenSupport();
+    @Mock
+    private JwtTokenProvider jwtTokenProvider;
 
-	private AuthService authService;
+    @Mock
+    private UserRepository userRepository;
 
-	@BeforeEach
-	void setUp() {
-		authService = new AuthService(
-				googleIdTokenVerifier,
-				jwtTokenProvider,
-				refreshTokenSupport,
-				userRepository,
-				userAuthIdentityRepository,
-				userSessionRepository,
-				userProfileRepository,
-				Duration.ofDays(14));
-	}
+    @Mock
+    private UserAuthIdentityRepository userAuthIdentityRepository;
 
-	private Jwt googleJwt(String sub, String email, String name) {
-		return Jwt.withTokenValue("id-token")
-				.header("alg", "RS256")
-				.subject(sub)
-				.claim("email", email)
-				.claim("name", name)
-				.build();
-	}
+    @Mock
+    private UserSessionRepository userSessionRepository;
 
-	@Test
-	void loginWithGoogle_newUser_createsUserAndIdentity() {
-		when(googleIdTokenVerifier.verify(anyString())).thenReturn(googleJwt("g-123", "new@example.com", "Newbie"));
-		when(userAuthIdentityRepository.findByProviderAndProviderId(AuthProvider.GOOGLE, "g-123"))
-				.thenReturn(Optional.empty());
-		when(userRepository.findByEmail("new@example.com")).thenReturn(Optional.empty());
-		when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
-		when(jwtTokenProvider.createAccessToken(any(UUID.class))).thenReturn("access-token");
-		when(userProfileRepository.existsByUserId(any(UUID.class))).thenReturn(false);
+    @Mock
+    private UserProfileRepository userProfileRepository;
 
-		LoginResult result = authService.loginWithGoogle("id-token");
+    private final RefreshTokenSupport refreshTokenSupport = new RefreshTokenSupport();
 
-		assertThat(result.newUser()).isTrue();
-		assertThat(result.hasProfile()).isFalse();
-		assertThat(result.accessToken()).isEqualTo("access-token");
-		assertThat(result.refreshToken()).isNotBlank();
-		assertThat(result.user().getEmail()).isEqualTo("new@example.com");
-	}
+    private AuthService authService;
 
-	@Test
-	void loginWithGoogle_existingIdentity_doesNotCreateUser() {
-		User existing = User.create("user@example.com", "User", "en");
-		UserAuthIdentity identity = UserAuthIdentity.google(existing.getId(), "g-999");
-		when(googleIdTokenVerifier.verify(anyString())).thenReturn(googleJwt("g-999", "user@example.com", "User"));
-		when(userAuthIdentityRepository.findByProviderAndProviderId(AuthProvider.GOOGLE, "g-999"))
-				.thenReturn(Optional.of(identity));
-		when(userRepository.findById(existing.getId())).thenReturn(Optional.of(existing));
-		when(jwtTokenProvider.createAccessToken(existing.getId())).thenReturn("access-token");
-		when(userProfileRepository.existsByUserId(existing.getId())).thenReturn(true);
+    @BeforeEach
+    void setUp() {
+        authService = new AuthService(
+                googleIdTokenVerifier,
+                jwtTokenProvider,
+                refreshTokenSupport,
+                userRepository,
+                userAuthIdentityRepository,
+                userSessionRepository,
+                userProfileRepository,
+                Duration.ofDays(14));
+    }
 
-		LoginResult result = authService.loginWithGoogle("id-token");
+    private Jwt googleJwt(String sub, String email, String name) {
+        return Jwt.withTokenValue("id-token")
+                .header("alg", "RS256")
+                .subject(sub)
+                .claim("email", email)
+                .claim("name", name)
+                .build();
+    }
 
-		assertThat(result.newUser()).isFalse();
-		assertThat(result.hasProfile()).isTrue();
-		assertThat(result.refreshToken()).isNotBlank();
-	}
+    @Test
+    void loginWithGoogle_newUser_createsUserAndIdentity() {
+        when(googleIdTokenVerifier.verify(anyString())).thenReturn(googleJwt("g-123", "new@example.com", "Newbie"));
+        when(userAuthIdentityRepository.findByProviderAndProviderId(AuthProvider.GOOGLE, "g-123"))
+                .thenReturn(Optional.empty());
+        when(userRepository.findByEmail("new@example.com")).thenReturn(Optional.empty());
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(jwtTokenProvider.createAccessToken(any(UUID.class))).thenReturn("access-token");
+        when(userProfileRepository.existsByUserId(any(UUID.class))).thenReturn(false);
 
-	@Test
-	void refresh_activeSession_rotatesAndIssuesNewTokens() {
-		UUID userId = UUID.randomUUID();
-		Instant now = Instant.now();
-		String rawToken = "raw-refresh-token";
-		String hash = refreshTokenSupport.sha256Hex(rawToken);
-		UserSession session = UserSession.issue(userId, hash, now.plus(Duration.ofDays(7)), now);
+        LoginResult result = authService.loginWithGoogle("id-token");
 
-		when(userSessionRepository.findByRefreshTokenHash(hash)).thenReturn(Optional.of(session));
-		when(jwtTokenProvider.createAccessToken(userId)).thenReturn("new-access-token");
+        assertThat(result.newUser()).isTrue();
+        assertThat(result.hasProfile()).isFalse();
+        assertThat(result.accessToken()).isEqualTo("access-token");
+        assertThat(result.refreshToken()).isNotBlank();
+        assertThat(result.user().getEmail()).isEqualTo("new@example.com");
+    }
 
-		TokenResult result = authService.refresh(rawToken);
+    @Test
+    void loginWithGoogle_existingIdentity_doesNotCreateUser() {
+        User existing = User.create("user@example.com", "User", "en");
+        UserAuthIdentity identity = UserAuthIdentity.google(existing.getId(), "g-999");
+        when(googleIdTokenVerifier.verify(anyString())).thenReturn(googleJwt("g-999", "user@example.com", "User"));
+        when(userAuthIdentityRepository.findByProviderAndProviderId(AuthProvider.GOOGLE, "g-999"))
+                .thenReturn(Optional.of(identity));
+        when(userRepository.findById(existing.getId())).thenReturn(Optional.of(existing));
+        when(jwtTokenProvider.createAccessToken(existing.getId())).thenReturn("access-token");
+        when(userProfileRepository.existsByUserId(existing.getId())).thenReturn(true);
 
-		assertThat(session.getRevokedAt()).isNotNull(); // 기존 세션 폐기(회전)
-		assertThat(result.accessToken()).isEqualTo("new-access-token");
-		assertThat(result.refreshToken()).isNotBlank().isNotEqualTo(rawToken);
-	}
+        LoginResult result = authService.loginWithGoogle("id-token");
 
-	@Test
-	void refresh_expiredSession_throwsInvalidToken() {
-		UUID userId = UUID.randomUUID();
-		Instant now = Instant.now();
-		String rawToken = "expired-token";
-		String hash = refreshTokenSupport.sha256Hex(rawToken);
-		UserSession expired = UserSession.issue(userId, hash, now.minus(Duration.ofMinutes(1)), now.minus(Duration.ofDays(15)));
-		when(userSessionRepository.findByRefreshTokenHash(hash)).thenReturn(Optional.of(expired));
+        assertThat(result.newUser()).isFalse();
+        assertThat(result.hasProfile()).isTrue();
+        assertThat(result.refreshToken()).isNotBlank();
+    }
 
-		assertThatThrownBy(() -> authService.refresh(rawToken))
-				.isInstanceOf(BusinessException.class)
-				.extracting(ex -> ((BusinessException) ex).getErrorCode())
-				.isEqualTo(ErrorCode.INVALID_TOKEN);
-	}
+    @Test
+    void refresh_activeSession_rotatesAndIssuesNewTokens() {
+        UUID userId = UUID.randomUUID();
+        Instant now = Instant.now();
+        String rawToken = "raw-refresh-token";
+        String hash = refreshTokenSupport.sha256Hex(rawToken);
+        UserSession session = UserSession.issue(userId, hash, now.plus(Duration.ofDays(7)), now);
 
-	@Test
-	void refresh_unknownToken_throwsInvalidToken() {
-		when(userSessionRepository.findByRefreshTokenHash(anyString())).thenReturn(Optional.empty());
+        when(userSessionRepository.findByRefreshTokenHash(hash)).thenReturn(Optional.of(session));
+        when(jwtTokenProvider.createAccessToken(userId)).thenReturn("new-access-token");
 
-		assertThatThrownBy(() -> authService.refresh("nope"))
-				.isInstanceOf(BusinessException.class)
-				.extracting(ex -> ((BusinessException) ex).getErrorCode())
-				.isEqualTo(ErrorCode.INVALID_TOKEN);
-	}
+        TokenResult result = authService.refresh(rawToken);
 
-	@Test
-	void logout_revokesAllActiveSessions() {
-		UUID userId = UUID.randomUUID();
-		Instant now = Instant.now();
-		UserSession s1 = UserSession.issue(userId, "h1", now.plus(Duration.ofDays(1)), now);
-		UserSession s2 = UserSession.issue(userId, "h2", now.plus(Duration.ofDays(1)), now);
-		when(userSessionRepository.findAllByUserIdAndRevokedAtIsNull(eq(userId))).thenReturn(List.of(s1, s2));
+        assertThat(session.getRevokedAt()).isNotNull(); // 기존 세션 폐기(회전)
+        assertThat(result.accessToken()).isEqualTo("new-access-token");
+        assertThat(result.refreshToken()).isNotBlank().isNotEqualTo(rawToken);
+    }
 
-		authService.logout(userId);
+    @Test
+    void refresh_expiredSession_throwsInvalidToken() {
+        UUID userId = UUID.randomUUID();
+        Instant now = Instant.now();
+        String rawToken = "expired-token";
+        String hash = refreshTokenSupport.sha256Hex(rawToken);
+        UserSession expired =
+                UserSession.issue(userId, hash, now.minus(Duration.ofMinutes(1)), now.minus(Duration.ofDays(15)));
+        when(userSessionRepository.findByRefreshTokenHash(hash)).thenReturn(Optional.of(expired));
 
-		assertThat(s1.getRevokedAt()).isNotNull();
-		assertThat(s2.getRevokedAt()).isNotNull();
-	}
+        assertThatThrownBy(() -> authService.refresh(rawToken))
+                .isInstanceOf(BusinessException.class)
+                .extracting(ex -> ((BusinessException) ex).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_TOKEN);
+    }
+
+    @Test
+    void refresh_unknownToken_throwsInvalidToken() {
+        when(userSessionRepository.findByRefreshTokenHash(anyString())).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.refresh("nope"))
+                .isInstanceOf(BusinessException.class)
+                .extracting(ex -> ((BusinessException) ex).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_TOKEN);
+    }
+
+    @Test
+    void logout_revokesAllActiveSessions() {
+        UUID userId = UUID.randomUUID();
+        Instant now = Instant.now();
+        UserSession s1 = UserSession.issue(userId, "h1", now.plus(Duration.ofDays(1)), now);
+        UserSession s2 = UserSession.issue(userId, "h2", now.plus(Duration.ofDays(1)), now);
+        when(userSessionRepository.findAllByUserIdAndRevokedAtIsNull(eq(userId)))
+                .thenReturn(List.of(s1, s2));
+
+        authService.logout(userId);
+
+        assertThat(s1.getRevokedAt()).isNotNull();
+        assertThat(s2.getRevokedAt()).isNotNull();
+    }
 }

@@ -8,8 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 @ConfigurationPropertiesScan
 public class BackendApiApplication {
 
-	public static void main(String[] args) {
-		SpringApplication.run(BackendApiApplication.class, args);
-	}
-
+    public static void main(String[] args) {
+        SpringApplication.run(BackendApiApplication.class, args);
+    }
 }

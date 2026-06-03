@@ -1,0 +1,22 @@
+# 로컬 개발용 PostgreSQL (pgvector 포함). application-local.yml 기본값과 일치.
+# 사용: docker compose -f docker/docker-compose.yml up -d
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: hanspoon-postgres
+    environment:
+      POSTGRES_DB: hanspoon
+      POSTGRES_USER: hanspoon
+      POSTGRES_PASSWORD: hanspoon
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hanspoon -d hanspoon"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
