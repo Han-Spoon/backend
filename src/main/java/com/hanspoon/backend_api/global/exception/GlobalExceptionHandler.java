@@ -3,6 +3,7 @@ package com.hanspoon.backend_api.global.exception;
 import java.net.URI;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.slf4j.MDC;
 import org.springframework.http.HttpHeaders;
@@ -80,7 +81,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     private void enrich(ProblemDetail problemDetail, String code, WebRequest request) {
-        problemDetail.setProperty("code", code);
+        // 이미 설정된 code(예: 검증 실패의 INVALID_REQUEST)는 보존한다.
+        // handleExceptionInternal 이 마지막에 다시 enrich 하면서 HTTP_xxx 로 덮어쓰는 것을 방지.
+        Map<String, Object> properties = problemDetail.getProperties();
+        if (properties == null || properties.get("code") == null) {
+            problemDetail.setProperty("code", code);
+        }
         problemDetail.setProperty("timestamp", OffsetDateTime.now());
         problemDetail.setProperty("traceId", resolveTraceId());
         problemDetail.setInstance(URI.create(requestPath(request)));
