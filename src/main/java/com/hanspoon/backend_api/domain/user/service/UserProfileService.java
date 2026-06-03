@@ -14,6 +14,7 @@ import com.hanspoon.backend_api.domain.user.repository.UserRepository;
 import com.hanspoon.backend_api.global.exception.BusinessException;
 import com.hanspoon.backend_api.global.exception.ErrorCode;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,7 +46,7 @@ public class UserProfileService {
         user.changeLanguage(request.languageCode());
         UserProfile profile = userProfileRepository.save(UserProfile.create(
                 userId,
-                request.nationality(),
+                normalizeNationality(request.nationality()),
                 request.isFirstTime(),
                 request.isVegan(),
                 resolveVeganType(request),
@@ -78,7 +79,7 @@ public class UserProfileService {
 
         user.changeLanguage(request.languageCode());
         profile.update(
-                request.nationality(),
+                normalizeNationality(request.nationality()),
                 request.isFirstTime(),
                 request.isVegan(),
                 resolveVeganType(request),
@@ -104,6 +105,11 @@ public class UserProfileService {
                 && (request.allergies() == null || request.allergies().isEmpty())) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "allergies are required when hasAllergies is true.");
         }
+    }
+
+    /** 국가 코드 대문자 정규화(ISO 3166-1 alpha-2 는 대문자). 검증은 @CountryCode 가 담당. */
+    private String normalizeNationality(String nationality) {
+        return nationality == null ? null : nationality.trim().toUpperCase(Locale.ROOT);
     }
 
     private VegetarianType resolveVeganType(ProfileRequest request) {
