@@ -205,8 +205,65 @@ KV → **개체 → 비밀(Secrets)** → **생성/가져오기**로 아래 3개
 
 ---
 
-## 9. 사용자 지정 도메인 (선택, 나중에)
-앱 → **설정 → 사용자 지정 도메인** → `api.han-spoon.com` 추가 → 관리형 인증서 발급. Cloudflare DNS에서 CNAME/검증 레코드 등록.
+## 9. 사용자 지정 도메인 + 무료 관리형 인증서 (`api.han-spoon.com`)
+ACA 임의 FQDN(`ca-hanspoon-api.<rand>.koreacentral.azurecontainerapps.io`) 대신 고정 공개 주소를 붙인다.
+방식: **Cloudflare는 DNS only(회색 구름)** + **Azure 무료 관리형 인증서**(자동 발급·갱신). 서브도메인이라 CNAME 검증.
+
+> ⚠️ **Cloudflare 프록시(주황 구름)는 반드시 OFF.** 프록시를 켜면 CNAME이 Cloudflare를 경유하여
+> ACA 생성 FQDN을 **직접** 가리키지 못해 관리형 인증서 발급·갱신이 실패한다(가장 흔한 함정).
+
+### 9-0. 선행(도메인/존 준비)
+- `han-spoon.com` 등록(미등록 시) → **Cloudflare에 존 추가** → 등록기관에서 NS 위임 → 존 *Active*.
+- (선택) `han-spoon.com`에 **CAA 레코드가 있으면** `0 issue digicert.com` 추가. 신규 존이면 보통 불필요.
+
+### 9-1. ACA 요건 확인
+인그레스가 **External + HTTP, 포트 8080** 인지 확인(8-2/8-4에서 설정됨). 비공개면 관리형 인증서 발급 불가.
+
+### 9-2. DNS 레코드 값 산출 (CLI)
+```bash
+RG=smu-team1; APP=ca-hanspoon-api
+# CNAME 값 = ACA FQDN
+az containerapp show -g $RG -n $APP -o tsv --query "properties.configuration.ingress.fqdn"
+# asuid TXT 값 = 도메인 검증 코드
+az containerapp show -g $RG -n $APP -o tsv --query "properties.customDomainVerificationId"
+```
+(헬퍼: `./infra/custom-domain.sh show` — 위 값을 레코드 형태로 정리해 출력)
+
+### 9-3. Cloudflare 레코드 추가 (대시보드, 직접)
+`han-spoon.com` 존 → **DNS → Records → Add record**. 둘 다 **Proxy status = DNS only**, TTL Auto:
+
+| Type  | Name        | Content                          |
+| ----- | ----------- | -------------------------------- |
+| CNAME | `api`       | 9-2의 ACA FQDN                   |
+| TXT   | `asuid.api` | 9-2의 customDomainVerificationId |
+
+전파 확인: `dig +short api.han-spoon.com CNAME` / `dig +short asuid.api.han-spoon.com TXT`.
+
+### 9-4. 호스트네임 추가 + 인증서 바인딩 (CLI)
+```bash
+ENV=cae-hanspoon-prod; DOMAIN=api.han-spoon.com
+az containerapp hostname add  -g $RG -n $APP --hostname $DOMAIN
+az containerapp hostname bind -g $RG -n $APP --environment $ENV \
+  --hostname $DOMAIN --validation-method CNAME      # 발급에 수 분 소요
+```
+(헬퍼: `./infra/custom-domain.sh bind`)
+Portal 대안: 앱 → **설정 → 사용자 지정 도메인 → 사용자 지정 도메인 추가** → 관리형 인증서 → CNAME 선택.
+
+### 9-5. 검증
+```bash
+az containerapp hostname list -g $RG -n $APP -o table      # api.han-spoon.com = Secured
+curl -sS https://api.han-spoon.com/actuator/health         # {"status":"UP"}
+```
+(헬퍼: `./infra/custom-domain.sh verify`)
+
+### 9-6. (의사결정 2026-06-03) MVP 단계 — 도메인 보류, 기본 FQDN 사용
+비용 절감을 위해 **MVP 시연까지는 커스텀 도메인을 사지 않고 ACA 기본 FQDN으로 진행**한다.
+- 기본 FQDN(`ca-hanspoon-api.<rand>.koreacentral.azurecontainerapps.io`)은 이미 **HTTPS + 유효 인증서**
+  (Microsoft 발급, 자동 갱신) → 보안 손실 없음.
+- 우리 구성은 Cloudflare **DNS only**라 커스텀 도메인을 붙여도 WAF·오리진IP 숨김 등 추가 보안은 없음 → 보안 득실 없음.
+- 백엔드는 API라 URL이 최종 사용자에게 노출되지 않음(사용자가 보는 건 프론트 도메인) → 완성도 영향 미미.
+- ⚠️ 기본 FQDN은 **ACA 환경 재생성 시 변경**(stop/start·scale-0·재배포로는 불변). 프론트 설정 및 Google OAuth 허용 출처에 등록해 둘 것.
+- 적용 시점: **실서비스 출시 직전**. 위 9-0~9-5(또는 `./infra/custom-domain.sh show|bind|verify`)로 ~10분 내 전환.
 
 ---
 
