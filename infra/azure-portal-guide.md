@@ -162,7 +162,16 @@ KV → **개체 → 비밀(Secrets)** → **생성/가져오기**로 아래 3개
 
 > ⚠️ **역할 할당 권한이 없을 때(공유 구독) 우회:**
 > - **Key Vault**: 액세스 정책 모드(5-2 우회)에서 → 액세스 정책 만들기 → 비밀 권한 **Get, List** → 보안 주체 `ca-hanspoon-api`(매니지드 ID).
-> - **ACR**(액세스 정책 없음 → admin user로 우회): ACR → **설정 → 액세스 키** → **관리자 사용자(Admin user)** 켜기 → username/password 메모 → 8단계에서 Container App 이미지 연결 시 이 **레지스트리 자격증명**을 입력(매니지드 ID `AcrPull` 대신).
+> - **ACR**(액세스 정책 없음 → admin user로 우회): ACR → **설정 → 액세스 키** → **관리자 사용자(Admin user)** 켜기 → username/password 메모 → Container App에 **레지스트리 자격증명 등록**(매니지드 ID `AcrPull` 대신).
+>   - CLI:
+>     ```bash
+>     az acr update -n acrhanspoonprod --admin-enabled true
+>     ACR_USER=$(az acr credential show -n acrhanspoonprod --query username -o tsv)
+>     ACR_PWD=$(az acr credential show -n acrhanspoonprod --query 'passwords[0].value' -o tsv)
+>     az containerapp registry set -g smu-team1 -n ca-hanspoon-api \
+>       --server acrhanspoonprod.azurecr.io --username "$ACR_USER" --password "$ACR_PWD"
+>     ```
+>   - ⚠️ 이 **registry set(레지스트리 자격증명 등록)** 을 안 하면 배포 시 `UNAUTHORIZED: authentication required`로 이미지 pull 실패.
 
 ### 8-4. 환경 변수 주입
 1. 앱 → **애플리케이션 → 컨테이너(Containers)** → 상단 **편집 및 배포(Edit and deploy)**.

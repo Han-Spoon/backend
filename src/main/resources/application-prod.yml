@@ -46,7 +46,7 @@ app:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:https://han-spoon.vercel.app,https://www.han-spoon.com}
   azure-ai:
     endpoint: ${AZURE_AI_PRIVATE_ENDPOINT:https://aoai-hanspoon-prod.openai.azure.com}
-    api-key: ${kv-secret-azure-openai-api-key}
+    api-key: ${kv-secret-azure-openai-api-key:}
   security:
     google:
       client-id: ${GOOGLE_CLIENT_ID}
