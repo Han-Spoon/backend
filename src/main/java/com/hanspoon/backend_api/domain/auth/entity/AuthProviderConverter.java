@@ -10,13 +10,13 @@ import jakarta.persistence.Converter;
 @Converter(autoApply = true)
 public class AuthProviderConverter implements AttributeConverter<AuthProvider, String> {
 
-	@Override
-	public String convertToDatabaseColumn(AuthProvider attribute) {
-		return attribute == null ? null : attribute.getCode();
-	}
+    @Override
+    public String convertToDatabaseColumn(AuthProvider attribute) {
+        return attribute == null ? null : attribute.getCode();
+    }
 
-	@Override
-	public AuthProvider convertToEntityAttribute(String dbData) {
-		return dbData == null ? null : AuthProvider.fromCode(dbData);
-	}
+    @Override
+    public AuthProvider convertToEntityAttribute(String dbData) {
+        return dbData == null ? null : AuthProvider.fromCode(dbData);
+    }
 }

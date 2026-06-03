@@ -3,7 +3,6 @@ package com.hanspoon.backend_api.global.security;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
@@ -19,33 +18,33 @@ import org.springframework.stereotype.Component;
 @Component
 public class JwtTokenProvider {
 
-	private final JwtEncoder jwtEncoder;
-	private final String issuer;
-	private final Duration accessTokenExpiration;
+    private final JwtEncoder jwtEncoder;
+    private final String issuer;
+    private final Duration accessTokenExpiration;
 
-	public JwtTokenProvider(
-			JwtEncoder jwtEncoder,
-			@Value("${app.security.jwt.issuer}") String issuer,
-			@Value("${app.security.jwt.access-token-expiration}") Duration accessTokenExpiration) {
+    public JwtTokenProvider(
+            JwtEncoder jwtEncoder,
+            @Value("${app.security.jwt.issuer}") String issuer,
+            @Value("${app.security.jwt.access-token-expiration}") Duration accessTokenExpiration) {
 
-		this.jwtEncoder = jwtEncoder;
-		this.issuer = issuer;
-		this.accessTokenExpiration = accessTokenExpiration;
-	}
+        this.jwtEncoder = jwtEncoder;
+        this.issuer = issuer;
+        this.accessTokenExpiration = accessTokenExpiration;
+    }
 
-	public String createAccessToken(UUID userId) {
-		Instant now = Instant.now();
-		JwtClaimsSet claims = JwtClaimsSet.builder()
-				.issuer(issuer)
-				.issuedAt(now)
-				.expiresAt(now.plus(accessTokenExpiration))
-				.subject(userId.toString())
-				.build();
-		JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
-		return jwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
-	}
+    public String createAccessToken(UUID userId) {
+        Instant now = Instant.now();
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer(issuer)
+                .issuedAt(now)
+                .expiresAt(now.plus(accessTokenExpiration))
+                .subject(userId.toString())
+                .build();
+        JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
+        return jwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
+    }
 
-	public Duration getAccessTokenExpiration() {
-		return accessTokenExpiration;
-	}
+    public Duration getAccessTokenExpiration() {
+        return accessTokenExpiration;
+    }
 }

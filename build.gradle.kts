@@ -2,6 +2,7 @@ plugins {
 	java
 	id("org.springframework.boot") version "4.0.6"
 	id("io.spring.dependency-management") version "1.1.7"
+	id("com.diffplug.spotless") version "7.0.2"
 }
 
 group = "com.hanspoon"
@@ -39,7 +40,8 @@ dependencies {
 	runtimeOnly("org.postgresql:postgresql")
 	implementation("com.pgvector:pgvector:0.1.6")
 
-	// DB Migration (Flyway)
+	// DB Migration (Flyway) — Spring Boot 4는 자동설정이 spring-boot-flyway 모듈에 분리됨
+	implementation("org.springframework.boot:spring-boot-flyway")
 	implementation("org.flywaydb:flyway-core")
 	implementation("org.flywaydb:flyway-database-postgresql")
 
@@ -68,8 +70,30 @@ dependencies {
 	testCompileOnly("org.projectlombok:lombok")
 	testAnnotationProcessor("org.projectlombok:lombok")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+
+	// Test - Testcontainers (통합 테스트용 PostgreSQL). Testcontainers 2.x 아티팩트 명명 사용
+	testImplementation("org.springframework.boot:spring-boot-testcontainers")
+	testImplementation("org.testcontainers:testcontainers-junit-jupiter")
+	testImplementation("org.testcontainers:testcontainers-postgresql")
 }
 
 tasks.withType<Test> {
 	useJUnitPlatform()
+}
+
+// Spring Boot 실행 가능 jar만 생성 (plain jar 비활성 → Docker COPY 글롭 모호성 제거)
+tasks.named<Jar>("jar") {
+	enabled = false
+}
+
+spotless {
+	java {
+		target("src/**/*.java")
+		palantirJavaFormat("2.50.0")
+		removeUnusedImports()
+		importOrder()
+		formatAnnotations()
+		trimTrailingWhitespace()
+		endWithNewline()
+	}
 }

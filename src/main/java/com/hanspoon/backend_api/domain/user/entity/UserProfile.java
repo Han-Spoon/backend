@@ -1,13 +1,11 @@
 package com.hanspoon.backend_api.domain.user.entity;
 
-import java.util.UUID;
-
 import com.hanspoon.backend_api.global.common.BaseEntity;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -22,10 +20,10 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class UserProfile extends BaseEntity {
 
-	@Id
-	@Column(name = "id", columnDefinition = "uuid", updatable = false, nullable = false)
-	private UUID id;
+    @Id
+    @Column(name = "id", columnDefinition = "uuid", updatable = false, nullable = false)
+    private UUID id;
 
-	@Column(name = "user_id", columnDefinition = "uuid", nullable = false, unique = true)
-	private UUID userId;
+    @Column(name = "user_id", columnDefinition = "uuid", nullable = false, unique = true)
+    private UUID userId;
 }
