@@ -5,8 +5,9 @@ import com.fasterxml.jackson.annotation.JsonValue;
 import java.util.Arrays;
 
 /**
- * 식약처 알레르기 유발물질 표시대상 19종 + 알코올.
+ * 식약처 알레르기 유발물질 표시대상 19종.
  * JSON 와이어값/DB 저장값 모두 소문자 저장. {@link #code}
+ * (알코올 회피는 알레르기가 아니라 선호/종교 영역 → user_profiles.no_alcohol / religion_type 가 담당)
  */
 public enum AllergyCode {
     EGG("egg"),
@@ -27,8 +28,7 @@ public enum AllergyCode {
     BEEF("beef"),
     SQUID("squid"),
     SHELLFISH("shellfish"),
-    PINE_NUT("pine_nut"),
-    ALCOHOL("alcohol");
+    PINE_NUT("pine_nut");
 
     private final String code;
 

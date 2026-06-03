@@ -1,5 +1,5 @@
 -- User allergies (V2)
--- ERD user_allergies. 프로필별 알레르기 N(N>=0)개 선택. allergy_code = AllergyCode enum 소문자 code (예: egg/milk/shrimp/alcohol).
+-- ERD user_allergies. 프로필별 알레르기 N(N>=0)개 선택. allergy_code = AllergyCode enum 소문자 code (식약처 19종, 예: egg/milk/shrimp).
 -- UUID는 애플리케이션에서 생성(UUID.randomUUID()).
 
 CREATE TABLE user_allergies (
