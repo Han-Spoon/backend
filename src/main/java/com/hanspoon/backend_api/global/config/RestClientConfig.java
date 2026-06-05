@@ -33,6 +33,24 @@ public class RestClientConfig {
                 .build();
     }
 
+    /**
+     * AI 서비스(OCR + Rule Engine) 호출용 RestClient.
+     * OCR 은 Azure Document Intelligence 를 거쳐 느리므로 read-timeout 을 길게 둔다.
+     */
+    @Bean
+    public RestClient aiServiceRestClient(
+            RestClient.Builder builder,
+            @Value("${app.ai-service.base-url:http://localhost:8000}") String aiServiceBaseUrl,
+            @Value("${app.ai-service.connect-timeout:3s}") Duration connectTimeout,
+            @Value("${app.ai-service.read-timeout:30s}") Duration readTimeout) {
+
+        return builder.baseUrl(aiServiceBaseUrl)
+                .requestFactory(clientHttpRequestFactory(connectTimeout, readTimeout))
+                .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
+                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .build();
+    }
+
     private SimpleClientHttpRequestFactory clientHttpRequestFactory(Duration connectTimeout, Duration readTimeout) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(connectTimeout);
