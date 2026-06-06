@@ -2,6 +2,7 @@ package com.hanspoon.backend_api.domain.ai.client;
 
 import com.hanspoon.backend_api.domain.ai.dto.ocr.OcrRequest;
 import com.hanspoon.backend_api.domain.ai.dto.ocr.OcrResponse;
+import com.hanspoon.backend_api.domain.ai.dto.result.FinalResultResponse;
 import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleEngineRequest;
 import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleEngineResponse;
 import com.hanspoon.backend_api.global.exception.BusinessException;
@@ -23,6 +24,7 @@ public class AiClient {
 
     private static final String OCR_PATH = "/v1/ocr";
     private static final String RULE_ENGINE_PATH = "/v1/ruleengine";
+    private static final String RESULT_PATH = "/v1/result";
 
     private final RestClient aiServiceRestClient;
 
@@ -63,6 +65,24 @@ public class AiClient {
                     .body(RuleEngineResponse.class);
         } catch (ResourceAccessException exception) {
             throw new BusinessException(ErrorCode.AI_SERVICE_UNAVAILABLE, "Rule engine unreachable.", exception);
+        }
+    }
+
+    /** Result 호출: 룰엔진 판정(judged) → 최종 표시 결과(message/owner_card). body 는 judged 를 그대로 전송. */
+    public FinalResultResponse result(RuleEngineResponse judged) {
+        try {
+            return aiServiceRestClient
+                    .post()
+                    .uri(RESULT_PATH)
+                    .body(judged)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (req, res) -> {
+                        throw new BusinessException(
+                                ErrorCode.RESULT_SERVICE_ERROR, "Result service responded with " + res.getStatusCode());
+                    })
+                    .body(FinalResultResponse.class);
+        } catch (ResourceAccessException exception) {
+            throw new BusinessException(ErrorCode.AI_SERVICE_UNAVAILABLE, "Result service unreachable.", exception);
         }
     }
 }

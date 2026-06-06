@@ -1,12 +1,12 @@
 package com.hanspoon.backend_api.domain.scan.service;
 
 import com.hanspoon.backend_api.domain.ai.client.AiClient;
-import com.hanspoon.backend_api.domain.ai.dto.common.EscalationCase;
 import com.hanspoon.backend_api.domain.ai.dto.ocr.OcrRequest;
 import com.hanspoon.backend_api.domain.ai.dto.ocr.OcrResponse;
+import com.hanspoon.backend_api.domain.ai.dto.result.FinalMenu;
+import com.hanspoon.backend_api.domain.ai.dto.result.FinalResultResponse;
 import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleEngineRequest;
 import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleEngineResponse;
-import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleMenuAnalysis;
 import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleProfile;
 import com.hanspoon.backend_api.domain.ai.mapper.AiProfileMapper;
 import com.hanspoon.backend_api.domain.scan.entity.MenuAnalysis;
@@ -34,8 +34,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 스캔 비동기 파이프라인. read SAS 생성 → OCR → (needs_retake 분기) → 프로필 매핑 → RuleEngine →
- * OCR↔Rule index 머지 → 영속화. {@link ScanService} 와 분리된 빈이라 @Async 프록시가 정상 적용된다.
+ * 스캔 비동기 파이프라인. read SAS 생성 → OCR → (needs_retake 분기) → 프로필 매핑 → RuleEngine → ai_result →
+ * OCR↔Final index 머지 → 영속화. {@link ScanService} 와 분리된 빈이라 @Async 프록시가 정상 적용된다.
  *
  * <p>실패해도 예외를 호출자에게 던지지 않고 scan_status 를 FAILED 로 남긴다(폴링으로 확인).
  */
@@ -89,9 +89,10 @@ public class ScanProcessor {
                     ocr.scanSession() != null ? ocr.scanSession().menuCount() : null,
                     parseScannedAt(ocr.scanSession() != null ? ocr.scanSession().scannedAt() : null));
 
-            // 3) needs_retake → 종료
+            // 3) needs_retake → 종료 (OCR 이 준 사유 저장)
             if (isNeedsRetake(ocr)) {
-                session.changeStatus(ScanStatus.NEEDS_RETAKE);
+                session.applyNeedsRetake(
+                        ocr.scanQuality() != null ? ocr.scanQuality().reasons() : null);
                 log.info("Scan needs retake: {}", scanId);
                 return;
             }
@@ -105,10 +106,13 @@ public class ScanProcessor {
 
             RuleEngineResponse judged = aiClient.judge(new RuleEngineRequest(ruleProfile, ocr));
 
-            // 5) OCR ↔ Rule index 머지 → 저장
-            menuAnalysisRepository.saveAll(merge(scanId, ocr, judged));
+            // 5) 최종 결과(ai_result) — message/owner_card 생성(GPT는 AI 내부)
+            FinalResultResponse finalResult = aiClient.result(judged);
 
-            // 6) 세션 완료
+            // 6) OCR ↔ Final index 머지 → 저장 (표시 출처는 ai_result FinalOutput)
+            menuAnalysisRepository.saveAll(merge(scanId, ocr, finalResult));
+
+            // 7) 세션 완료
             Integer riskyCount =
                     judged.scanSession() != null ? judged.scanSession().riskyMenuCount() : null;
             session.applyRuleEngineResult(riskyCount, ScanStatus.COMPLETED);
@@ -139,18 +143,19 @@ public class ScanProcessor {
                 && NEEDS_RETAKE.equals(ocr.scanQuality().status());
     }
 
-    private List<MenuAnalysis> merge(UUID scanId, OcrResponse ocr, RuleEngineResponse judged) {
+    private List<MenuAnalysis> merge(UUID scanId, OcrResponse ocr, FinalResultResponse finalResult) {
         List<com.hanspoon.backend_api.domain.ai.dto.ocr.MenuAnalysis> ocrMenus =
                 ocr.menuAnalyses() != null ? ocr.menuAnalyses() : List.of();
-        List<RuleMenuAnalysis> ruleMenus = judged.menuAnalyses() != null ? judged.menuAnalyses() : List.of();
-        if (ocrMenus.size() != ruleMenus.size()) {
-            log.warn("OCR/Rule menu size mismatch: ocr={}, rule={}", ocrMenus.size(), ruleMenus.size());
+        List<FinalMenu> finalMenus =
+                finalResult != null && finalResult.menuAnalyses() != null ? finalResult.menuAnalyses() : List.of();
+        if (ocrMenus.size() != finalMenus.size()) {
+            log.warn("menu size mismatch: ocr={}, final={}", ocrMenus.size(), finalMenus.size());
         }
-        int n = Math.min(ocrMenus.size(), ruleMenus.size());
+        int n = Math.min(ocrMenus.size(), finalMenus.size());
         List<MenuAnalysis> merged = new ArrayList<>(n);
         for (int i = 0; i < n; i++) {
             var o = ocrMenus.get(i);
-            RuleMenuAnalysis r = ruleMenus.get(i);
+            FinalMenu f = finalMenus.get(i);
             merged.add(MenuAnalysis.create(
                     scanId,
                     o.displayOrder() != null ? o.displayOrder() : i + 1,
@@ -159,24 +164,14 @@ public class ScanProcessor {
                     o.descriptionKo(),
                     o.descriptionEn(),
                     o.priceText(),
-                    r.isSpicy() != null ? r.isSpicy() : o.isSpicy(),
+                    o.isSpicy(),
                     o.imageUrl(),
-                    r.riskLevel(),
-                    r.needGpt(),
-                    r.hitTags(),
-                    r.triggeredFlags(),
-                    r.forbiddenTags(),
-                    toCodes(r.escalationCase()),
-                    r.gptContext(),
-                    r.riskReasons()));
+                    f.riskLevel(),
+                    f.hits(),
+                    f.message(),
+                    f.ownerCard()));
         }
         return merged;
-    }
-
-    private List<String> toCodes(List<EscalationCase> cases) {
-        return cases == null
-                ? null
-                : cases.stream().map(EscalationCase::getCode).toList();
     }
 
     private Instant parseScannedAt(String value) {

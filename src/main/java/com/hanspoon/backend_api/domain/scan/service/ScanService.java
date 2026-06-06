@@ -66,7 +66,8 @@ public class ScanService {
                 session.getMenuCount(),
                 session.getRiskyMenuCount(),
                 session.getScannedAt(),
-                menus);
+                menus,
+                session.getRetakeReasons());
     }
 
     private static MenuResult toMenuResult(MenuAnalysis m) {
@@ -77,9 +78,8 @@ public class ScanService {
                 m.getPriceText(),
                 m.getIsSpicy(),
                 m.getRiskLevel(),
-                m.getNeedGpt(),
                 m.getHitTags(),
-                m.getTriggeredFlags(),
-                m.getRiskReasons());
+                m.getMessage(),
+                m.getOwnerCard());
     }
 }
