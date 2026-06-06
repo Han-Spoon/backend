@@ -3,8 +3,6 @@ package com.hanspoon.backend_api.domain.scan.entity;
 import com.hanspoon.backend_api.domain.ai.dto.common.RiskLevel;
 import com.hanspoon.backend_api.domain.ai.dto.result.FinalMessage;
 import com.hanspoon.backend_api.domain.ai.dto.result.OwnerCard;
-import com.hanspoon.backend_api.domain.ai.dto.ruleengine.GptContext;
-import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RiskReason;
 import com.hanspoon.backend_api.global.common.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -20,7 +18,7 @@ import org.hibernate.type.SqlTypes;
 
 /**
  * 메뉴 분석 결과. scan_sessions 와 N:1 (FK ON DELETE CASCADE).
- * OCR(menu_name/price/...)과 RuleEngine(risk_level/hit_tags/...) 결과를 index 순서로 머지해 저장한다.
+ * OCR(menu_name/price/...)과 ai_result FinalOutput(risk_level/hit_tags/message/owner_card)을 index 순서로 머지해 저장한다.
  */
 @Entity
 @Table(name = "menu_analyses")
@@ -62,32 +60,9 @@ public class MenuAnalysis extends BaseEntity {
     @Column(name = "risk_level", length = 20)
     private RiskLevel riskLevel;
 
-    @Column(name = "need_gpt")
-    private Boolean needGpt;
-
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "hit_tags", columnDefinition = "jsonb")
     private List<String> hitTags;
-
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "triggered_flags", columnDefinition = "jsonb")
-    private List<String> triggeredFlags;
-
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "forbidden_tags", columnDefinition = "jsonb")
-    private List<String> forbiddenTags;
-
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "escalation_case", columnDefinition = "jsonb")
-    private List<String> escalationCase;
-
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "gpt_context", columnDefinition = "jsonb")
-    private GptContext gptContext;
-
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "risk_reasons", columnDefinition = "jsonb")
-    private List<RiskReason> riskReasons;
 
     // ai_result(최종) 표시용
     @JdbcTypeCode(SqlTypes.JSON)
@@ -109,13 +84,7 @@ public class MenuAnalysis extends BaseEntity {
             Boolean isSpicy,
             String imageUrl,
             RiskLevel riskLevel,
-            Boolean needGpt,
             List<String> hitTags,
-            List<String> triggeredFlags,
-            List<String> forbiddenTags,
-            List<String> escalationCase,
-            GptContext gptContext,
-            List<RiskReason> riskReasons,
             FinalMessage message,
             OwnerCard ownerCard) {
         this.id = UUID.randomUUID();
@@ -129,13 +98,7 @@ public class MenuAnalysis extends BaseEntity {
         this.isSpicy = isSpicy;
         this.imageUrl = imageUrl;
         this.riskLevel = riskLevel;
-        this.needGpt = needGpt;
         this.hitTags = hitTags;
-        this.triggeredFlags = triggeredFlags;
-        this.forbiddenTags = forbiddenTags;
-        this.escalationCase = escalationCase;
-        this.gptContext = gptContext;
-        this.riskReasons = riskReasons;
         this.message = message;
         this.ownerCard = ownerCard;
     }
@@ -151,13 +114,7 @@ public class MenuAnalysis extends BaseEntity {
             Boolean isSpicy,
             String imageUrl,
             RiskLevel riskLevel,
-            Boolean needGpt,
             List<String> hitTags,
-            List<String> triggeredFlags,
-            List<String> forbiddenTags,
-            List<String> escalationCase,
-            GptContext gptContext,
-            List<RiskReason> riskReasons,
             FinalMessage message,
             OwnerCard ownerCard) {
         return new MenuAnalysis(
@@ -171,13 +128,7 @@ public class MenuAnalysis extends BaseEntity {
                 isSpicy,
                 imageUrl,
                 riskLevel,
-                needGpt,
                 hitTags,
-                triggeredFlags,
-                forbiddenTags,
-                escalationCase,
-                gptContext,
-                riskReasons,
                 message,
                 ownerCard);
     }
