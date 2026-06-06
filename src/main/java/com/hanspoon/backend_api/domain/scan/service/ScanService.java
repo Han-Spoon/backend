@@ -74,10 +74,12 @@ public class ScanService {
                 session.getRetakeReasons());
     }
 
-    /** 본인 스캔 이력 목록(최신순). 목록엔 menus 미포함. */
+    /** 본인 스캔 이력 목록(최신순). 분석이 끝난 completed 만 노출, menus 는 미포함. */
     @Transactional(readOnly = true)
     public PageResponse<ScanHistoryItem> getScans(UUID userId, Pageable pageable) {
-        return PageResponse.of(scanSessionRepository.findByUserId(userId, pageable), ScanHistoryItem::from);
+        return PageResponse.of(
+                scanSessionRepository.findByUserIdAndScanStatus(userId, ScanStatus.COMPLETED, pageable),
+                ScanHistoryItem::from);
     }
 
     /** 본인 스캔 이력 제목 수정. 없거나 타인 소유면 SCAN_NOT_FOUND. */
