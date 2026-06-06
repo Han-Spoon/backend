@@ -2,18 +2,22 @@ package com.hanspoon.backend_api.domain.scan.service;
 
 import com.hanspoon.backend_api.domain.scan.dto.MenuResult;
 import com.hanspoon.backend_api.domain.scan.dto.ScanCreatedResponse;
+import com.hanspoon.backend_api.domain.scan.dto.ScanHistoryItem;
 import com.hanspoon.backend_api.domain.scan.dto.ScanResultResponse;
 import com.hanspoon.backend_api.domain.scan.dto.StartScanRequest;
+import com.hanspoon.backend_api.domain.scan.dto.UpdateScanTitleRequest;
 import com.hanspoon.backend_api.domain.scan.entity.MenuAnalysis;
 import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
 import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
 import com.hanspoon.backend_api.domain.upload.service.BlobStorageService;
+import com.hanspoon.backend_api.global.common.PageResponse;
 import com.hanspoon.backend_api.global.exception.BusinessException;
 import com.hanspoon.backend_api.global.exception.ErrorCode;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -68,6 +72,31 @@ public class ScanService {
                 session.getScannedAt(),
                 menus,
                 session.getRetakeReasons());
+    }
+
+    /** 본인 스캔 이력 목록(최신순). 목록엔 menus 미포함. */
+    @Transactional(readOnly = true)
+    public PageResponse<ScanHistoryItem> getScans(UUID userId, Pageable pageable) {
+        return PageResponse.of(scanSessionRepository.findByUserId(userId, pageable), ScanHistoryItem::from);
+    }
+
+    /** 본인 스캔 이력 제목 수정. 없거나 타인 소유면 SCAN_NOT_FOUND. */
+    @Transactional
+    public ScanHistoryItem updateTitle(UUID userId, UUID scanId, UpdateScanTitleRequest request) {
+        ScanSession session = scanSessionRepository
+                .findByIdAndUserId(scanId, userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SCAN_NOT_FOUND));
+        session.changeTitle(request.title());
+        return ScanHistoryItem.from(session);
+    }
+
+    /** 본인 스캔 이력 삭제. 연관 menu_images/menu_analyses 는 FK CASCADE 로 함께 삭제. */
+    @Transactional
+    public void deleteScan(UUID userId, UUID scanId) {
+        ScanSession session = scanSessionRepository
+                .findByIdAndUserId(scanId, userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SCAN_NOT_FOUND));
+        scanSessionRepository.delete(session);
     }
 
     private static MenuResult toMenuResult(MenuAnalysis m) {

@@ -92,6 +92,11 @@ public class ScanSession extends BaseEntity {
         this.scanStatus = scanStatus;
     }
 
+    /** 유저가 이력 제목을 수정. */
+    public void changeTitle(String title) {
+        this.title = title;
+    }
+
     /** 재촬영 필요 시 상태 + OCR 이 제공한 사유를 반영. */
     public void applyNeedsRetake(List<String> retakeReasons) {
         this.scanStatus = ScanStatus.NEEDS_RETAKE;
