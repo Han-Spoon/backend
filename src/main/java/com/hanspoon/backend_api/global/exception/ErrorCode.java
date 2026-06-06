@@ -20,6 +20,7 @@ public enum ErrorCode {
     INVALID_CONTENT_TYPE(HttpStatus.BAD_REQUEST, "INVALID_CONTENT_TYPE", "Unsupported image content type."),
     INVALID_STORAGE_KEY(HttpStatus.BAD_REQUEST, "INVALID_STORAGE_KEY", "Invalid storage key or image URL."),
     BLOB_SAS_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "BLOB_SAS_ERROR", "Failed to issue blob SAS."),
+    SCAN_NOT_FOUND(HttpStatus.NOT_FOUND, "SCAN_NOT_FOUND", "Scan not found."),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR", "Unexpected server error.");
 
     private final HttpStatus status;
