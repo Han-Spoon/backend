@@ -66,7 +66,8 @@ public class ScanService {
                 session.getMenuCount(),
                 session.getRiskyMenuCount(),
                 session.getScannedAt(),
-                menus);
+                menus,
+                session.getRetakeReasons());
     }
 
     private static MenuResult toMenuResult(MenuAnalysis m) {
