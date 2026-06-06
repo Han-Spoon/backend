@@ -83,6 +83,11 @@ public class BlobStorageService {
         return blob.getBlobUrl() + "?" + sas;
     }
 
+    /** SAS 없는 평문 blob URL (DB 저장용 — SAS 는 휘발성이라 미저장). */
+    public String blobUrl(String storageKey) {
+        return containerClient.getBlobClient(validateKey(storageKey)).getBlobUrl();
+    }
+
     /** A, B 공유 코어: storageKey 또는 imageUrl(Path A) 을 받아 blob 명으로 정규화. 우리 컨테이너 외 URL 은 거부(SSRF 가드). */
     public String extractStorageKey(String storageKeyOrUrl) {
         if (storageKeyOrUrl == null || storageKeyOrUrl.isBlank()) {

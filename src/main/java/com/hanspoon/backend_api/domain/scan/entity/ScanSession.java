@@ -69,6 +69,12 @@ public class ScanSession extends BaseEntity {
         return new ScanSession(userId, title, menuCount, riskyMenuCount, scanStatus, scannedAt);
     }
 
+    /** OCR 완료 후 메뉴 수/스캔 시각 반영. */
+    public void applyOcrResult(Integer menuCount, Instant scannedAt) {
+        this.menuCount = menuCount;
+        this.scannedAt = scannedAt;
+    }
+
     /** 룰엔진 판정 후 위험 메뉴 수/상태 갱신. */
     public void applyRuleEngineResult(Integer riskyMenuCount, ScanStatus scanStatus) {
         this.riskyMenuCount = riskyMenuCount;
