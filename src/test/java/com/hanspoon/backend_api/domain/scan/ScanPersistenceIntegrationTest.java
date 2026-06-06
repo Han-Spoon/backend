@@ -7,8 +7,6 @@ import com.hanspoon.backend_api.domain.ai.dto.common.RiskLevel;
 import com.hanspoon.backend_api.domain.ai.dto.result.FinalMessage;
 import com.hanspoon.backend_api.domain.ai.dto.result.OwnerCard;
 import com.hanspoon.backend_api.domain.ai.dto.result.OwnerQuestion;
-import com.hanspoon.backend_api.domain.ai.dto.ruleengine.GptContext;
-import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RiskReason;
 import com.hanspoon.backend_api.domain.scan.entity.MenuAnalysis;
 import com.hanspoon.backend_api.domain.scan.entity.MenuImage;
 import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
@@ -30,7 +28,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * scan 도메인 영속화 + JSONB 라운드트립 검증. @SpringBootTest 부팅 자체가 Flyway V1~V4 마이그레이트 후
+ * scan 도메인 영속화 + JSONB 라운드트립 검증. @SpringBootTest 부팅 자체가 Flyway V1~V5 마이그레이트 후
  * Hibernate validate 를 수행하므로 스키마↔엔티티 정합도 함께 검증된다.
  */
 @SpringBootTest
@@ -70,7 +68,6 @@ class ScanPersistenceIntegrationTest {
                 "image/jpeg",
                 123456L));
 
-        GptContext gptContext = new GptContext("sundubu", List.of("sundubu", "egg"), List.of("is_egg"), List.of());
         menuAnalysisRepository.save(MenuAnalysis.create(
                 sessionId,
                 1,
@@ -82,13 +79,7 @@ class ScanPersistenceIntegrationTest {
                 true,
                 null,
                 RiskLevel.CAUTION,
-                Boolean.TRUE,
-                List.of(),
                 List.of("has_unclear_broth", "has_unclear_jeotgal"),
-                List.of("is_alcohol", "is_pork"),
-                List.of("ambiguity"),
-                gptContext,
-                List.of(new RiskReason("halal", "pork possible")),
                 new FinalMessage("pork possible", null, null),
                 new OwnerCard("sundubu", "has_unclear_jeotgal", new OwnerQuestion("use jeotgal?", null, null))));
 
@@ -110,13 +101,7 @@ class ScanPersistenceIntegrationTest {
         assertThat(analyses).hasSize(1);
         MenuAnalysis analysis = analyses.get(0);
         assertThat(analysis.getRiskLevel()).isEqualTo(RiskLevel.CAUTION);
-        assertThat(analysis.getNeedGpt()).isTrue();
-        assertThat(analysis.getTriggeredFlags()).containsExactly("has_unclear_broth", "has_unclear_jeotgal");
-        assertThat(analysis.getEscalationCase()).containsExactly("ambiguity");
-        assertThat(analysis.getGptContext().baseMenu()).isEqualTo("sundubu");
-        assertThat(analysis.getGptContext().explicitTags()).containsExactly("is_egg");
-        assertThat(analysis.getRiskReasons()).hasSize(1);
-        assertThat(analysis.getRiskReasons().get(0).reasonType()).isEqualTo("halal");
+        assertThat(analysis.getHitTags()).containsExactly("has_unclear_broth", "has_unclear_jeotgal");
         assertThat(analysis.getMessage().ko()).isEqualTo("pork possible");
         assertThat(analysis.getOwnerCard().flag()).isEqualTo("has_unclear_jeotgal");
         assertThat(analysis.getOwnerCard().question().ko()).isEqualTo("use jeotgal?");
@@ -136,5 +121,21 @@ class ScanPersistenceIntegrationTest {
         ScanSession reloaded = scanSessionRepository.findById(session.getId()).orElseThrow();
         assertThat(reloaded.getRiskyMenuCount()).isEqualTo(2);
         assertThat(reloaded.getScanStatus()).isEqualTo(ScanStatus.COMPLETED);
+    }
+
+    @Test
+    void appliesNeedsRetakePersistsReasonsAsJsonb() {
+        User user = userRepository.save(User.create("scan-retake@example.com", "scanuser3", "ko"));
+        ScanSession session = scanSessionRepository.save(
+                ScanSession.create(user.getId(), "blur.jpg", null, null, ScanStatus.PROCESSING, Instant.now()));
+
+        session.applyNeedsRetake(List.of("too blurry", "low light"));
+        scanSessionRepository.save(session);
+        entityManager.flush();
+        entityManager.clear();
+
+        ScanSession reloaded = scanSessionRepository.findById(session.getId()).orElseThrow();
+        assertThat(reloaded.getScanStatus()).isEqualTo(ScanStatus.NEEDS_RETAKE);
+        assertThat(reloaded.getRetakeReasons()).containsExactly("too blurry", "low light");
     }
 }

@@ -157,13 +157,13 @@ class ScanProcessorTest {
         verify(menuAnalysisRepository).saveAll(captor.capture());
         List<MenuAnalysis> saved = captor.getValue();
         assertThat(saved).hasSize(2);
-        // OCR 가격 + RuleEngine 위험도가 같은 행에 머지됐는지
+        // OCR 가격 + FinalOutput 위험도/태그가 같은 행에 머지됐는지
         assertThat(saved.get(0).getMenuNameKo()).isEqualTo("samgyeopsal");
         assertThat(saved.get(0).getPriceText()).isEqualTo("9000");
         assertThat(saved.get(0).getRiskLevel()).isEqualTo(RiskLevel.DANGER);
+        assertThat(saved.get(0).getHitTags()).containsExactly("is_pork");
         assertThat(saved.get(0).getDisplayOrder()).isEqualTo(1);
-        assertThat(saved.get(1).getEscalationCase()).containsExactly("ambiguity");
-        assertThat(saved.get(1).getNeedGpt()).isTrue();
+        assertThat(saved.get(1).getRiskLevel()).isEqualTo(RiskLevel.CAUTION);
         // ai_result 최종 표시 필드 머지
         assertThat(saved.get(0).getMessage().ko()).isEqualTo("pork included");
         assertThat(saved.get(1).getOwnerCard().question().ko()).isEqualTo("use anchovy?");
@@ -178,7 +178,7 @@ class ScanProcessorTest {
                 new com.hanspoon.backend_api.domain.ai.dto.ocr.ScanSession("menu.jpg", 0, null, "completed", null),
                 new com.hanspoon.backend_api.domain.ai.dto.ocr.MenuImage("upload", "menu-x.jpg", "u", "image/jpeg", 1L),
                 new com.hanspoon.backend_api.domain.ai.dto.ocr.ScanQuality(
-                        "needs_retake", 20, 1, 0, 0.0, 100, 100, null, List.of("too blurry"), List.of()),
+                        "needs_retake", 20, 1, 0, 0.0, 100, 100, null, List.of(), List.of("too blurry")),
                 List.of(),
                 null);
 
@@ -191,6 +191,7 @@ class ScanProcessorTest {
         scanProcessor.process(scanId, userId, "menu-x.jpg", "upload");
 
         assertThat(session.getScanStatus()).isEqualTo(ScanStatus.NEEDS_RETAKE);
+        assertThat(session.getRetakeReasons()).containsExactly("too blurry");
         verify(aiClient, never()).judge(any());
         verify(menuAnalysisRepository, never()).saveAll(any());
     }
