@@ -28,7 +28,7 @@ public enum AllergyCode {
     BEEF("beef"),
     SQUID("squid"),
     SHELLFISH("shellfish"),
-    PINE_NUT("pine_nut");
+    PINE_NUT("pinenut");
 
     private final String code;
 
