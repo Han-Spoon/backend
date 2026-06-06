@@ -117,7 +117,7 @@ class ScanServiceTest {
         UUID userId = UUID.randomUUID();
         Pageable pageable = PageRequest.of(0, 20);
         ScanSession session = ScanSession.create(userId, "menu.jpg", 3, 1, ScanStatus.COMPLETED, Instant.now());
-        when(scanSessionRepository.findByUserId(userId, pageable))
+        when(scanSessionRepository.findByUserIdAndScanStatus(userId, ScanStatus.COMPLETED, pageable))
                 .thenReturn(new PageImpl<>(List.of(session), pageable, 1));
 
         PageResponse<ScanHistoryItem> response = scanService.getScans(userId, pageable);
@@ -128,6 +128,7 @@ class ScanServiceTest {
         assertThat(response.totalElements()).isEqualTo(1);
         assertThat(response.totalPages()).isEqualTo(1);
         assertThat(response.items().get(0).scanId()).isEqualTo(session.getId());
+        assertThat(response.items().get(0).status()).isEqualTo(ScanStatus.COMPLETED);
         assertThat(response.items().get(0).riskyMenuCount()).isEqualTo(1);
     }
 
