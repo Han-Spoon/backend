@@ -4,6 +4,8 @@ import com.hanspoon.backend_api.domain.ai.client.AiClient;
 import com.hanspoon.backend_api.domain.ai.dto.common.EscalationCase;
 import com.hanspoon.backend_api.domain.ai.dto.ocr.OcrRequest;
 import com.hanspoon.backend_api.domain.ai.dto.ocr.OcrResponse;
+import com.hanspoon.backend_api.domain.ai.dto.result.FinalMenu;
+import com.hanspoon.backend_api.domain.ai.dto.result.FinalResultResponse;
 import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleEngineRequest;
 import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleEngineResponse;
 import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleMenuAnalysis;
@@ -105,10 +107,13 @@ public class ScanProcessor {
 
             RuleEngineResponse judged = aiClient.judge(new RuleEngineRequest(ruleProfile, ocr));
 
-            // 5) OCR ↔ Rule index 머지 → 저장
-            menuAnalysisRepository.saveAll(merge(scanId, ocr, judged));
+            // 5) 최종 결과(ai_result) — message/owner_card 생성(GPT는 AI 내부)
+            FinalResultResponse finalResult = aiClient.result(judged);
 
-            // 6) 세션 완료
+            // 6) OCR ↔ Rule ↔ Final index 머지 → 저장
+            menuAnalysisRepository.saveAll(merge(scanId, ocr, judged, finalResult));
+
+            // 7) 세션 완료
             Integer riskyCount =
                     judged.scanSession() != null ? judged.scanSession().riskyMenuCount() : null;
             session.applyRuleEngineResult(riskyCount, ScanStatus.COMPLETED);
@@ -139,18 +144,26 @@ public class ScanProcessor {
                 && NEEDS_RETAKE.equals(ocr.scanQuality().status());
     }
 
-    private List<MenuAnalysis> merge(UUID scanId, OcrResponse ocr, RuleEngineResponse judged) {
+    private List<MenuAnalysis> merge(
+            UUID scanId, OcrResponse ocr, RuleEngineResponse judged, FinalResultResponse finalResult) {
         List<com.hanspoon.backend_api.domain.ai.dto.ocr.MenuAnalysis> ocrMenus =
                 ocr.menuAnalyses() != null ? ocr.menuAnalyses() : List.of();
         List<RuleMenuAnalysis> ruleMenus = judged.menuAnalyses() != null ? judged.menuAnalyses() : List.of();
-        if (ocrMenus.size() != ruleMenus.size()) {
-            log.warn("OCR/Rule menu size mismatch: ocr={}, rule={}", ocrMenus.size(), ruleMenus.size());
+        List<FinalMenu> finalMenus =
+                finalResult != null && finalResult.menuAnalyses() != null ? finalResult.menuAnalyses() : List.of();
+        if (ocrMenus.size() != ruleMenus.size() || ruleMenus.size() != finalMenus.size()) {
+            log.warn(
+                    "menu size mismatch: ocr={}, rule={}, final={}",
+                    ocrMenus.size(),
+                    ruleMenus.size(),
+                    finalMenus.size());
         }
-        int n = Math.min(ocrMenus.size(), ruleMenus.size());
+        int n = Math.min(ocrMenus.size(), Math.min(ruleMenus.size(), finalMenus.size()));
         List<MenuAnalysis> merged = new ArrayList<>(n);
         for (int i = 0; i < n; i++) {
             var o = ocrMenus.get(i);
             RuleMenuAnalysis r = ruleMenus.get(i);
+            FinalMenu f = finalMenus.get(i);
             merged.add(MenuAnalysis.create(
                     scanId,
                     o.displayOrder() != null ? o.displayOrder() : i + 1,
@@ -168,7 +181,9 @@ public class ScanProcessor {
                     r.forbiddenTags(),
                     toCodes(r.escalationCase()),
                     r.gptContext(),
-                    r.riskReasons()));
+                    r.riskReasons(),
+                    f.message(),
+                    f.ownerCard()));
         }
         return merged;
     }

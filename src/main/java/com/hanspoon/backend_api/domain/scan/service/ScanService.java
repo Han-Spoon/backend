@@ -77,9 +77,8 @@ public class ScanService {
                 m.getPriceText(),
                 m.getIsSpicy(),
                 m.getRiskLevel(),
-                m.getNeedGpt(),
                 m.getHitTags(),
-                m.getTriggeredFlags(),
-                m.getRiskReasons());
+                m.getMessage(),
+                m.getOwnerCard());
     }
 }

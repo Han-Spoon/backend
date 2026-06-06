@@ -1,6 +1,8 @@
 package com.hanspoon.backend_api.domain.scan.entity;
 
 import com.hanspoon.backend_api.domain.ai.dto.common.RiskLevel;
+import com.hanspoon.backend_api.domain.ai.dto.result.FinalMessage;
+import com.hanspoon.backend_api.domain.ai.dto.result.OwnerCard;
 import com.hanspoon.backend_api.domain.ai.dto.ruleengine.GptContext;
 import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RiskReason;
 import com.hanspoon.backend_api.global.common.BaseEntity;
@@ -87,6 +89,15 @@ public class MenuAnalysis extends BaseEntity {
     @Column(name = "risk_reasons", columnDefinition = "jsonb")
     private List<RiskReason> riskReasons;
 
+    // ai_result(최종) 표시용
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "message", columnDefinition = "jsonb")
+    private FinalMessage message;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "owner_card", columnDefinition = "jsonb")
+    private OwnerCard ownerCard;
+
     private MenuAnalysis(
             UUID scanSessionId,
             Integer displayOrder,
@@ -104,7 +115,9 @@ public class MenuAnalysis extends BaseEntity {
             List<String> forbiddenTags,
             List<String> escalationCase,
             GptContext gptContext,
-            List<RiskReason> riskReasons) {
+            List<RiskReason> riskReasons,
+            FinalMessage message,
+            OwnerCard ownerCard) {
         this.id = UUID.randomUUID();
         this.scanSessionId = scanSessionId;
         this.displayOrder = displayOrder;
@@ -123,6 +136,8 @@ public class MenuAnalysis extends BaseEntity {
         this.escalationCase = escalationCase;
         this.gptContext = gptContext;
         this.riskReasons = riskReasons;
+        this.message = message;
+        this.ownerCard = ownerCard;
     }
 
     public static MenuAnalysis create(
@@ -142,7 +157,9 @@ public class MenuAnalysis extends BaseEntity {
             List<String> forbiddenTags,
             List<String> escalationCase,
             GptContext gptContext,
-            List<RiskReason> riskReasons) {
+            List<RiskReason> riskReasons,
+            FinalMessage message,
+            OwnerCard ownerCard) {
         return new MenuAnalysis(
                 scanSessionId,
                 displayOrder,
@@ -160,6 +177,8 @@ public class MenuAnalysis extends BaseEntity {
                 forbiddenTags,
                 escalationCase,
                 gptContext,
-                riskReasons);
+                riskReasons,
+                message,
+                ownerCard);
     }
 }
