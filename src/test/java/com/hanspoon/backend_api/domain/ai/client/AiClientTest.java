@@ -10,6 +10,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import com.hanspoon.backend_api.domain.ai.dto.common.RiskLevel;
 import com.hanspoon.backend_api.domain.ai.dto.ocr.OcrRequest;
 import com.hanspoon.backend_api.domain.ai.dto.ocr.OcrResponse;
+import com.hanspoon.backend_api.domain.ai.dto.result.FinalResultResponse;
 import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleEngineRequest;
 import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleEngineResponse;
 import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleProfile;
@@ -123,6 +124,46 @@ class AiClientTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.RULE_ENGINE_ERROR);
+        server.verify();
+    }
+
+    @Test
+    void resultParsesFinalResponse() {
+        String body =
+                """
+                {
+                  "scan_session": {"title": "m.jpg", "menu_count": 1, "scan_status": "completed"},
+                  "menu_image": {"source": "upload"},
+                  "scan_quality": {"status": "usable", "score": 80},
+                  "menu_analyses": [
+                    {"menu_name": "x", "risk_level": "caution", "hits": [],
+                     "message": {"ko": "broth?", "en": null, "ar": null},
+                     "owner_card": {"menu_name": "x", "flag": "has_unclear_broth",
+                                    "question": {"ko": "use anchovy?", "en": null, "ar": null}}}
+                  ]
+                }
+                """;
+        server.expect(requestTo(BASE_URL + "/v1/result"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+
+        FinalResultResponse response = aiClient.result(new RuleEngineResponse(null, null, null, List.of()));
+
+        assertThat(response.menuAnalyses()).hasSize(1);
+        assertThat(response.menuAnalyses().get(0).riskLevel()).isEqualTo(RiskLevel.CAUTION);
+        assertThat(response.menuAnalyses().get(0).message().ko()).isEqualTo("broth?");
+        assertThat(response.menuAnalyses().get(0).ownerCard().question().ko()).isEqualTo("use anchovy?");
+        server.verify();
+    }
+
+    @Test
+    void resultMapsErrorStatusToBusinessException() {
+        server.expect(requestTo(BASE_URL + "/v1/result")).andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
+
+        assertThatThrownBy(() -> aiClient.result(new RuleEngineResponse(null, null, null, List.of())))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.RESULT_SERVICE_ERROR);
         server.verify();
     }
 }

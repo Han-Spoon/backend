@@ -10,6 +10,11 @@ import com.hanspoon.backend_api.domain.ai.client.AiClient;
 import com.hanspoon.backend_api.domain.ai.dto.common.EscalationCase;
 import com.hanspoon.backend_api.domain.ai.dto.common.RiskLevel;
 import com.hanspoon.backend_api.domain.ai.dto.ocr.OcrResponse;
+import com.hanspoon.backend_api.domain.ai.dto.result.FinalMenu;
+import com.hanspoon.backend_api.domain.ai.dto.result.FinalMessage;
+import com.hanspoon.backend_api.domain.ai.dto.result.FinalResultResponse;
+import com.hanspoon.backend_api.domain.ai.dto.result.OwnerCard;
+import com.hanspoon.backend_api.domain.ai.dto.result.OwnerQuestion;
 import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RiskReason;
 import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleEngineResponse;
 import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleMenuAnalysis;
@@ -124,6 +129,21 @@ class ScanProcessorTest {
                                 null,
                                 null)));
         when(aiClient.judge(any())).thenReturn(judged);
+        FinalResultResponse finalResult = new FinalResultResponse(List.of(
+                new FinalMenu(
+                        "samgyeopsal",
+                        RiskLevel.DANGER,
+                        List.of("is_pork"),
+                        new FinalMessage("pork included", null, null),
+                        null),
+                new FinalMenu(
+                        "doenjang",
+                        RiskLevel.CAUTION,
+                        List.of(),
+                        new FinalMessage("broth unclear", null, null),
+                        new OwnerCard(
+                                "doenjang", "has_unclear_broth", new OwnerQuestion("use anchovy?", null, null)))));
+        when(aiClient.result(any())).thenReturn(finalResult);
 
         scanProcessor.process(scanId, userId, "menu-x.jpg", "upload");
 
@@ -144,6 +164,9 @@ class ScanProcessorTest {
         assertThat(saved.get(0).getDisplayOrder()).isEqualTo(1);
         assertThat(saved.get(1).getEscalationCase()).containsExactly("ambiguity");
         assertThat(saved.get(1).getNeedGpt()).isTrue();
+        // ai_result 최종 표시 필드 머지
+        assertThat(saved.get(0).getMessage().ko()).isEqualTo("pork included");
+        assertThat(saved.get(1).getOwnerCard().question().ko()).isEqualTo("use anchovy?");
     }
 
     @Test

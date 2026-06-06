@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.hanspoon.backend_api.TestcontainersConfiguration;
 import com.hanspoon.backend_api.domain.ai.dto.common.RiskLevel;
+import com.hanspoon.backend_api.domain.ai.dto.result.FinalMessage;
+import com.hanspoon.backend_api.domain.ai.dto.result.OwnerCard;
+import com.hanspoon.backend_api.domain.ai.dto.result.OwnerQuestion;
 import com.hanspoon.backend_api.domain.ai.dto.ruleengine.GptContext;
 import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RiskReason;
 import com.hanspoon.backend_api.domain.scan.entity.MenuAnalysis;
@@ -27,7 +30,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * scan 도메인 영속화 + JSONB 라운드트립 검증. @SpringBootTest 부팅 자체가 Flyway V1~V3 마이그레이트 후
+ * scan 도메인 영속화 + JSONB 라운드트립 검증. @SpringBootTest 부팅 자체가 Flyway V1~V4 마이그레이트 후
  * Hibernate validate 를 수행하므로 스키마↔엔티티 정합도 함께 검증된다.
  */
 @SpringBootTest
@@ -85,7 +88,9 @@ class ScanPersistenceIntegrationTest {
                 List.of("is_alcohol", "is_pork"),
                 List.of("ambiguity"),
                 gptContext,
-                List.of(new RiskReason("halal", "pork possible"))));
+                List.of(new RiskReason("halal", "pork possible")),
+                new FinalMessage("pork possible", null, null),
+                new OwnerCard("sundubu", "has_unclear_jeotgal", new OwnerQuestion("use jeotgal?", null, null))));
 
         // 강제로 DB 까지 쓰고(L1 비우고) 다시 읽어 JSONB 직렬화/역직렬화 라운드트립을 검증
         entityManager.flush();
@@ -112,6 +117,9 @@ class ScanPersistenceIntegrationTest {
         assertThat(analysis.getGptContext().explicitTags()).containsExactly("is_egg");
         assertThat(analysis.getRiskReasons()).hasSize(1);
         assertThat(analysis.getRiskReasons().get(0).reasonType()).isEqualTo("halal");
+        assertThat(analysis.getMessage().ko()).isEqualTo("pork possible");
+        assertThat(analysis.getOwnerCard().flag()).isEqualTo("has_unclear_jeotgal");
+        assertThat(analysis.getOwnerCard().question().ko()).isEqualTo("use jeotgal?");
     }
 
     @Test
