@@ -138,4 +138,39 @@ class ScanPersistenceIntegrationTest {
         assertThat(reloaded.getScanStatus()).isEqualTo(ScanStatus.NEEDS_RETAKE);
         assertThat(reloaded.getRetakeReasons()).containsExactly("too blurry", "low light");
     }
+
+    @Test
+    void deletingScanSessionCascadesToImageAndAnalyses() {
+        User user = userRepository.save(User.create("scan-del@example.com", "scanuser4", "ko"));
+        UUID userId = user.getId();
+        ScanSession session = scanSessionRepository.save(
+                ScanSession.create(userId, "del.jpg", 1, 0, ScanStatus.COMPLETED, Instant.now()));
+        UUID sessionId = session.getId();
+        menuImageRepository.save(MenuImage.create(sessionId, "upload", "scans/del.jpg", "u", "image/jpeg", 1L));
+        menuAnalysisRepository.save(MenuAnalysis.create(
+                sessionId,
+                1,
+                "samgyeopsal",
+                null,
+                null,
+                null,
+                "9000",
+                false,
+                null,
+                RiskLevel.DANGER,
+                List.of("is_pork"),
+                new FinalMessage("pork included", null, null),
+                null));
+        entityManager.flush();
+        entityManager.clear();
+
+        scanSessionRepository.delete(scanSessionRepository.findById(sessionId).orElseThrow());
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(scanSessionRepository.findById(sessionId)).isEmpty();
+        assertThat(menuImageRepository.findByScanSessionId(sessionId)).isEmpty();
+        assertThat(menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(sessionId))
+                .isEmpty();
+    }
 }
