@@ -17,6 +17,9 @@ public enum ErrorCode {
     OCR_SERVICE_ERROR(HttpStatus.BAD_GATEWAY, "OCR_SERVICE_ERROR", "OCR service failed."),
     RULE_ENGINE_ERROR(HttpStatus.BAD_GATEWAY, "RULE_ENGINE_ERROR", "Rule engine evaluation failed."),
     AI_SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "AI_SERVICE_UNAVAILABLE", "AI service is unavailable."),
+    INVALID_CONTENT_TYPE(HttpStatus.BAD_REQUEST, "INVALID_CONTENT_TYPE", "Unsupported image content type."),
+    INVALID_STORAGE_KEY(HttpStatus.BAD_REQUEST, "INVALID_STORAGE_KEY", "Invalid storage key or image URL."),
+    BLOB_SAS_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "BLOB_SAS_ERROR", "Failed to issue blob SAS."),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR", "Unexpected server error.");
 
     private final HttpStatus status;
