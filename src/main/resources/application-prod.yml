@@ -11,7 +11,8 @@ spring:
   datasource:
     url: ${DB_PRIVATE_ENDPOINT_URL:jdbc:postgresql://psql-hanspoon-prod.privatelink.postgres.database.azure.com:5432/hanspoon?sslmode=require}
     username: ${DB_USERNAME:hanspoon_app}
-    password: ${kv-secret-db-password}
+    # Key Vault 우선, 미사용/부재 시 DB_PASSWORD 환경변수로 폴백
+    password: ${kv-secret-db-password:${DB_PASSWORD:}}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: ${DB_MAX_POOL_SIZE:10}
@@ -46,13 +47,15 @@ app:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:https://han-spoon.vercel.app,https://www.han-spoon.com}
   azure-ai:
     endpoint: ${AZURE_AI_PRIVATE_ENDPOINT:https://aoai-hanspoon-prod.openai.azure.com}
-    api-key: ${kv-secret-azure-openai-api-key:}
+    # Key Vault 우선, 미사용/부재 시 AZURE_AI_API_KEY 환경변수로 폴백
+    api-key: ${kv-secret-azure-openai-api-key:${AZURE_AI_API_KEY:}}
   security:
     google:
       client-id: ${GOOGLE_CLIENT_ID}
     jwt:
       issuer: ${JWT_ISSUER:https://api.han-spoon.com}
-      secret: ${kv-secret-jwt-signing-key}
+      # Key Vault 우선, 미사용/부재 시 JWT_SECRET 환경변수로 폴백
+      secret: ${kv-secret-jwt-signing-key:${JWT_SECRET:}}
       access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION:15m}
       refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION:14d}
 
