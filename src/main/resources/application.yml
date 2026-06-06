@@ -44,6 +44,13 @@ app:
     base-url: ${AI_SERVICE_BASE_URL:http://localhost:8000}
     connect-timeout: ${AI_SERVICE_CONNECT_TIMEOUT:3s}
     read-timeout: ${AI_SERVICE_READ_TIMEOUT:30s}
+  blob:
+    account-name: ${BLOB_ACCOUNT_NAME:sthanspoonprod}
+    container: ${BLOB_CONTAINER:board-images}
+    account-key: ${BLOB_ACCOUNT_KEY:}
+    upload-sas-ttl: ${BLOB_UPLOAD_SAS_TTL:10m}
+    read-sas-ttl: ${BLOB_READ_SAS_TTL:15m}
+    allowed-content-types: ${BLOB_ALLOWED_CONTENT_TYPES:image/jpeg,image/png,image/webp}
   security:
     google:
       client-id: ${GOOGLE_CLIENT_ID:}

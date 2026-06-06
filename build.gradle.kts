@@ -48,6 +48,9 @@ dependencies {
 	// Azure Configuration (Key Vault secrets)
 	implementation("com.azure.spring:spring-cloud-azure-starter-keyvault-secrets")
 
+	// Azure Blob Storage (SAS 발급용 — 업로드 프록시 아님)
+	implementation("com.azure:azure-storage-blob")
+
 	// OpenAPI & Swagger (Spring Boot 4 compatible)
 	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3")
 
