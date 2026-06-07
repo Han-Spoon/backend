@@ -182,19 +182,21 @@ public class DevDataSeeder implements ApplicationRunner {
     }
 
     private void seedCards(UUID userId) {
+        // 모든 카드는 화면에 보이는 text 를 그대로 저장(언어 스냅샷). 재료확인 text 는 AI owner_card.question 예시.
         savedCardRepository.saveAll(List.of(
-                // 템플릿형: ingredients(hit 코드)만 저장 → FE 가 언어별 문장 재렌더
-                SavedCard.create(userId, CardType.ORDER, "삼겹살", null, null, null, null),
-                SavedCard.create(userId, CardType.INGREDIENT_CHECK, "김치찌개", List.of("is_fish"), null, null, null),
-                SavedCard.create(userId, CardType.EXCLUDE, "비빔밥", List.of("is_egg"), null, null, null),
-                // owner_question: AI 완성 문구 text + flag 저장
                 SavedCard.create(
                         userId,
-                        CardType.OWNER_QUESTION,
+                        CardType.ORDER,
+                        "삼겹살",
+                        new CardText("삼겹살 하나 주세요.", "One pork belly, please.", null),
+                        null),
+                SavedCard.create(
+                        userId,
+                        CardType.INGREDIENT_CHECK,
                         "된장찌개",
-                        null,
-                        new CardText("멸치 육수를 사용하나요?", "Do you use anchovy broth?", null),
-                        "has_unclear_broth",
-                        null)));
+                        new CardText("이 메뉴에 멸치육수가 들어가나요?", "Does this dish contain fish broth?", null),
+                        null),
+                SavedCard.create(
+                        userId, CardType.EXCLUDE, "비빔밥", new CardText("계란 빼주세요.", "No egg, please.", null), null)));
     }
 }

@@ -8,8 +8,7 @@ import java.util.Arrays;
 public enum CardType {
     ORDER("order"),
     INGREDIENT_CHECK("ingredient_check"),
-    EXCLUDE("exclude"),
-    OWNER_QUESTION("owner_question");
+    EXCLUDE("exclude");
 
     private final String code;
 

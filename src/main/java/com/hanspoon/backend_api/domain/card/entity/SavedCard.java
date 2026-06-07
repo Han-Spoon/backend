@@ -7,7 +7,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -18,13 +17,10 @@ import org.hibernate.type.SqlTypes;
 /**
  * 자주 쓰는 카드(사장님 소통 카드 저장). users 와 N:1 (FK ON DELETE CASCADE).
  * 출처 스캔(scanSessionId)은 선택이며, 스캔 삭제 시 ON DELETE SET NULL 로 카드는 보존된다.
- * 문구 생성은 FE 책임 — 서버는 저장/목록/삭제만 담당한다.
  *
- * <p>저장 형태가 타입별로 다르다:
- * <ul>
- *   <li>order/ingredient_check/exclude: {@code ingredients}(hit 코드)만 저장 → FE 가 언어별 문장 재렌더.
- *   <li>owner_question: AI 가 준 완성 문구 {@code text} + {@code flag} 저장(재생성 불가).
- * </ul>
+ * <p>문구 생성은 FE 책임 — 서버는 화면에 보이는 텍스트({@link CardText})를 그대로 스냅샷 저장한다.
+ * 사용 언어를 바꿔도 저장된 카드는 변하지 않는다(재렌더 없음). 타입(order/ingredient_check/exclude)별로
+ * 텍스트 출처만 다를 뿐(재료확인=AI owner_card.question, 주문/빼고요청=FE 템플릿) 저장 형태는 동일하다.
  */
 @Entity
 @Table(name = "saved_cards")
@@ -45,19 +41,9 @@ public class SavedCard extends BaseEntity {
     @Column(name = "menu_name_ko", length = 255, nullable = false)
     private String menuNameKo;
 
-    // 템플릿형(order/ingredient_check/exclude) — hit 태그 코드. owner_question 에서는 null.
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "ingredients", columnDefinition = "jsonb")
-    private List<String> ingredients;
-
-    // owner_question 전용 — AI 완성 문구. 템플릿형에서는 null.
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "text", columnDefinition = "jsonb")
+    @Column(name = "text", columnDefinition = "jsonb", nullable = false)
     private CardText text;
-
-    // owner_question 전용 — AI 애매 사유 플래그(예: has_unclear_broth).
-    @Column(name = "flag", length = 50)
-    private String flag;
 
     @Column(name = "scan_session_id", columnDefinition = "uuid")
     private UUID scanSessionId;
@@ -65,34 +51,19 @@ public class SavedCard extends BaseEntity {
     @Column(name = "last_saved_at", nullable = false)
     private Instant lastSavedAt;
 
-    private SavedCard(
-            UUID userId,
-            CardType cardType,
-            String menuNameKo,
-            List<String> ingredients,
-            CardText text,
-            String flag,
-            UUID scanSessionId) {
+    private SavedCard(UUID userId, CardType cardType, String menuNameKo, CardText text, UUID scanSessionId) {
         this.id = UUID.randomUUID();
         this.userId = userId;
         this.cardType = cardType;
         this.menuNameKo = menuNameKo;
-        this.ingredients = ingredients;
         this.text = text;
-        this.flag = flag;
         this.scanSessionId = scanSessionId;
         this.lastSavedAt = Instant.now();
     }
 
     public static SavedCard create(
-            UUID userId,
-            CardType cardType,
-            String menuNameKo,
-            List<String> ingredients,
-            CardText text,
-            String flag,
-            UUID scanSessionId) {
-        return new SavedCard(userId, cardType, menuNameKo, ingredients, text, flag, scanSessionId);
+            UUID userId, CardType cardType, String menuNameKo, CardText text, UUID scanSessionId) {
+        return new SavedCard(userId, cardType, menuNameKo, text, scanSessionId);
     }
 
     /** 동일 카드 재저장 시 호출 — 목록 최상단으로 올라오도록 저장 시각만 갱신한다. */
