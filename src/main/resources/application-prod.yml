@@ -45,6 +45,9 @@ server:
 app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:https://han-spoon.vercel.app,https://www.han-spoon.com}
+  blob:
+    # SAS 서명용 스토리지 계정 키. Key Vault 우선, 미사용/부재 시 BLOB_ACCOUNT_KEY 환경변수로 폴백.
+    account-key: ${kv-secret-blob-account-key:${BLOB_ACCOUNT_KEY:}}
   azure-ai:
     endpoint: ${AZURE_AI_PRIVATE_ENDPOINT:https://aoai-hanspoon-prod.openai.azure.com}
     # Key Vault 우선, 미사용/부재 시 AZURE_AI_API_KEY 환경변수로 폴백
