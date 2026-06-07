@@ -6,10 +6,13 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * 스캔 세션. users 와 N:1 (FK ON DELETE CASCADE). OCR 결과의 scan_session 매핑.
@@ -43,6 +46,10 @@ public class ScanSession extends BaseEntity {
     @Column(name = "scanned_at")
     private Instant scannedAt;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "retake_reasons", columnDefinition = "jsonb")
+    private List<String> retakeReasons;
+
     private ScanSession(
             UUID userId,
             String title,
@@ -69,6 +76,12 @@ public class ScanSession extends BaseEntity {
         return new ScanSession(userId, title, menuCount, riskyMenuCount, scanStatus, scannedAt);
     }
 
+    /** OCR 완료 후 메뉴 수/스캔 시각 반영. */
+    public void applyOcrResult(Integer menuCount, Instant scannedAt) {
+        this.menuCount = menuCount;
+        this.scannedAt = scannedAt;
+    }
+
     /** 룰엔진 판정 후 위험 메뉴 수/상태 갱신. */
     public void applyRuleEngineResult(Integer riskyMenuCount, ScanStatus scanStatus) {
         this.riskyMenuCount = riskyMenuCount;
@@ -77,5 +90,16 @@ public class ScanSession extends BaseEntity {
 
     public void changeStatus(ScanStatus scanStatus) {
         this.scanStatus = scanStatus;
+    }
+
+    /** 유저가 이력 제목을 수정. */
+    public void changeTitle(String title) {
+        this.title = title;
+    }
+
+    /** 재촬영 필요 시 상태 + OCR 이 제공한 사유를 반영. */
+    public void applyNeedsRetake(List<String> retakeReasons) {
+        this.scanStatus = ScanStatus.NEEDS_RETAKE;
+        this.retakeReasons = retakeReasons;
     }
 }
