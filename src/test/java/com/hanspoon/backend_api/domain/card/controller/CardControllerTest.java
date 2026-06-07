@@ -1,5 +1,6 @@
 package com.hanspoon.backend_api.domain.card.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -22,7 +23,9 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.core.MethodParameter;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -135,6 +138,18 @@ class CardControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.items[0].cardId").value(cardId.toString()));
+    }
+
+    @Test
+    void getCardsIgnoresClientSortParam() throws Exception {
+        when(cardService.getCards(eq(USER_ID), any())).thenReturn(new PageResponse<>(List.of(), 0, 20, 0, 0));
+
+        // Swagger 가 채우는 잘못된 sort(=string)가 와도 500 이 아니라 정상 처리되어야 한다
+        mockMvc.perform(get("/api/v1/cards/saved?sort=string")).andExpect(status().isOk());
+
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(cardService).getCards(eq(USER_ID), captor.capture());
+        assertThat(captor.getValue().getSort().isSorted()).isFalse();
     }
 
     @Test
