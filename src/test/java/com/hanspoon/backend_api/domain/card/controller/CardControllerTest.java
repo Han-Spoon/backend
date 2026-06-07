@@ -1,0 +1,148 @@
+package com.hanspoon.backend_api.domain.card.controller;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.hanspoon.backend_api.domain.card.dto.CardText;
+import com.hanspoon.backend_api.domain.card.dto.SavedCardResponse;
+import com.hanspoon.backend_api.domain.card.entity.CardType;
+import com.hanspoon.backend_api.domain.card.service.CardService;
+import com.hanspoon.backend_api.global.common.PageResponse;
+import com.hanspoon.backend_api.global.security.CurrentUser;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.core.MethodParameter;
+import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.bind.support.WebDataBinderFactory;
+import org.springframework.web.context.request.NativeWebRequest;
+import org.springframework.web.method.support.HandlerMethodArgumentResolver;
+import org.springframework.web.method.support.ModelAndViewContainer;
+
+/** standalone 슬라이스. @CurrentUser 는 고정 userId 로 해석. 인증 강제는 SecurityConfig 담당(여기 범위 밖). */
+class CardControllerTest {
+
+    private static final UUID USER_ID = UUID.randomUUID();
+
+    private final CardService cardService = mock(CardService.class);
+    private MockMvc mockMvc;
+
+    @BeforeEach
+    void setUp() {
+        HandlerMethodArgumentResolver currentUserResolver = new HandlerMethodArgumentResolver() {
+            @Override
+            public boolean supportsParameter(MethodParameter parameter) {
+                return parameter.hasParameterAnnotation(CurrentUser.class);
+            }
+
+            @Override
+            public Object resolveArgument(
+                    MethodParameter parameter,
+                    ModelAndViewContainer mavContainer,
+                    NativeWebRequest webRequest,
+                    WebDataBinderFactory binderFactory) {
+                return USER_ID.toString();
+            }
+        };
+        mockMvc = MockMvcBuilders.standaloneSetup(new CardController(cardService))
+                .setCustomArgumentResolvers(currentUserResolver, new PageableHandlerMethodArgumentResolver())
+                .build();
+    }
+
+    @Test
+    void saveTemplateCardReturns201() throws Exception {
+        UUID cardId = UUID.randomUUID();
+        when(cardService.save(eq(USER_ID), any()))
+                .thenReturn(new SavedCardResponse(
+                        cardId, CardType.EXCLUDE, "비빔밥", List.of("is_egg"), null, null, Instant.now()));
+
+        mockMvc.perform(post("/api/v1/cards/saved")
+                        .contentType("application/json")
+                        .content("{\"type\":\"exclude\",\"menuNameKo\":\"비빔밥\",\"ingredients\":[\"is_egg\"]}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.cardId").value(cardId.toString()))
+                .andExpect(jsonPath("$.type").value("exclude"))
+                .andExpect(jsonPath("$.ingredients[0]").value("is_egg"));
+    }
+
+    @Test
+    void saveOwnerQuestionCardReturns201() throws Exception {
+        UUID cardId = UUID.randomUUID();
+        when(cardService.save(eq(USER_ID), any()))
+                .thenReturn(new SavedCardResponse(
+                        cardId,
+                        CardType.OWNER_QUESTION,
+                        "된장찌개",
+                        null,
+                        new CardText("멸치 육수를 사용하나요?", null, null),
+                        "has_unclear_broth",
+                        Instant.now()));
+
+        mockMvc.perform(
+                        post("/api/v1/cards/saved")
+                                .contentType("application/json")
+                                .content(
+                                        "{\"type\":\"owner_question\",\"menuNameKo\":\"된장찌개\",\"text\":{\"ko\":\"멸치 육수를 사용하나요?\"},\"flag\":\"has_unclear_broth\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.type").value("owner_question"))
+                .andExpect(jsonPath("$.text.ko").value("멸치 육수를 사용하나요?"))
+                .andExpect(jsonPath("$.flag").value("has_unclear_broth"));
+    }
+
+    @Test
+    void saveRejectsBlankMenuName() throws Exception {
+        mockMvc.perform(post("/api/v1/cards/saved")
+                        .contentType("application/json")
+                        .content("{\"type\":\"order\",\"menuNameKo\":\"\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void saveRejectsExcludeWithoutIngredients() throws Exception {
+        mockMvc.perform(post("/api/v1/cards/saved")
+                        .contentType("application/json")
+                        .content("{\"type\":\"exclude\",\"menuNameKo\":\"비빔밥\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void saveRejectsOwnerQuestionWithoutText() throws Exception {
+        mockMvc.perform(post("/api/v1/cards/saved")
+                        .contentType("application/json")
+                        .content("{\"type\":\"owner_question\",\"menuNameKo\":\"된장찌개\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getCardsReturnsPage() throws Exception {
+        UUID cardId = UUID.randomUUID();
+        SavedCardResponse item = new SavedCardResponse(cardId, CardType.ORDER, "삼겹살", null, null, null, Instant.now());
+        when(cardService.getCards(eq(USER_ID), any())).thenReturn(new PageResponse<>(List.of(item), 0, 20, 1, 1));
+
+        mockMvc.perform(get("/api/v1/cards/saved?page=0&size=20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.items[0].cardId").value(cardId.toString()));
+    }
+
+    @Test
+    void deleteReturns204() throws Exception {
+        UUID cardId = UUID.randomUUID();
+
+        mockMvc.perform(delete("/api/v1/cards/saved/{cardId}", cardId)).andExpect(status().isNoContent());
+
+        verify(cardService).delete(USER_ID, cardId);
+    }
+}

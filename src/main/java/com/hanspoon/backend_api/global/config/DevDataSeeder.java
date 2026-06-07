@@ -4,6 +4,10 @@ import com.hanspoon.backend_api.domain.ai.dto.common.RiskLevel;
 import com.hanspoon.backend_api.domain.ai.dto.result.FinalMessage;
 import com.hanspoon.backend_api.domain.ai.dto.result.OwnerCard;
 import com.hanspoon.backend_api.domain.ai.dto.result.OwnerQuestion;
+import com.hanspoon.backend_api.domain.card.dto.CardText;
+import com.hanspoon.backend_api.domain.card.entity.CardType;
+import com.hanspoon.backend_api.domain.card.entity.SavedCard;
+import com.hanspoon.backend_api.domain.card.repository.SavedCardRepository;
 import com.hanspoon.backend_api.domain.scan.entity.MenuAnalysis;
 import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
@@ -51,6 +55,7 @@ public class DevDataSeeder implements ApplicationRunner {
     private final UserAllergyRepository userAllergyRepository;
     private final ScanSessionRepository scanSessionRepository;
     private final MenuAnalysisRepository menuAnalysisRepository;
+    private final SavedCardRepository savedCardRepository;
     private final JwtTokenProvider jwtTokenProvider;
 
     public DevDataSeeder(
@@ -59,12 +64,14 @@ public class DevDataSeeder implements ApplicationRunner {
             UserAllergyRepository userAllergyRepository,
             ScanSessionRepository scanSessionRepository,
             MenuAnalysisRepository menuAnalysisRepository,
+            SavedCardRepository savedCardRepository,
             JwtTokenProvider jwtTokenProvider) {
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
         this.userAllergyRepository = userAllergyRepository;
         this.scanSessionRepository = scanSessionRepository;
         this.menuAnalysisRepository = menuAnalysisRepository;
+        this.savedCardRepository = savedCardRepository;
         this.jwtTokenProvider = jwtTokenProvider;
     }
 
@@ -81,7 +88,8 @@ public class DevDataSeeder implements ApplicationRunner {
                     UserAllergy.of(profile.getId(), AllergyCode.SHRIMP),
                     UserAllergy.of(profile.getId(), AllergyCode.EGG)));
             seedScans(user.getId());
-            log.info("[seed] demo user + profile(allergies) + scan history created");
+            seedCards(user.getId());
+            log.info("[seed] demo user + profile(allergies) + scan history + saved cards created");
         } else {
             log.info("[seed] demo user already exists ({}), skip insert", user.getId());
         }
@@ -171,5 +179,22 @@ public class DevDataSeeder implements ApplicationRunner {
 
         // 4) PROCESSING · 진행 중
         scanSessionRepository.save(ScanSession.create(userId, null, null, null, ScanStatus.PROCESSING, null));
+    }
+
+    private void seedCards(UUID userId) {
+        savedCardRepository.saveAll(List.of(
+                // 템플릿형: ingredients(hit 코드)만 저장 → FE 가 언어별 문장 재렌더
+                SavedCard.create(userId, CardType.ORDER, "삼겹살", null, null, null, null),
+                SavedCard.create(userId, CardType.INGREDIENT_CHECK, "김치찌개", List.of("is_fish"), null, null, null),
+                SavedCard.create(userId, CardType.EXCLUDE, "비빔밥", List.of("is_egg"), null, null, null),
+                // owner_question: AI 완성 문구 text + flag 저장
+                SavedCard.create(
+                        userId,
+                        CardType.OWNER_QUESTION,
+                        "된장찌개",
+                        null,
+                        new CardText("멸치 육수를 사용하나요?", "Do you use anchovy broth?", null),
+                        "has_unclear_broth",
+                        null)));
     }
 }

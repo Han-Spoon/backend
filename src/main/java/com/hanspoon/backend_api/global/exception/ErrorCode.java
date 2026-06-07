@@ -21,6 +21,7 @@ public enum ErrorCode {
     INVALID_STORAGE_KEY(HttpStatus.BAD_REQUEST, "INVALID_STORAGE_KEY", "Invalid storage key or image URL."),
     BLOB_SAS_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "BLOB_SAS_ERROR", "Failed to issue blob SAS."),
     SCAN_NOT_FOUND(HttpStatus.NOT_FOUND, "SCAN_NOT_FOUND", "Scan not found."),
+    CARD_NOT_FOUND(HttpStatus.NOT_FOUND, "CARD_NOT_FOUND", "Saved card not found."),
     RESULT_SERVICE_ERROR(HttpStatus.BAD_GATEWAY, "RESULT_SERVICE_ERROR", "Result generation failed."),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR", "Unexpected server error.");
 
