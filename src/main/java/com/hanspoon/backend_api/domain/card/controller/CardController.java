@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.UUID;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
@@ -43,7 +44,9 @@ public class CardController {
     @GetMapping
     public PageResponse<SavedCardResponse> getCards(
             @CurrentUser String userId, @PageableDefault(size = 20) Pageable pageable) {
-        return cardService.getCards(UUID.fromString(userId), pageable);
+        // 정렬은 lastSavedAt desc 고정(repository OrderBy). 클라이언트 sort 파라미터는 무시
+        Pageable paging = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+        return cardService.getCards(UUID.fromString(userId), paging);
     }
 
     @Operation(summary = "저장 카드 삭제(마이페이지).")
