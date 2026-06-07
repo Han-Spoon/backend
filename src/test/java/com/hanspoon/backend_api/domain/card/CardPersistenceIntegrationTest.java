@@ -23,7 +23,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * card 도메인 영속화 + JSONB 라운드트립 검증. @SpringBootTest 부팅이 Flyway V1~V7 마이그레이트 후
+ * card 도메인 영속화 + JSONB 라운드트립 검증. @SpringBootTest 부팅이 Flyway V1(통합 베이스라인) 마이그레이트 후
  * Hibernate validate 를 수행하므로 스키마↔엔티티 정합도 함께 검증된다.
  */
 @SpringBootTest
