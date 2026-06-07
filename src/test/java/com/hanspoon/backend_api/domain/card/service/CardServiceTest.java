@@ -44,78 +44,52 @@ class CardServiceTest {
     @InjectMocks
     private CardService cardService;
 
-    private static SaveCardRequest orderRequest() {
-        return new SaveCardRequest(CardType.ORDER, "삼겹살", null, null, null, null);
+    private static SaveCardRequest request(CardType type, String menuNameKo, CardText text, UUID scanId) {
+        return new SaveCardRequest(type, menuNameKo, text, scanId);
     }
 
-    private static SaveCardRequest excludeRequest(UUID scanId) {
-        return new SaveCardRequest(CardType.EXCLUDE, "비빔밥", List.of("is_egg"), null, null, scanId);
-    }
-
-    private static SaveCardRequest ownerQuestionRequest() {
-        return new SaveCardRequest(
-                CardType.OWNER_QUESTION,
-                "된장찌개",
-                null,
-                new CardText("멸치 육수를 사용하나요?", "Do you use anchovy broth?", null),
-                "has_unclear_broth",
-                null);
+    private static CardText orderText() {
+        return new CardText("삼겹살 하나 주세요.", "One pork belly, please.", null);
     }
 
     @Test
-    void saveCreatesNewTemplateCard() {
+    void saveCreatesNewCard() {
         UUID userId = UUID.randomUUID();
         when(savedCardRepository.findByUserIdAndCardTypeAndMenuNameKo(userId, CardType.ORDER, "삼겹살"))
                 .thenReturn(List.of());
         when(savedCardRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        SavedCardResponse response = cardService.save(userId, orderRequest());
+        SavedCardResponse response = cardService.save(userId, request(CardType.ORDER, "삼겹살", orderText(), null));
 
         assertThat(response.type()).isEqualTo(CardType.ORDER);
         assertThat(response.menuNameKo()).isEqualTo("삼겹살");
-        assertThat(response.ingredients()).isNull();
-        assertThat(response.text()).isNull();
+        assertThat(response.text().ko()).isEqualTo("삼겹살 하나 주세요.");
         verify(savedCardRepository).save(any());
     }
 
     @Test
-    void saveCreatesOwnerQuestionCardWithTextAndFlag() {
+    void saveBumpsDuplicateByText() {
         UUID userId = UUID.randomUUID();
-        when(savedCardRepository.findByUserIdAndCardTypeAndMenuNameKo(userId, CardType.OWNER_QUESTION, "된장찌개"))
-                .thenReturn(List.of());
-        when(savedCardRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-
-        SavedCardResponse response = cardService.save(userId, ownerQuestionRequest());
-
-        assertThat(response.type()).isEqualTo(CardType.OWNER_QUESTION);
-        assertThat(response.text().ko()).isEqualTo("멸치 육수를 사용하나요?");
-        assertThat(response.flag()).isEqualTo("has_unclear_broth");
-        assertThat(response.ingredients()).isNull();
-        verify(savedCardRepository).save(any());
-    }
-
-    @Test
-    void saveBumpsDuplicateTemplateCardByIngredients() {
-        UUID userId = UUID.randomUUID();
-        SavedCard existing = SavedCard.create(userId, CardType.EXCLUDE, "비빔밥", List.of("is_egg"), null, null, null);
-        when(savedCardRepository.findByUserIdAndCardTypeAndMenuNameKo(userId, CardType.EXCLUDE, "비빔밥"))
+        SavedCard existing = SavedCard.create(userId, CardType.ORDER, "삼겹살", orderText(), null);
+        when(savedCardRepository.findByUserIdAndCardTypeAndMenuNameKo(userId, CardType.ORDER, "삼겹살"))
                 .thenReturn(List.of(existing));
 
-        SavedCardResponse response = cardService.save(userId, excludeRequest(null));
+        SavedCardResponse response = cardService.save(userId, request(CardType.ORDER, "삼겹살", orderText(), null));
 
         assertThat(response.cardId()).isEqualTo(existing.getId());
         verify(savedCardRepository, never()).save(any());
     }
 
     @Test
-    void saveCreatesNewWhenIngredientsDiffer() {
+    void saveCreatesNewWhenTextDiffers() {
         UUID userId = UUID.randomUUID();
-        SavedCard existing = SavedCard.create(userId, CardType.EXCLUDE, "비빔밥", List.of("is_pork"), null, null, null);
-        when(savedCardRepository.findByUserIdAndCardTypeAndMenuNameKo(userId, CardType.EXCLUDE, "비빔밥"))
+        SavedCard existing =
+                SavedCard.create(userId, CardType.ORDER, "삼겹살", new CardText("삼겹살 2인분 주세요.", null, null), null);
+        when(savedCardRepository.findByUserIdAndCardTypeAndMenuNameKo(userId, CardType.ORDER, "삼겹살"))
                 .thenReturn(List.of(existing));
         when(savedCardRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        cardService.save(userId, excludeRequest(null)); // ingredients=["is_egg"] ≠ existing ["is_pork"]
+        cardService.save(userId, request(CardType.ORDER, "삼겹살", orderText(), null)); // 다른 text
 
         verify(savedCardRepository).save(any());
     }
@@ -126,7 +100,7 @@ class CardServiceTest {
         UUID scanId = UUID.randomUUID();
         when(scanSessionRepository.findByIdAndUserId(scanId, userId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> cardService.save(userId, excludeRequest(scanId)))
+        assertThatThrownBy(() -> cardService.save(userId, request(CardType.ORDER, "삼겹살", orderText(), scanId)))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.SCAN_NOT_FOUND);
@@ -139,13 +113,13 @@ class CardServiceTest {
         ScanSession session = ScanSession.create(userId, null, 1, 0, ScanStatus.COMPLETED, Instant.now());
         UUID scanId = session.getId();
         when(scanSessionRepository.findByIdAndUserId(scanId, userId)).thenReturn(Optional.of(session));
-        when(savedCardRepository.findByUserIdAndCardTypeAndMenuNameKo(userId, CardType.EXCLUDE, "비빔밥"))
+        when(savedCardRepository.findByUserIdAndCardTypeAndMenuNameKo(userId, CardType.ORDER, "삼겹살"))
                 .thenReturn(List.of());
         when(savedCardRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        SavedCardResponse response = cardService.save(userId, excludeRequest(scanId));
+        SavedCardResponse response = cardService.save(userId, request(CardType.ORDER, "삼겹살", orderText(), scanId));
 
-        assertThat(response.ingredients()).containsExactly("is_egg");
+        assertThat(response.menuNameKo()).isEqualTo("삼겹살");
         verify(savedCardRepository).save(any());
     }
 
@@ -153,8 +127,8 @@ class CardServiceTest {
     void getCardsReturnsMappedPage() {
         UUID userId = UUID.randomUUID();
         Pageable pageable = PageRequest.of(0, 20);
-        SavedCard card =
-                SavedCard.create(userId, CardType.INGREDIENT_CHECK, "김치찌개", List.of("is_fish"), null, null, null);
+        SavedCard card = SavedCard.create(
+                userId, CardType.INGREDIENT_CHECK, "된장찌개", new CardText("이 메뉴에 멸치육수가 들어가나요?", null, null), null);
         when(savedCardRepository.findByUserIdOrderByLastSavedAtDesc(userId, pageable))
                 .thenReturn(new PageImpl<>(List.of(card), pageable, 1));
 
@@ -163,13 +137,13 @@ class CardServiceTest {
         assertThat(response.items()).hasSize(1);
         assertThat(response.totalElements()).isEqualTo(1);
         assertThat(response.items().get(0).type()).isEqualTo(CardType.INGREDIENT_CHECK);
-        assertThat(response.items().get(0).ingredients()).containsExactly("is_fish");
+        assertThat(response.items().get(0).text().ko()).isEqualTo("이 메뉴에 멸치육수가 들어가나요?");
     }
 
     @Test
     void deleteRemovesForOwner() {
         UUID userId = UUID.randomUUID();
-        SavedCard card = SavedCard.create(userId, CardType.ORDER, "삼겹살", null, null, null, null);
+        SavedCard card = SavedCard.create(userId, CardType.ORDER, "삼겹살", orderText(), null);
         UUID cardId = card.getId();
         when(savedCardRepository.findByIdAndUserId(cardId, userId)).thenReturn(Optional.of(card));
 

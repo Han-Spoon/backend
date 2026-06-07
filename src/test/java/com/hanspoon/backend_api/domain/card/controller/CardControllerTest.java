@@ -65,79 +65,63 @@ class CardControllerTest {
     }
 
     @Test
-    void saveTemplateCardReturns201() throws Exception {
-        UUID cardId = UUID.randomUUID();
-        when(cardService.save(eq(USER_ID), any()))
-                .thenReturn(new SavedCardResponse(
-                        cardId, CardType.EXCLUDE, "비빔밥", List.of("is_egg"), null, null, Instant.now()));
-
-        mockMvc.perform(post("/api/v1/cards/saved")
-                        .contentType("application/json")
-                        .content("{\"type\":\"exclude\",\"menuNameKo\":\"비빔밥\",\"ingredients\":[\"is_egg\"]}"))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.cardId").value(cardId.toString()))
-                .andExpect(jsonPath("$.type").value("exclude"))
-                .andExpect(jsonPath("$.ingredients[0]").value("is_egg"));
-    }
-
-    @Test
-    void saveOwnerQuestionCardReturns201() throws Exception {
+    void saveReturns201() throws Exception {
         UUID cardId = UUID.randomUUID();
         when(cardService.save(eq(USER_ID), any()))
                 .thenReturn(new SavedCardResponse(
                         cardId,
-                        CardType.OWNER_QUESTION,
+                        CardType.INGREDIENT_CHECK,
                         "된장찌개",
-                        null,
-                        new CardText("멸치 육수를 사용하나요?", null, null),
-                        "has_unclear_broth",
+                        new CardText("이 메뉴에 멸치육수가 들어가나요?", null, null),
                         Instant.now()));
 
         mockMvc.perform(
                         post("/api/v1/cards/saved")
                                 .contentType("application/json")
                                 .content(
-                                        "{\"type\":\"owner_question\",\"menuNameKo\":\"된장찌개\",\"text\":{\"ko\":\"멸치 육수를 사용하나요?\"},\"flag\":\"has_unclear_broth\"}"))
+                                        "{\"type\":\"ingredient_check\",\"menuNameKo\":\"된장찌개\",\"text\":{\"ko\":\"이 메뉴에 멸치육수가 들어가나요?\"}}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.type").value("owner_question"))
-                .andExpect(jsonPath("$.text.ko").value("멸치 육수를 사용하나요?"))
-                .andExpect(jsonPath("$.flag").value("has_unclear_broth"));
+                .andExpect(jsonPath("$.cardId").value(cardId.toString()))
+                .andExpect(jsonPath("$.type").value("ingredient_check"))
+                .andExpect(jsonPath("$.text.ko").value("이 메뉴에 멸치육수가 들어가나요?"));
     }
 
     @Test
     void saveRejectsBlankMenuName() throws Exception {
         mockMvc.perform(post("/api/v1/cards/saved")
                         .contentType("application/json")
-                        .content("{\"type\":\"order\",\"menuNameKo\":\"\"}"))
+                        .content("{\"type\":\"order\",\"menuNameKo\":\"\",\"text\":{\"ko\":\"삼겹살 하나 주세요.\"}}"))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
-    void saveRejectsExcludeWithoutIngredients() throws Exception {
+    void saveRejectsMissingText() throws Exception {
         mockMvc.perform(post("/api/v1/cards/saved")
                         .contentType("application/json")
-                        .content("{\"type\":\"exclude\",\"menuNameKo\":\"비빔밥\"}"))
+                        .content("{\"type\":\"order\",\"menuNameKo\":\"삼겹살\"}"))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
-    void saveRejectsOwnerQuestionWithoutText() throws Exception {
+    void saveRejectsBlankTextKo() throws Exception {
         mockMvc.perform(post("/api/v1/cards/saved")
                         .contentType("application/json")
-                        .content("{\"type\":\"owner_question\",\"menuNameKo\":\"된장찌개\"}"))
+                        .content("{\"type\":\"order\",\"menuNameKo\":\"삼겹살\",\"text\":{\"ko\":\"\"}}"))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
     void getCardsReturnsPage() throws Exception {
         UUID cardId = UUID.randomUUID();
-        SavedCardResponse item = new SavedCardResponse(cardId, CardType.ORDER, "삼겹살", null, null, null, Instant.now());
+        SavedCardResponse item = new SavedCardResponse(
+                cardId, CardType.ORDER, "삼겹살", new CardText("삼겹살 하나 주세요.", null, null), Instant.now());
         when(cardService.getCards(eq(USER_ID), any())).thenReturn(new PageResponse<>(List.of(item), 0, 20, 1, 1));
 
         mockMvc.perform(get("/api/v1/cards/saved?page=0&size=20"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1))
-                .andExpect(jsonPath("$.items[0].cardId").value(cardId.toString()));
+                .andExpect(jsonPath("$.items[0].cardId").value(cardId.toString()))
+                .andExpect(jsonPath("$.items[0].text.ko").value("삼겹살 하나 주세요."));
     }
 
     @Test
