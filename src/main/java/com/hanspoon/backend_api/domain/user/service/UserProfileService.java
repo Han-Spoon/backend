@@ -123,6 +123,9 @@ public class UserProfileService {
     /** 기존 알레르기를 전부 지우고 요청값으로 재삽입(중복 제거). 저장된 목록을 반환. */
     private List<AllergyCode> replaceAllergies(UUID profileId, ProfileRequest request) {
         userAllergyRepository.deleteByUserProfileId(profileId);
+        // Hibernate 는 커밋 시 INSERT 를 DELETE 보다 먼저 실행하므로, 재삽입 전에 삭제를 DB 로 강제 반영해
+        // uq_user_allergies 유니크 제약 위반(중복 키)을 방지한다.
+        userAllergyRepository.flush();
         if (!Boolean.TRUE.equals(request.hasAllergies()) || request.allergies() == null) {
             return List.of();
         }

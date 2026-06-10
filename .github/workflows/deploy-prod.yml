@@ -1,0 +1,71 @@
+name: Deploy (prod)
+
+# main 머지(push) → ACR 클라우드 빌드(새 태그) → ACA 새 이미지로 배포.
+# 인증은 GitHub OIDC 페더레이션(장기 비밀번호 없음). 수동 실행도 허용.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# 동시 배포 방지: 같은 ref의 이전 배포가 끝날 때까지 새 배포는 대기(취소하지 않음).
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+permissions:
+  id-token: write # OIDC 토큰 발급
+  contents: read
+
+env:
+  RG: smu-team1
+  ACR: acrhanspoonprod
+  APP: ca-hanspoon-api
+  IMAGE_REPO: hanspoon-api
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # 커밋 SHA를 태그로 → 매 배포가 고유·불변 이미지가 되어 ACA가 반드시 새 리비전 생성.
+      - name: Set image tag
+        id: tag
+        run: echo "tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - name: ACR build (cloud)
+        run: |
+          az acr build -r "$ACR" \
+            -t "$IMAGE_REPO:${{ steps.tag.outputs.tag }}" \
+            -t "$IMAGE_REPO:latest" \
+            -f docker/Dockerfile .
+
+      - name: Deploy to Container Apps
+        run: |
+          az containerapp update -g "$RG" -n "$APP" \
+            --image "$ACR.azurecr.io/$IMAGE_REPO:${{ steps.tag.outputs.tag }}" \
+            -o none
+
+      - name: Health check
+        run: |
+          FQDN=$(az containerapp show -g "$RG" -n "$APP" \
+            --query properties.configuration.ingress.fqdn -o tsv)
+          echo "App URL: https://$FQDN"
+          # 새 리비전이 트래픽을 받을 때까지 최대 ~2.5분 폴링
+          for i in $(seq 1 15); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "https://$FQDN/actuator/health" || true)
+            echo "  attempt $i: HTTP $code"
+            if [ "$code" = "200" ]; then
+              echo "✅ Health OK"; exit 0
+            fi
+            sleep 10
+          done
+          echo "::warning::Health check가 200을 반환하지 않았습니다. ACA 로그를 확인하세요."
