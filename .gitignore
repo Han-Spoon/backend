@@ -45,3 +45,17 @@ docs/
 ### Logs ###
 logs/
 *.log
+
+### Terraform ###
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+.terraformrc
+terraform.rc
