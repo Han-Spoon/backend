@@ -16,7 +16,7 @@ import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
 import com.hanspoon.backend_api.domain.scan.repository.MenuImageRepository;
 import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
-import com.hanspoon.backend_api.domain.upload.service.BlobStorageService;
+import com.hanspoon.backend_api.domain.upload.service.S3StorageService;
 import com.hanspoon.backend_api.domain.user.entity.UserAllergy;
 import com.hanspoon.backend_api.domain.user.entity.UserProfile;
 import com.hanspoon.backend_api.domain.user.repository.UserAllergyRepository;
@@ -33,12 +33,6 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * 스캔 비동기 파이프라인. read SAS 생성 → OCR → (needs_retake 분기) → 프로필 매핑 → RuleEngine → ai_result →
- * OCR↔Final index 머지 → 영속화. {@link ScanService} 와 분리된 빈이라 @Async 프록시가 정상 적용된다.
- *
- * <p>실패해도 예외를 호출자에게 던지지 않고 scan_status 를 FAILED 로 남긴다(폴링으로 확인).
- */
 @Component
 public class ScanProcessor {
 
@@ -46,7 +40,7 @@ public class ScanProcessor {
     private static final String NEEDS_RETAKE = "needs_retake";
 
     private final AiClient aiClient;
-    private final BlobStorageService blobStorageService;
+    private final S3StorageService s3StorageService;
     private final UserProfileRepository userProfileRepository;
     private final UserAllergyRepository userAllergyRepository;
     private final ScanSessionRepository scanSessionRepository;
@@ -55,14 +49,14 @@ public class ScanProcessor {
 
     public ScanProcessor(
             AiClient aiClient,
-            BlobStorageService blobStorageService,
+            S3StorageService s3StorageService,
             UserProfileRepository userProfileRepository,
             UserAllergyRepository userAllergyRepository,
             ScanSessionRepository scanSessionRepository,
             MenuImageRepository menuImageRepository,
             MenuAnalysisRepository menuAnalysisRepository) {
         this.aiClient = aiClient;
-        this.blobStorageService = blobStorageService;
+        this.s3StorageService = s3StorageService;
         this.userProfileRepository = userProfileRepository;
         this.userAllergyRepository = userAllergyRepository;
         this.scanSessionRepository = scanSessionRepository;
@@ -79,8 +73,8 @@ public class ScanProcessor {
             return;
         }
         try {
-            // 1) read SAS → OCR
-            String imageUrl = blobStorageService.createReadSasUrl(storageKey);
+            // 1) presigned GET URL → OCR
+            String imageUrl = s3StorageService.createReadUrl(storageKey);
             OcrResponse ocr = aiClient.requestOcr(new OcrRequest(source, storageKey, imageUrl));
 
             // 2) menu_image 저장 + 세션에 OCR 메타 반영
@@ -135,7 +129,7 @@ public class ScanProcessor {
             fileSize = ocr.menuImage().fileSize();
         }
         menuImageRepository.save(MenuImage.create(
-                scanId, resolvedSource, storageKey, blobStorageService.blobUrl(storageKey), mimeType, fileSize));
+                scanId, resolvedSource, storageKey, s3StorageService.objectUri(storageKey), mimeType, fileSize));
     }
 
     private boolean isNeedsRetake(OcrResponse ocr) {

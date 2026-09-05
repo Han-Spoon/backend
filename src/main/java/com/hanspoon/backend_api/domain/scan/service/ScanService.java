@@ -11,7 +11,7 @@ import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
 import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
-import com.hanspoon.backend_api.domain.upload.service.BlobStorageService;
+import com.hanspoon.backend_api.domain.upload.service.S3StorageService;
 import com.hanspoon.backend_api.global.common.PageResponse;
 import com.hanspoon.backend_api.global.exception.BusinessException;
 import com.hanspoon.backend_api.global.exception.ErrorCode;
@@ -21,32 +21,33 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * 스캔 시작/조회. 시작은 세션을 PROCESSING 으로 저장(즉시 커밋)한 뒤 {@link ScanProcessor} 비동기 처리를 트리거한다.
- *
- * <p>startScan 은 의도적으로 비트랜잭션 — 세션 저장이 즉시 커밋돼야 별도 스레드의 비동기 작업이 그 행을 조회할 수 있다.
- */
 @Service
 public class ScanService {
 
-    private final BlobStorageService blobStorageService;
+    private final S3StorageService s3StorageService;
     private final ScanSessionRepository scanSessionRepository;
     private final MenuAnalysisRepository menuAnalysisRepository;
     private final ScanProcessor scanProcessor;
 
     public ScanService(
-            BlobStorageService blobStorageService,
+            S3StorageService s3StorageService,
             ScanSessionRepository scanSessionRepository,
             MenuAnalysisRepository menuAnalysisRepository,
             ScanProcessor scanProcessor) {
-        this.blobStorageService = blobStorageService;
+        this.s3StorageService = s3StorageService;
         this.scanSessionRepository = scanSessionRepository;
         this.menuAnalysisRepository = menuAnalysisRepository;
         this.scanProcessor = scanProcessor;
     }
 
     public ScanCreatedResponse startScan(UUID userId, StartScanRequest request) {
-        String storageKey = blobStorageService.extractStorageKey(request.storageKey());
+        // 형식 · 소유권 검증 (외부 입력을 받는 유일한 지점)
+        String storageKey = s3StorageService.resolveKey(userId, request.storageKey());
+
+        // presigned PUT 은 서버가 내용을 모르므로 실제 업로드 여부·크기·타입을 여기서 확인한다.
+        // 비동기로 넘긴 뒤 실패하면 사용자는 폴링만 하다 FAILED 를 받게 된다.
+        s3StorageService.verifyUploadObject(storageKey);
+
         // title 은 생성 시 null — 조회 때 기본값(스캔 시각)으로 보이고, 수정은 마이페이지 API 담당
         ScanSession session =
                 scanSessionRepository.save(ScanSession.create(userId, null, null, null, ScanStatus.PROCESSING, null));
