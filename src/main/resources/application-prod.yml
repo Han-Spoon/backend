@@ -2,17 +2,10 @@ spring:
   config:
     activate:
       on-profile: prod
-    import: optional:azure-keyvault:${AZURE_KEYVAULT_ENDPOINT:https://kv-hanspoon-prod.vault.azure.net/}
-  cloud:
-    azure:
-      keyvault:
-        secret:
-          endpoint: ${AZURE_KEYVAULT_ENDPOINT:https://kv-hanspoon-prod.vault.azure.net/}
   datasource:
-    url: ${DB_PRIVATE_ENDPOINT_URL:jdbc:postgresql://psql-hanspoon-prod.privatelink.postgres.database.azure.com:5432/hanspoon?sslmode=require}
+    url: jdbc:postgresql://${DB_HOST}:5432/${DB_NAME:hanspoon}?sslmode=require
     username: ${DB_USERNAME:hanspoon_app}
-    # Key Vault 우선, 미사용/부재 시 DB_PASSWORD 환경변수로 폴백
-    password: ${kv-secret-db-password:${DB_PASSWORD:}}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: ${DB_MAX_POOL_SIZE:10}
@@ -45,20 +38,15 @@ server:
 app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:https://han-spoon.site,https://www.han-spoon.site}
-  blob:
-    # SAS 서명용 스토리지 계정 키. Key Vault 우선, 미사용/부재 시 BLOB_ACCOUNT_KEY 환경변수로 폴백.
-    account-key: ${kv-secret-blob-account-key:${BLOB_ACCOUNT_KEY:}}
-  azure-ai:
-    endpoint: ${AZURE_AI_PRIVATE_ENDPOINT:https://aoai-hanspoon-prod.openai.azure.com}
-    # Key Vault 우선, 미사용/부재 시 AZURE_AI_API_KEY 환경변수로 폴백
-    api-key: ${kv-secret-azure-openai-api-key:${AZURE_AI_API_KEY:}}
+  s3:
+    bucket: ${S3_BUCKET}
+    region: ${AWS_REGION:ap-northeast-2}
   security:
     google:
       client-id: ${GOOGLE_CLIENT_ID}
     jwt:
-      issuer: ${JWT_ISSUER:https://api.han-spoon.com}
-      # Key Vault 우선, 미사용/부재 시 JWT_SECRET 환경변수로 폴백
-      secret: ${kv-secret-jwt-signing-key:${JWT_SECRET:}}
+      issuer: ${JWT_ISSUER:https://api.han-spoon.site}
+      secret: ${JWT_SECRET}
       access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION:15m}
       refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION:14d}
 
