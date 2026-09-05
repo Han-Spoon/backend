@@ -26,7 +26,7 @@ public class SwaggerConfig {
     private Info apiInfo() {
         return new Info()
                 .title("Han-Spoon Backend API")
-                .description("Foreign tourist service API for Han-Spoon running on Azure Container Apps.")
+                .description("Foreign tourist service API for Han-Spoon.")
                 .version("v1")
                 .contact(new Contact().name("Han-Spoon Backend Team").email("backend@han-spoon.com"))
                 .license(new License().name("Private").url("https://han-spoon.com"));
