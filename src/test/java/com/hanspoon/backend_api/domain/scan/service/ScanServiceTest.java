@@ -16,7 +16,7 @@ import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
 import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
-import com.hanspoon.backend_api.domain.upload.service.BlobStorageService;
+import com.hanspoon.backend_api.domain.upload.service.S3StorageService;
 import com.hanspoon.backend_api.global.common.PageResponse;
 import com.hanspoon.backend_api.global.exception.BusinessException;
 import com.hanspoon.backend_api.global.exception.ErrorCode;
@@ -37,7 +37,7 @@ import org.springframework.data.domain.Pageable;
 class ScanServiceTest {
 
     @Mock
-    private BlobStorageService blobStorageService;
+    private S3StorageService s3StorageService;
 
     @Mock
     private ScanSessionRepository scanSessionRepository;
@@ -54,14 +54,15 @@ class ScanServiceTest {
     @Test
     void startScanSavesSessionTriggersProcessorAndReturnsProcessing() {
         UUID userId = UUID.randomUUID();
-        when(blobStorageService.extractStorageKey("menu-x.jpg")).thenReturn("menu-x.jpg");
+        String key = "scans/" + userId + "/2f1c9d3e-0000-4000-8000-000000000001.jpg";
+        when(s3StorageService.resolveKey(userId, key)).thenReturn(key);
         when(scanSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        ScanCreatedResponse response = scanService.startScan(userId, new StartScanRequest("menu-x.jpg", "upload"));
+        ScanCreatedResponse response = scanService.startScan(userId, new StartScanRequest(key, "upload"));
 
         assertThat(response.status()).isEqualTo(ScanStatus.PROCESSING);
         assertThat(response.scanId()).isNotNull();
-        verify(scanProcessor).process(eq(response.scanId()), eq(userId), eq("menu-x.jpg"), eq("upload"));
+        verify(scanProcessor).process(eq(response.scanId()), eq(userId), eq(key), eq("upload"));
     }
 
     @Test

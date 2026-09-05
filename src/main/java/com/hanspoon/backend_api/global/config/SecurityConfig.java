@@ -1,6 +1,5 @@
 package com.hanspoon.backend_api.global.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hanspoon.backend_api.global.exception.ErrorCode;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import io.jsonwebtoken.security.Keys;
@@ -31,6 +30,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtGra
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import tools.jackson.databind.ObjectMapper;
 
 @Configuration
 @EnableMethodSecurity
@@ -123,7 +123,7 @@ public class SecurityConfig {
 
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(status, errorCode.getMessage());
         problemDetail.setTitle(status.getReasonPhrase());
-        problemDetail.setType(URI.create("https://api.han-spoon.com/problems/" + errorCode.getCode()));
+        problemDetail.setType(URI.create("https://api.han-spoon.site/problems/" + errorCode.getCode()));
         problemDetail.setProperty("code", errorCode.getCode());
         problemDetail.setProperty("timestamp", OffsetDateTime.now());
 

@@ -89,7 +89,7 @@ resource "aws_cloudfront_distribution" "main" {
   }
 
   ordered_cache_behavior {
-    path_pattern           = "/images/*"
+    path_pattern           = "/menus/*"
     target_origin_id       = "images"
     viewer_protocol_policy = "redirect-to-https"
     allowed_methods        = ["GET", "HEAD"]

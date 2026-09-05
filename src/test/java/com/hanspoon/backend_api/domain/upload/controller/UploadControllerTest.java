@@ -1,6 +1,7 @@
 package com.hanspoon.backend_api.domain.upload.controller;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -8,44 +9,65 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.hanspoon.backend_api.domain.upload.dto.UploadTicketResponse;
-import com.hanspoon.backend_api.domain.upload.service.BlobStorageService;
+import com.hanspoon.backend_api.domain.upload.service.S3StorageService;
+import com.hanspoon.backend_api.global.security.CurrentUser;
 import java.time.Instant;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.MethodParameter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.bind.support.WebDataBinderFactory;
+import org.springframework.web.context.request.NativeWebRequest;
+import org.springframework.web.method.support.HandlerMethodArgumentResolver;
+import org.springframework.web.method.support.ModelAndViewContainer;
 
-/**
- * 컨트롤러 standalone 슬라이스. 인증 강제는 SecurityConfig(anyRequest authenticated, PUBLIC_ENDPOINTS 미포함)가
- * 담당하므로 여기서는 위임/검증/응답 스키마만 확인한다.
- */
 class UploadControllerTest {
 
-    private final BlobStorageService blobStorageService = mock(BlobStorageService.class);
+    private static final UUID USER_ID = UUID.randomUUID();
+
+    private final S3StorageService s3StorageService = mock(S3StorageService.class);
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new UploadController(blobStorageService))
+        HandlerMethodArgumentResolver currentUserResolver = new HandlerMethodArgumentResolver() {
+            @Override
+            public boolean supportsParameter(MethodParameter parameter) {
+                return parameter.hasParameterAnnotation(CurrentUser.class);
+            }
+
+            @Override
+            public Object resolveArgument(
+                    MethodParameter parameter,
+                    ModelAndViewContainer mavContainer,
+                    NativeWebRequest webRequest,
+                    WebDataBinderFactory binderFactory) {
+                return USER_ID.toString();
+            }
+        };
+        mockMvc = MockMvcBuilders.standaloneSetup(new UploadController(s3StorageService))
+                .setCustomArgumentResolvers(currentUserResolver)
                 .build();
     }
 
     @Test
-    void issuesUploadSas() throws Exception {
-        when(blobStorageService.createUploadSas("image/jpeg"))
+    void issuesUploadTicket() throws Exception {
+        String key = "scans/" + USER_ID + "/abc.jpg";
+        when(s3StorageService.createUploadUrl(eq(USER_ID), eq("image/jpeg")))
                 .thenReturn(new UploadTicketResponse(
-                        "menu-abc.jpg",
-                        "https://testacct.blob.core.windows.net/board-images/menu-abc.jpg?sig=xyz",
-                        "https://testacct.blob.core.windows.net/board-images/menu-abc.jpg",
+                        key,
+                        "https://bucket.s3.ap-northeast-2.amazonaws.com/" + key + "?X-Amz-Signature=xyz",
                         Instant.parse("2026-06-06T00:10:00Z")));
 
         mockMvc.perform(post("/api/v1/uploads/sas")
                         .contentType("application/json")
                         .content("{\"contentType\":\"image/jpeg\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.storageKey").value("menu-abc.jpg"))
-                .andExpect(jsonPath("$.uploadUrl").value(containsString("sig=")))
-                .andExpect(jsonPath("$.readUrl").value(containsString("board-images/menu-abc.jpg")));
+                .andExpect(jsonPath("$.storageKey").value(key))
+                .andExpect(jsonPath("$.uploadUrl").value(containsString("X-Amz-Signature=")))
+                .andExpect(jsonPath("$.expiresAt").exists());
     }
 
     @Test

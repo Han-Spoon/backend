@@ -18,6 +18,7 @@
 ## ✅ Self-Check List
 <!-- 본인이 리뷰를 요청하기 전 마지막으로 확인한 사항을 체크해 주세요. -->
 - [ ] 스스로 코드를 한 번 이상 리뷰했습니다. (Self-review)
-- [ ] `ktlint` 포맷팅과 Kotlin 공식 컨벤션을 준수했습니다.
-- [ ] 불필요한 `!!` (Not-null assertion) 사용을 배제하고 안전하게 예외 처리(`?: throw`)를 했습니다.
-- [ ] 코드에 불필요한 주석이나 `println`, TODO가 남아있지 않습니다.
+- [ ] `./gradlew spotlessApply` 로 포맷팅을 적용했습니다.
+- [ ] `./gradlew build` 가 통과합니다.
+- [ ] 예외를 `BusinessException` + `ErrorCode` 로 처리했습니다.
+- [ ] 코드에 불필요한 주석이나 `System.out.println`, TODO 가 남아있지 않습니다.
