@@ -38,6 +38,8 @@ out/
 
 ### .env ###
 .env
+.env.*
+!.env.example
 
 ### docs ###
 docs/
@@ -45,3 +47,20 @@ docs/
 ### Logs ###
 logs/
 *.log
+
+### Terraform ###
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+.terraformrc
+terraform.rc
+tfplan
+*.tfplan
+plan.out

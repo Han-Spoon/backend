@@ -37,20 +37,17 @@ app:
     openai:
       capacity: ${OPENAI_RATE_LIMIT_CAPACITY:30}
       refill-period: ${OPENAI_RATE_LIMIT_REFILL_PERIOD:1m}
-  azure-ai:
-    endpoint: ${AZURE_AI_ENDPOINT:https://han-spoon-openai.openai.azure.com}
-    api-key: ${AZURE_AI_API_KEY:}
   ai-service:
     base-url: ${AI_SERVICE_BASE_URL:http://localhost:8000}
     connect-timeout: ${AI_SERVICE_CONNECT_TIMEOUT:3s}
     read-timeout: ${AI_SERVICE_READ_TIMEOUT:30s}
-  blob:
-    account-name: ${BLOB_ACCOUNT_NAME:sthanspoonprod}
-    container: ${BLOB_CONTAINER:board-images}
-    account-key: ${BLOB_ACCOUNT_KEY:}
-    upload-sas-ttl: ${BLOB_UPLOAD_SAS_TTL:10m}
-    read-sas-ttl: ${BLOB_READ_SAS_TTL:15m}
-    allowed-content-types: ${BLOB_ALLOWED_CONTENT_TYPES:image/jpeg,image/png,image/webp}
+  s3:
+    bucket: ${S3_BUCKET:hanspoon-local-images}
+    region: ${AWS_REGION:ap-northeast-2}
+    endpoint: ${S3_ENDPOINT:}
+    upload-url-ttl: ${S3_UPLOAD_URL_TTL:10m}
+    read-url-ttl: ${S3_READ_URL_TTL:15m}
+    max-file-size: ${S3_MAX_FILE_SIZE:10485760} # 10MB
   security:
     google:
       client-id: ${GOOGLE_CLIENT_ID:}

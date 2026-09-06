@@ -3,6 +3,10 @@ name: CI
 on:
   pull_request:
     branches: [dev, main]
+    paths-ignore:
+      - "infra/**"
+      - "docs/**"
+      - "**.md"
 
 # 동일 PR에서 새 푸시 시 이전 실행 취소
 concurrency:

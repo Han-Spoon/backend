@@ -18,11 +18,10 @@ repositories {
 	mavenCentral()
 }
 
-extra["springCloudAzureVersion"] = "7.1.0"
-
+extra["awsSdkVersion"] = "2.54.13"
 dependencyManagement {
 	imports {
-		mavenBom("com.azure.spring:spring-cloud-azure-dependencies:${property("springCloudAzureVersion")}")
+		mavenBom("software.amazon.awssdk:bom:${property("awsSdkVersion")}")
 	}
 }
 
@@ -40,16 +39,17 @@ dependencies {
 	runtimeOnly("org.postgresql:postgresql")
 	implementation("com.pgvector:pgvector:0.1.6")
 
-	// DB Migration (Flyway) — Spring Boot 4는 자동설정이 spring-boot-flyway 모듈에 분리됨
+	// DB Migration (Flyway)
 	implementation("org.springframework.boot:spring-boot-flyway")
 	implementation("org.flywaydb:flyway-core")
 	implementation("org.flywaydb:flyway-database-postgresql")
 
-	// Azure Configuration (Key Vault secrets)
-	implementation("com.azure.spring:spring-cloud-azure-starter-keyvault-secrets")
-
-	// Azure Blob Storage (SAS 발급용 — 업로드 프록시 아님)
-	implementation("com.azure:azure-storage-blob")
+	// AWS S3
+	implementation("software.amazon.awssdk:s3") {
+		exclude(group = "software.amazon.awssdk", module = "netty-nio-client")
+		exclude(group = "software.amazon.awssdk", module = "apache-client")
+	}
+	implementation("software.amazon.awssdk:url-connection-client")
 
 	// OpenAPI & Swagger (Spring Boot 4 compatible)
 	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3")
@@ -74,7 +74,7 @@ dependencies {
 	testAnnotationProcessor("org.projectlombok:lombok")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
-	// Test - Testcontainers (통합 테스트용 PostgreSQL). Testcontainers 2.x 아티팩트 명명 사용
+	// Test - Testcontainers
 	testImplementation("org.springframework.boot:spring-boot-testcontainers")
 	testImplementation("org.testcontainers:testcontainers-junit-jupiter")
 	testImplementation("org.testcontainers:testcontainers-postgresql")
@@ -84,7 +84,6 @@ tasks.withType<Test> {
 	useJUnitPlatform()
 }
 
-// Spring Boot 실행 가능 jar만 생성 (plain jar 비활성 → Docker COPY 글롭 모호성 제거)
 tasks.named<Jar>("jar") {
 	enabled = false
 }

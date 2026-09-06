@@ -24,7 +24,7 @@ import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
 import com.hanspoon.backend_api.domain.scan.repository.MenuImageRepository;
 import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
-import com.hanspoon.backend_api.domain.upload.service.BlobStorageService;
+import com.hanspoon.backend_api.domain.upload.service.S3StorageService;
 import com.hanspoon.backend_api.domain.user.entity.ReligionType;
 import com.hanspoon.backend_api.domain.user.entity.UserProfile;
 import com.hanspoon.backend_api.domain.user.repository.UserAllergyRepository;
@@ -44,11 +44,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ScanProcessorTest {
 
+    private static final String STORAGE_KEY = "scans/11111111-1111-1111-1111-111111111111/abc.jpg";
+
     @Mock
     private AiClient aiClient;
 
     @Mock
-    private BlobStorageService blobStorageService;
+    private S3StorageService s3StorageService;
 
     @Mock
     private UserProfileRepository userProfileRepository;
@@ -79,7 +81,7 @@ class ScanProcessorTest {
                 new com.hanspoon.backend_api.domain.ai.dto.ocr.ScanSession(
                         "menu.jpg", 2, null, "completed", "2026-06-05T00:00:00Z"),
                 new com.hanspoon.backend_api.domain.ai.dto.ocr.MenuImage(
-                        "upload", "menu-x.jpg", "https://acct/board-images/menu-x.jpg", "image/jpeg", 123L),
+                        "upload", STORAGE_KEY, "https://s3/presigned", "image/jpeg", 123L),
                 new com.hanspoon.backend_api.domain.ai.dto.ocr.ScanQuality(
                         "usable", 80, 20, 2, 1.0, 1280, 960, null, List.of(), List.of()),
                 List.of(ocrMenu("samgyeopsal", "9000", false, 1), ocrMenu("doenjang", "8000", true, 2)),
@@ -94,9 +96,8 @@ class ScanProcessorTest {
         OcrResponse ocr = usableOcr();
 
         when(scanSessionRepository.findById(scanId)).thenReturn(Optional.of(session));
-        when(blobStorageService.createReadSasUrl("menu-x.jpg"))
-                .thenReturn("https://acct/board-images/menu-x.jpg?sig=r");
-        when(blobStorageService.blobUrl("menu-x.jpg")).thenReturn("https://acct/board-images/menu-x.jpg");
+        when(s3StorageService.createReadUrl(STORAGE_KEY)).thenReturn("https://s3/presigned?X-Amz-Signature=r");
+        when(s3StorageService.objectUri(STORAGE_KEY)).thenReturn("s3://test-bucket/" + STORAGE_KEY);
         when(aiClient.requestOcr(any())).thenReturn(ocr);
         UserProfile profile = UserProfile.create(userId, "KR", false, false, null, ReligionType.HALAL, true, true);
         when(userProfileRepository.findByUserId(userId)).thenReturn(Optional.of(profile));
@@ -145,7 +146,7 @@ class ScanProcessorTest {
                                 "doenjang", "has_unclear_broth", new OwnerQuestion("use anchovy?", null, null)))));
         when(aiClient.result(any())).thenReturn(finalResult);
 
-        scanProcessor.process(scanId, userId, "menu-x.jpg", "upload");
+        scanProcessor.process(scanId, userId, STORAGE_KEY, "upload");
 
         assertThat(session.getScanStatus()).isEqualTo(ScanStatus.COMPLETED);
         assertThat(session.getMenuCount()).isEqualTo(2);
@@ -176,19 +177,18 @@ class ScanProcessorTest {
         UUID scanId = session.getId();
         OcrResponse ocr = new OcrResponse(
                 new com.hanspoon.backend_api.domain.ai.dto.ocr.ScanSession("menu.jpg", 0, null, "completed", null),
-                new com.hanspoon.backend_api.domain.ai.dto.ocr.MenuImage("upload", "menu-x.jpg", "u", "image/jpeg", 1L),
+                new com.hanspoon.backend_api.domain.ai.dto.ocr.MenuImage("upload", STORAGE_KEY, "u", "image/jpeg", 1L),
                 new com.hanspoon.backend_api.domain.ai.dto.ocr.ScanQuality(
                         "needs_retake", 20, 1, 0, 0.0, 100, 100, null, List.of(), List.of("too blurry")),
                 List.of(),
                 null);
 
         when(scanSessionRepository.findById(scanId)).thenReturn(Optional.of(session));
-        when(blobStorageService.createReadSasUrl("menu-x.jpg"))
-                .thenReturn("https://acct/board-images/menu-x.jpg?sig=r");
-        when(blobStorageService.blobUrl("menu-x.jpg")).thenReturn("https://acct/board-images/menu-x.jpg");
+        when(s3StorageService.createReadUrl(STORAGE_KEY)).thenReturn("https://s3/presigned?X-Amz-Signature=r");
+        when(s3StorageService.objectUri(STORAGE_KEY)).thenReturn("s3://test-bucket/" + STORAGE_KEY);
         when(aiClient.requestOcr(any())).thenReturn(ocr);
 
-        scanProcessor.process(scanId, userId, "menu-x.jpg", "upload");
+        scanProcessor.process(scanId, userId, STORAGE_KEY, "upload");
 
         assertThat(session.getScanStatus()).isEqualTo(ScanStatus.NEEDS_RETAKE);
         assertThat(session.getRetakeReasons()).containsExactly("too blurry");
@@ -203,11 +203,10 @@ class ScanProcessorTest {
         UUID scanId = session.getId();
 
         when(scanSessionRepository.findById(scanId)).thenReturn(Optional.of(session));
-        when(blobStorageService.createReadSasUrl("menu-x.jpg"))
-                .thenReturn("https://acct/board-images/menu-x.jpg?sig=r");
+        when(s3StorageService.createReadUrl(STORAGE_KEY)).thenReturn("https://s3/presigned?X-Amz-Signature=r");
         when(aiClient.requestOcr(any())).thenThrow(new BusinessException(ErrorCode.OCR_SERVICE_ERROR, "boom"));
 
-        scanProcessor.process(scanId, userId, "menu-x.jpg", "upload");
+        scanProcessor.process(scanId, userId, STORAGE_KEY, "upload");
 
         assertThat(session.getScanStatus()).isEqualTo(ScanStatus.FAILED);
         verify(menuAnalysisRepository, never()).saveAll(any());
