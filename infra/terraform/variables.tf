@@ -66,3 +66,13 @@ variable "api_subdomain" {
   type        = string
   default     = "api"
 }
+
+variable "web_origins" {
+  description = "S3 presigned 업로드를 수행하는 프론트엔드 origin. S3 CORS 허용 목록."
+  type        = list(string)
+  default = [
+    "https://han-spoon.site",
+    "https://www.han-spoon.site",
+    "http://localhost:5173",
+  ]
+}
