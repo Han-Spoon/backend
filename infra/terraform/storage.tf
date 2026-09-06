@@ -45,6 +45,20 @@ resource "aws_s3_bucket_lifecycle_configuration" "images" {
   }
 }
 
+# 버킷 CORS.
+resource "aws_s3_bucket_cors_configuration" "images" {
+  bucket = aws_s3_bucket.images.id
+
+  cors_rule {
+    allowed_origins = var.web_origins
+    # PUT = 업로드, GET/HEAD = presigned 조회
+    allowed_methods = ["PUT", "GET", "HEAD"]
+    allowed_headers = ["*"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3000
+  }
+}
+
 # ── RDS: PostgreSQL 16 ───────────────────────────────────────
 resource "aws_db_subnet_group" "main" {
   name       = "${local.name_prefix}-db-subnet"
