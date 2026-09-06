@@ -44,7 +44,7 @@ variable "db_instance_class" {
 variable "github_repositories" {
   description = "OIDC 로 배포를 허용할 저장소 목록. 백엔드와 AI 서비스가 같은 태스크 정의를 갱신하므로 역할을 공유한다."
   type        = list(string)
-  default     = ["Han-Spoon/backend-api", "Han-Spoon/ai"]
+  default = ["Han-Spoon/backend", "Han-Spoon/ai"]
 }
 
 variable "alert_email" {
@@ -65,4 +65,14 @@ variable "api_subdomain" {
   description = "API 호스트. root 도메인은 Vercel 프론트엔드가 쓰고 있음."
   type        = string
   default     = "api"
+}
+
+variable "web_origins" {
+  description = "S3 presigned 업로드를 수행하는 프론트엔드 origin. S3 CORS 허용 목록."
+  type        = list(string)
+  default = [
+    "https://han-spoon.site",
+    "https://www.han-spoon.site",
+    "http://localhost:5173",
+  ]
 }
