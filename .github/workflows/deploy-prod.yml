@@ -69,9 +69,15 @@ jobs:
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
         run: |
-          IMAGE="$REGISTRY/$ECR_REPOSITORY:${GITHUB_SHA::12}"
-          docker build -f docker/Dockerfile -t "$IMAGE" .
-          docker push "$IMAGE"
+          TAG="${GITHUB_SHA::12}"
+          IMAGE="$REGISTRY/$ECR_REPOSITORY:$TAG"
+          if aws ecr describe-images --repository-name "$ECR_REPOSITORY" \
+               --image-ids imageTag="$TAG" >/dev/null 2>&1; then
+            echo "image already exists — skip build/push"
+          else
+            docker build -f docker/Dockerfile -t "$IMAGE" .
+            docker push "$IMAGE"
+          fi
           echo "uri=$IMAGE" >> "$GITHUB_OUTPUT"
 
       # Deploy to ECS

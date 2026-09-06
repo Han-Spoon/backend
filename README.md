@@ -99,7 +99,13 @@
 
 ## 🏗 시스템 아키텍처
 
+<div align="center">
 
+<img src="infra/images/architecture.png" alt="한스푼 시스템 아키텍처" width="900" />
+
+</div>
+
+> 프론트(Vercel)는 `han-spoon.site`로 서빙되고 메뉴 이미지는 Blob에 직접 업로드됩니다. 백엔드(Spring)·AI(FastAPI)는 ACA에서 실행되며, DB·Key Vault·AI 리소스는 VNet 사설 구간(Private Endpoint)에 격리됩니다. 자세한 흐름은 [`docs/02-architecture.md`](docs/02-architecture.md)를 참고하세요.
 
 ---
 

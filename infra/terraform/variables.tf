@@ -44,7 +44,7 @@ variable "db_instance_class" {
 variable "github_repositories" {
   description = "OIDC 로 배포를 허용할 저장소 목록. 백엔드와 AI 서비스가 같은 태스크 정의를 갱신하므로 역할을 공유한다."
   type        = list(string)
-  default = ["Han-Spoon/backend", "Han-Spoon/ai"]
+  default     = ["Han-Spoon/backend", "Han-Spoon/ai"]
 }
 
 variable "alert_email" {
