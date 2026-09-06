@@ -1,13 +1,21 @@
 name: Deploy (prod)
 
-# main 머지(push) → ACR 클라우드 빌드(새 태그) → ACA 새 이미지로 배포.
-# 인증은 GitHub OIDC 페더레이션(장기 비밀번호 없음). 수동 실행도 허용.
+# main 머지(push) → ECR 푸시(커밋 SHA 태그) → 태스크 정의 새 리비전 등록 → ECS 배포.
+
+# Checkout → JDK 21 → Gradle → bootJar
+#  → AWS OIDC → ECR 로그인 → 이미지 빌드·푸시
+#  → 현재 태스크 정의 조회 → 이미지 교체 → 새 리비전 등록·배포
+#  → 헬스체크
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "infra/**"
+      - "docs/**"
+      - "**.md"
   workflow_dispatch:
 
-# 동시 배포 방지: 같은 ref의 이전 배포가 끝날 때까지 새 배포는 대기(취소하지 않음).
+# 동시 배포 방지.
 concurrency:
   group: deploy-prod
   cancel-in-progress: false
@@ -17,55 +25,98 @@ permissions:
   contents: read
 
 env:
-  RG: smu-team1
-  ACR: acrhanspoonprod
-  APP: ca-hanspoon-api
-  IMAGE_REPO: hanspoon-api
+  AWS_REGION: ap-northeast-2
+  ECR_REPOSITORY: hanspoon-prod-backend
+  ECS_CLUSTER: hanspoon-prod-cluster
+  ECS_SERVICE: hanspoon-prod-app
+  TASK_FAMILY: hanspoon-prod-app
+  CONTAINER_NAME: backend
+  HEALTH_URL: https://api.han-spoon.site/actuator/health
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    # ARM64 native runner.
+    runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Azure login (OIDC)
-        uses: azure/login@v2
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          distribution: temurin
+          java-version: "21"
 
-      # 커밋 SHA를 태그로 → 매 배포가 고유·불변 이미지가 되어 ACA가 반드시 새 리비전 생성.
-      - name: Set image tag
-        id: tag
-        run: echo "tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
 
-      - name: ACR build (cloud)
+      - name: Build jar
+        run: ./gradlew bootJar -x test
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # Build and push Docker image to ECR
+      - name: Build and push image
+        id: image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
         run: |
-          az acr build -r "$ACR" \
-            -t "$IMAGE_REPO:${{ steps.tag.outputs.tag }}" \
-            -t "$IMAGE_REPO:latest" \
-            -f docker/Dockerfile .
+          IMAGE="$REGISTRY/$ECR_REPOSITORY:${GITHUB_SHA::12}"
+          docker build -f docker/Dockerfile -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "uri=$IMAGE" >> "$GITHUB_OUTPUT"
 
-      - name: Deploy to Container Apps
+      # Deploy to ECS
+      - name: Fetch current task definition
         run: |
-          az containerapp update -g "$RG" -n "$APP" \
-            --image "$ACR.azurecr.io/$IMAGE_REPO:${{ steps.tag.outputs.tag }}" \
-            -o none
+          aws ecs describe-task-definition \
+            --task-definition "$TASK_FAMILY" \
+            --query 'taskDefinition | {
+              family: family,
+              taskRoleArn: taskRoleArn,
+              executionRoleArn: executionRoleArn,
+              networkMode: networkMode,
+              containerDefinitions: containerDefinitions,
+              requiresCompatibilities: requiresCompatibilities,
+              cpu: cpu,
+              memory: memory,
+              runtimePlatform: runtimePlatform
+            }' > task-definition.json
 
+      - name: Render task definition
+        id: render
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ steps.image.outputs.uri }}
+
+      - name: Deploy to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+      # 인스턴스 1대 + network_mode host: 교체형 배포. 30~60초 다운타임 후 복귀.
       - name: Health check
         run: |
-          FQDN=$(az containerapp show -g "$RG" -n "$APP" \
-            --query properties.configuration.ingress.fqdn -o tsv)
-          echo "App URL: https://$FQDN"
-          # 새 리비전이 트래픽을 받을 때까지 최대 ~2.5분 폴링
-          for i in $(seq 1 15); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' "https://$FQDN/actuator/health" || true)
-            echo "  attempt $i: HTTP $code"
-            if [ "$code" = "200" ]; then
-              echo "✅ Health OK"; exit 0
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 10 "$HEALTH_URL" > /dev/null; then
+              echo "healthy"
+              exit 0
             fi
+            echo "waiting... ($i/30)"
             sleep 10
           done
-          echo "::warning::Health check가 200을 반환하지 않았습니다. ACA 로그를 확인하세요."
+          echo "health check failed"
+          exit 1

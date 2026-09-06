@@ -123,10 +123,11 @@ data "aws_iam_policy_document" "github_assume" {
       values   = ["sts.amazonaws.com"]
     }
 
+    # 저장소/브랜치를 반드시 좁힐 것. 빠뜨리면 아무 저장소나 이 역할을 가정할 수 있다.
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repository}:ref:refs/heads/main"]
+      values   = [for repo in var.github_repositories : "repo:${repo}:ref:refs/heads/main"]
     }
   }
 }
@@ -137,20 +138,34 @@ resource "aws_iam_role" "github_actions" {
 }
 
 data "aws_iam_policy_document" "github_deploy" {
+  # 계정 단위 액션이라 리소스를 지정할 수 없다
+  statement {
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+
+  # 나머지 ECR 액션은 우리 저장소로 한정
   statement {
     actions = [
-      "ecr:GetAuthorizationToken",
       "ecr:BatchCheckLayerAvailability",
       "ecr:InitiateLayerUpload",
       "ecr:UploadLayerPart",
       "ecr:CompleteLayerUpload",
       "ecr:PutImage",
+      "ecr:BatchGetImage",
+      "ecr:DescribeImages",
     ]
-    resources = ["*"]
+    resources = [for repo in aws_ecr_repository.app : repo.arn]
   }
 
+  # RegisterTaskDefinition 은 리소스 수준 권한을 지원하지 않는다
   statement {
-    actions   = ["ecs:UpdateService", "ecs:DescribeServices", "ecs:RegisterTaskDefinition"]
+    actions = [
+      "ecs:DescribeTaskDefinition",
+      "ecs:RegisterTaskDefinition",
+      "ecs:UpdateService",
+      "ecs:DescribeServices",
+    ]
     resources = ["*"]
   }
 
@@ -325,7 +340,10 @@ resource "aws_ecs_task_definition" "app" {
 
   container_definitions = jsonencode([
     {
-      name      = "ai"
+      name = "ai"
+      # :latest 는 부트스트랩용 플레이스홀더. ECR 이 IMMUTABLE 이라 재푸시가 불가하므로
+      # 실제 배포는 GitHub Actions 가 커밋 SHA 태그로 새 리비전을 등록한다.
+      # aws_ecs_service 의 ignore_changes = [task_definition] 이 이를 보장한다.
       image     = "${aws_ecr_repository.app["ai"].repository_url}:latest"
       essential = true
       memory    = local.ai_memory
