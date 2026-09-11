@@ -2,6 +2,7 @@ package com.hanspoon.backend_api.domain.scan.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 
 /**
  * 스캔 시작 요청. 이미지는 presigned URL 로 S3 에 업로드된 상태이고, 그 객체 키를 넘긴다.
@@ -14,4 +15,5 @@ import jakarta.validation.constraints.NotBlank;
 @Schema(description = "스캔 시작 요청")
 public record StartScanRequest(
         @Schema(description = "업로드된 S3 객체 키", example = "scans/3f2a.../9f3c....jpg") @NotBlank String storageKey,
-        @Schema(description = "이미지 소스", example = "upload") String source) {}
+        @Schema(description = "이미지 소스", example = "upload")
+                @Pattern(regexp = "camera|upload", message = "source must be camera or upload") String source) {}
