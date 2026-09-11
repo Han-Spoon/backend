@@ -29,7 +29,7 @@ env:
   ECR_REPOSITORY: hanspoon-prod-backend
   ECS_CLUSTER: hanspoon-prod-cluster
   ECS_SERVICE: hanspoon-prod-app
-  TASK_FAMILY: hanspoon-prod-app
+  DEPLOY_LOCK_TABLE: hanspoon-prod-deploy-lock
   CONTAINER_NAME: backend
   HEALTH_URL: https://api.han-spoon.site/actuator/health
 
@@ -50,8 +50,9 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build jar
-        run: ./gradlew bootJar -x test
+      # main CI와 배포가 동시에 시작될 수 있으므로 배포 워크플로도 품질 게이트를 통과해야 한다.
+      - name: Verify and build jar
+        run: ./gradlew spotlessCheck test bootJar
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -69,35 +70,86 @@ jobs:
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
         run: |
-          IMAGE="$REGISTRY/$ECR_REPOSITORY:${GITHUB_SHA::12}"
-          docker build -f docker/Dockerfile -t "$IMAGE" .
-          docker push "$IMAGE"
+          TAG="${GITHUB_SHA::12}"
+          IMAGE="$REGISTRY/$ECR_REPOSITORY:$TAG"
+          if aws ecr describe-images --repository-name "$ECR_REPOSITORY" \
+               --image-ids imageTag="$TAG" >/dev/null 2>&1; then
+            echo "image already exists — skip build/push"
+          else
+            docker build -f docker/Dockerfile -t "$IMAGE" .
+            docker push "$IMAGE"
+          fi
           echo "uri=$IMAGE" >> "$GITHUB_OUTPUT"
 
-      # Deploy to ECS
-      - name: Fetch current task definition
+      # backend/ai 저장소가 같은 ECS 태스크 정의를 동시에 덮어쓰지 않도록 AWS에서 직렬화.
+      - name: Acquire ECS deploy lock
+        id: deploy-lock
+        env:
+          LOCK_OWNER: ${{ github.repository }}:${{ github.run_id }}:${{ github.run_attempt }}
         run: |
-          aws ecs describe-task-definition \
-            --task-definition "$TASK_FAMILY" \
-            --query 'taskDefinition | {
-              family: family,
-              taskRoleArn: taskRoleArn,
-              executionRoleArn: executionRoleArn,
-              networkMode: networkMode,
-              containerDefinitions: containerDefinitions,
-              requiresCompatibilities: requiresCompatibilities,
-              cpu: cpu,
-              memory: memory,
-              runtimePlatform: runtimePlatform
-            }' > task-definition.json
+          for i in $(seq 1 60); do
+            NOW="$(date +%s)"
+            EXPIRES_AT="$((NOW + 900))"
+            ITEM="$(jq -nc \
+              --arg owner "$LOCK_OWNER" \
+              --argjson expires "$EXPIRES_AT" \
+              '{lock_name:{S:"prod-ecs"},owner:{S:$owner},expires_at:{N:($expires|tostring)}}')"
+            VALUES="$(jq -nc --argjson now "$NOW" '{":now":{N:($now|tostring)}}')"
+
+            if aws dynamodb put-item \
+              --table-name "$DEPLOY_LOCK_TABLE" \
+              --item "$ITEM" \
+              --condition-expression 'attribute_not_exists(#lock) OR #expires < :now' \
+              --expression-attribute-names '{"#lock":"lock_name","#expires":"expires_at"}' \
+              --expression-attribute-values "$VALUES"; then
+              echo "owner=$LOCK_OWNER" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "Another ECS deployment is running... ($i/60)"
+            sleep 5
+          done
+          echo "Timed out waiting for ECS deploy lock"
+          exit 1
+
+      # Deploy to ECS
+      # 패밀리의 최신 리비전이 아니라, 현재 서비스에 지정된 정확한 리비전을 기준으로 배포.
+      - name: Resolve deployed task definition
+        id: current-task
+        run: |
+          TASK_DEFINITION_ARN="$(
+            aws ecs describe-services \
+              --cluster "$ECS_CLUSTER" \
+              --services "$ECS_SERVICE" \
+              --query 'services[0].taskDefinition' \
+              --output text
+          )"
+
+          if [ -z "$TASK_DEFINITION_ARN" ] || [ "$TASK_DEFINITION_ARN" = "None" ]; then
+            echo "Failed to resolve the task definition used by ECS service: $ECS_SERVICE"
+            exit 1
+          fi
+
+          echo "Using deployed task definition: $TASK_DEFINITION_ARN"
+          echo "arn=$TASK_DEFINITION_ARN" >> "$GITHUB_OUTPUT"
 
       - name: Render task definition
         id: render
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
-          task-definition: task-definition.json
+          task-definition-arn: ${{ steps.current-task.outputs.arn }}
           container-name: ${{ env.CONTAINER_NAME }}
           image: ${{ steps.image.outputs.uri }}
+          environment-variables: |
+            AI_SERVICE_CONNECT_TIMEOUT=500ms
+            AI_OCR_READ_TIMEOUT=18s
+            AI_RULE_ENGINE_READ_TIMEOUT=2s
+            AI_RESULT_READ_TIMEOUT=7s
+            AI_OCR_PRESIGNED_FALLBACK_ENABLED=false
+            SCAN_ASYNC_CORE_POOL_SIZE=2
+            SCAN_ASYNC_MAX_POOL_SIZE=2
+            SCAN_ASYNC_QUEUE_CAPACITY=0
+            SCAN_STALE_AFTER=2m
+            SCAN_RECOVERY_INTERVAL_MS=60000
 
       - name: Deploy to ECS
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
@@ -120,3 +172,16 @@ jobs:
           done
           echo "health check failed"
           exit 1
+
+      - name: Release ECS deploy lock
+        if: ${{ always() && steps.deploy-lock.outcome == 'success' }}
+        env:
+          LOCK_OWNER: ${{ steps.deploy-lock.outputs.owner }}
+        run: |
+          VALUES="$(jq -nc --arg owner "$LOCK_OWNER" '{":owner":{S:$owner}}')"
+          aws dynamodb delete-item \
+            --table-name "$DEPLOY_LOCK_TABLE" \
+            --key '{"lock_name":{"S":"prod-ecs"}}' \
+            --condition-expression '#owner = :owner' \
+            --expression-attribute-names '{"#owner":"owner"}' \
+            --expression-attribute-values "$VALUES" || true
