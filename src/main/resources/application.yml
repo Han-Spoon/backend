@@ -21,10 +21,13 @@ management:
         enabled: true
 
 app:
-  async:
-    core-pool-size: ${ASYNC_CORE_POOL_SIZE:4}
-    max-pool-size: ${ASYNC_MAX_POOL_SIZE:16}
-    queue-capacity: ${ASYNC_QUEUE_CAPACITY:100}
+  scan-async:
+    core-pool-size: ${SCAN_ASYNC_CORE_POOL_SIZE:2}
+    max-pool-size: ${SCAN_ASYNC_MAX_POOL_SIZE:2}
+    queue-capacity: ${SCAN_ASYNC_QUEUE_CAPACITY:0}
+  scan-recovery:
+    stale-after: ${SCAN_STALE_AFTER:2m}
+    interval-ms: ${SCAN_RECOVERY_INTERVAL_MS:60000}
   cache:
     maximum-size: ${CACHE_MAXIMUM_SIZE:10000}
     expire-after-write: ${CACHE_EXPIRE_AFTER_WRITE:10m}
@@ -39,8 +42,12 @@ app:
       refill-period: ${OPENAI_RATE_LIMIT_REFILL_PERIOD:1m}
   ai-service:
     base-url: ${AI_SERVICE_BASE_URL:http://localhost:8000}
-    connect-timeout: ${AI_SERVICE_CONNECT_TIMEOUT:3s}
-    read-timeout: ${AI_SERVICE_READ_TIMEOUT:30s}
+    connect-timeout: ${AI_SERVICE_CONNECT_TIMEOUT:500ms}
+    ocr-read-timeout: ${AI_OCR_READ_TIMEOUT:18s}
+    rule-engine-read-timeout: ${AI_RULE_ENGINE_READ_TIMEOUT:2s}
+    result-read-timeout: ${AI_RESULT_READ_TIMEOUT:7s}
+    # 로컬/전환 환경만 URL fallback을 사용하고 운영 프로필에서는 끈다.
+    presigned-url-fallback-enabled: ${AI_OCR_PRESIGNED_FALLBACK_ENABLED:true}
   s3:
     bucket: ${S3_BUCKET:hanspoon-local-images}
     region: ${AWS_REGION:ap-northeast-2}

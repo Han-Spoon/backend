@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -18,6 +19,9 @@ import com.hanspoon.backend_api.domain.scan.dto.ScanResultResponse;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.service.ScanService;
 import com.hanspoon.backend_api.global.common.PageResponse;
+import com.hanspoon.backend_api.global.exception.BusinessException;
+import com.hanspoon.backend_api.global.exception.ErrorCode;
+import com.hanspoon.backend_api.global.exception.GlobalExceptionHandler;
 import com.hanspoon.backend_api.global.security.CurrentUser;
 import java.util.List;
 import java.util.UUID;
@@ -58,6 +62,7 @@ class ScanControllerTest {
             }
         };
         mockMvc = MockMvcBuilders.standaloneSetup(new ScanController(scanService))
+                .setControllerAdvice(new GlobalExceptionHandler())
                 .setCustomArgumentResolvers(currentUserResolver, new PageableHandlerMethodArgumentResolver())
                 .build();
     }
@@ -83,10 +88,33 @@ class ScanControllerTest {
     }
 
     @Test
+    void startScanRejectsUnknownSource() throws Exception {
+        mockMvc.perform(post("/api/v1/scans")
+                        .contentType("application/json")
+                        .content("{\"storageKey\":\"menu-x.jpg\",\"source\":\"external-url\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    void startScanReturns503WhenScanCapacityIsExhausted() throws Exception {
+        when(scanService.startScan(eq(USER_ID), any()))
+                .thenThrow(new BusinessException(ErrorCode.SCAN_CAPACITY_EXCEEDED));
+
+        mockMvc.perform(post("/api/v1/scans")
+                        .contentType("application/json")
+                        .content("{\"storageKey\":\"menu-x.jpg\",\"source\":\"upload\"}"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(header().string("Retry-After", "2"))
+                .andExpect(jsonPath("$.code").value("SCAN_CAPACITY_EXCEEDED"));
+    }
+
+    @Test
     void getScanReturnsResult() throws Exception {
         UUID scanId = UUID.randomUUID();
         when(scanService.getScan(eq(USER_ID), eq(scanId)))
-                .thenReturn(new ScanResultResponse(scanId, ScanStatus.COMPLETED, null, 2, 1, null, List.of(), null));
+                .thenReturn(
+                        new ScanResultResponse(scanId, ScanStatus.COMPLETED, null, 2, 1, null, List.of(), null, null));
 
         mockMvc.perform(get("/api/v1/scans/{scanId}", scanId))
                 .andExpect(status().isOk())

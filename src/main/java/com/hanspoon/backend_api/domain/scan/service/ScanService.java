@@ -11,12 +11,17 @@ import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
 import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
+import com.hanspoon.backend_api.domain.upload.dto.VerifiedUpload;
 import com.hanspoon.backend_api.domain.upload.service.S3StorageService;
 import com.hanspoon.backend_api.global.common.PageResponse;
 import com.hanspoon.backend_api.global.exception.BusinessException;
 import com.hanspoon.backend_api.global.exception.ErrorCode;
 import java.util.List;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.core.task.TaskRejectedException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,35 +29,62 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ScanService {
 
+    private static final Logger log = LoggerFactory.getLogger(ScanService.class);
+
     private final S3StorageService s3StorageService;
     private final ScanSessionRepository scanSessionRepository;
     private final MenuAnalysisRepository menuAnalysisRepository;
     private final ScanProcessor scanProcessor;
+    private final ScanStateWriter scanStateWriter;
 
     public ScanService(
             S3StorageService s3StorageService,
             ScanSessionRepository scanSessionRepository,
             MenuAnalysisRepository menuAnalysisRepository,
-            ScanProcessor scanProcessor) {
+            ScanProcessor scanProcessor,
+            ScanStateWriter scanStateWriter) {
         this.s3StorageService = s3StorageService;
         this.scanSessionRepository = scanSessionRepository;
         this.menuAnalysisRepository = menuAnalysisRepository;
         this.scanProcessor = scanProcessor;
+        this.scanStateWriter = scanStateWriter;
     }
 
     public ScanCreatedResponse startScan(UUID userId, StartScanRequest request) {
-        // 형식 · 소유권 검증 (외부 입력을 받는 유일한 지점)
+        // 형식, 소유권 검증 (외부 입력)
         String storageKey = s3StorageService.resolveKey(userId, request.storageKey());
+
+        // storageKey는 서버가 발급하고 덮어쓰기가 금지된 객체 키이므로 스캔 멱등 키로 사용할 수 있다.
+        var existing = scanSessionRepository.findByUserIdAndStorageKey(userId, storageKey);
+        if (existing.isPresent()) {
+            return toCreatedResponse(existing.get());
+        }
 
         // presigned PUT 은 서버가 내용을 모르므로 실제 업로드 여부·크기·타입을 여기서 확인한다.
         // 비동기로 넘긴 뒤 실패하면 사용자는 폴링만 하다 FAILED 를 받게 된다.
-        s3StorageService.verifyUploadObject(storageKey);
+        VerifiedUpload verifiedUpload = s3StorageService.verifyUploadObject(storageKey);
 
         // title 은 생성 시 null — 조회 때 기본값(스캔 시각)으로 보이고, 수정은 마이페이지 API 담당
-        ScanSession session =
-                scanSessionRepository.save(ScanSession.create(userId, null, null, null, ScanStatus.PROCESSING, null));
-        scanProcessor.process(session.getId(), userId, storageKey, request.source());
-        return new ScanCreatedResponse(session.getId(), session.getScanStatus());
+        ScanSession session;
+        try {
+            // DB 고유 인덱스가 동시에 들어온 동일 요청까지 방어한다.
+            session = scanSessionRepository.saveAndFlush(ScanSession.start(userId, storageKey));
+        } catch (DataIntegrityViolationException exception) {
+            return scanSessionRepository
+                    .findByUserIdAndStorageKey(userId, storageKey)
+                    .map(ScanService::toCreatedResponse)
+                    .orElseThrow(() -> exception);
+        }
+
+        try {
+            scanProcessor.process(session.getId(), userId, verifiedUpload, request.source());
+        } catch (TaskRejectedException exception) {
+            // 비동기 본문이 시작되지 않았으므로 재시도 가능한 상태로 만들기 위해 세션을 제거한다.
+            scanStateWriter.deleteRejected(session.getId());
+            log.warn("Scan rejected before processing: {}", session.getId());
+            throw new BusinessException(ErrorCode.SCAN_CAPACITY_EXCEEDED, exception);
+        }
+        return toCreatedResponse(session);
     }
 
     @Transactional(readOnly = true)
@@ -72,7 +104,8 @@ public class ScanService {
                 session.getRiskyMenuCount(),
                 session.getScannedAt(),
                 menus,
-                session.getRetakeReasons());
+                session.getRetakeReasons(),
+                session.getFailureCode());
     }
 
     /** 본인 스캔 이력 목록(최신순). 분석이 끝난 completed 만 노출, menus 는 미포함. */
@@ -113,5 +146,9 @@ public class ScanService {
                 m.getHitTags(),
                 m.getMessage(),
                 m.getOwnerCard());
+    }
+
+    private static ScanCreatedResponse toCreatedResponse(ScanSession session) {
+        return new ScanCreatedResponse(session.getId(), session.getScanStatus());
     }
 }

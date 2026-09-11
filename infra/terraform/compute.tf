@@ -85,9 +85,26 @@ resource "aws_iam_role" "task" {
   assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume.json
 }
 
+# backend/ai 두 저장소가 하나의 ECS 태스크 정의를 수정하므로 교차 저장소 배포를 직렬화한다.
+resource "aws_dynamodb_table" "deploy_lock" {
+  name         = "${local.name_prefix}-deploy-lock"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "lock_name"
+
+  attribute {
+    name = "lock_name"
+    type = "S"
+  }
+
+  ttl {
+    attribute_name = "expires_at"
+    enabled        = true
+  }
+}
+
 data "aws_iam_policy_document" "task_s3" {
   statement {
-    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
+    actions   = ["s3:GetObject", "s3:GetObjectVersion", "s3:PutObject", "s3:DeleteObject"]
     resources = ["${aws_s3_bucket.images.arn}/*"]
   }
   statement {
@@ -142,6 +159,11 @@ data "aws_iam_policy_document" "github_deploy" {
   statement {
     actions   = ["ecr:GetAuthorizationToken"]
     resources = ["*"]
+  }
+
+  statement {
+    actions   = ["dynamodb:PutItem", "dynamodb:DeleteItem"]
+    resources = [aws_dynamodb_table.deploy_lock.arn]
   }
 
   # 나머지 ECR 액션은 우리 저장소로 한정
@@ -350,6 +372,19 @@ resource "aws_ecs_task_definition" "app" {
 
       environment = [
         { name = "PORT", value = "8000" },
+
+        # AI 컨테이너가 Presigned URL 없이 S3에서 직접 이미지를 읽음.
+        { name = "OCR_S3_FETCH_ENABLED", value = "true" },
+        { name = "OCR_S3_BUCKET", value = aws_s3_bucket.images.bucket },
+        { name = "AWS_REGION", value = var.region },
+
+        # 운영 SLA 명시.
+        { name = "OCR_REQUEST_BUDGET_SECONDS", value = "16" },
+        { name = "OCR_TOTAL_BUDGET_SECONDS", value = "14" },
+        { name = "OCR_MAX_CONCURRENT_SCANS", value = "2" },
+        { name = "OCR_QUEUE_WAIT_SECONDS", value = "1" },
+        { name = "OCR_ENABLE_GPT_POST_PROCESS", value = "false" },
+        { name = "OCR_ENABLE_GPT_JUDGMENT", value = "false" },
       ]
 
       secrets = [
@@ -387,6 +422,16 @@ resource "aws_ecs_task_definition" "app" {
         { name = "SPRING_PROFILES_ACTIVE", value = "prod" },
         { name = "SERVER_PORT", value = "8080" },
         { name = "AI_SERVICE_BASE_URL", value = "http://localhost:8000" },
+        { name = "AI_SERVICE_CONNECT_TIMEOUT", value = "500ms" },
+        { name = "AI_OCR_READ_TIMEOUT", value = "18s" },
+        { name = "AI_RULE_ENGINE_READ_TIMEOUT", value = "2s" },
+        { name = "AI_RESULT_READ_TIMEOUT", value = "7s" },
+        { name = "AI_OCR_PRESIGNED_FALLBACK_ENABLED", value = "false" },
+        { name = "SCAN_ASYNC_CORE_POOL_SIZE", value = "2" },
+        { name = "SCAN_ASYNC_MAX_POOL_SIZE", value = "2" },
+        { name = "SCAN_ASYNC_QUEUE_CAPACITY", value = "0" },
+        { name = "SCAN_STALE_AFTER", value = "2m" },
+        { name = "SCAN_RECOVERY_INTERVAL_MS", value = "60000" },
         { name = "S3_BUCKET", value = aws_s3_bucket.images.bucket },
         { name = "AWS_REGION", value = var.region },
         { name = "JAVA_TOOL_OPTIONS", value = "-XX:MaxRAMPercentage=60" },

@@ -11,17 +11,17 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 @EnableAsync
 public class AsyncConfig {
 
-    @Bean(name = "applicationTaskExecutor")
-    public Executor applicationTaskExecutor(
-            @Value("${app.async.core-pool-size:4}") int corePoolSize,
-            @Value("${app.async.max-pool-size:16}") int maxPoolSize,
-            @Value("${app.async.queue-capacity:100}") int queueCapacity) {
+    @Bean(name = "scanTaskExecutor")
+    public Executor scanTaskExecutor(
+            @Value("${app.scan-async.core-pool-size:2}") int corePoolSize,
+            @Value("${app.scan-async.max-pool-size:2}") int maxPoolSize,
+            @Value("${app.scan-async.queue-capacity:0}") int queueCapacity) {
 
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(corePoolSize);
         executor.setMaxPoolSize(maxPoolSize);
         executor.setQueueCapacity(queueCapacity);
-        executor.setThreadNamePrefix("han-spoon-async-");
+        executor.setThreadNamePrefix("han-spoon-scan-");
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(20);
         executor.initialize();

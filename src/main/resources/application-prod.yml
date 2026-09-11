@@ -36,6 +36,8 @@ server:
   forward-headers-strategy: framework
 
 app:
+  ai-service:
+    presigned-url-fallback-enabled: ${AI_OCR_PRESIGNED_FALLBACK_ENABLED:false}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:https://han-spoon.site,https://www.han-spoon.site}
   s3:
