@@ -12,6 +12,7 @@ import com.hanspoon.backend_api.domain.upload.dto.UploadTicketResponse;
 import com.hanspoon.backend_api.domain.upload.service.S3StorageService;
 import com.hanspoon.backend_api.global.security.CurrentUser;
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -59,7 +60,8 @@ class UploadControllerTest {
                 .thenReturn(new UploadTicketResponse(
                         key,
                         "https://bucket.s3.ap-northeast-2.amazonaws.com/" + key + "?X-Amz-Signature=xyz",
-                        Instant.parse("2026-06-06T00:10:00Z")));
+                        Instant.parse("2026-06-06T00:10:00Z"),
+                        Map.of("Content-Type", "image/jpeg", "If-None-Match", "*")));
 
         mockMvc.perform(post("/api/v1/uploads/sas")
                         .contentType("application/json")
@@ -67,7 +69,9 @@ class UploadControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.storageKey").value(key))
                 .andExpect(jsonPath("$.uploadUrl").value(containsString("X-Amz-Signature=")))
-                .andExpect(jsonPath("$.expiresAt").exists());
+                .andExpect(jsonPath("$.expiresAt").exists())
+                .andExpect(jsonPath("$.uploadHeaders['Content-Type']").value("image/jpeg"))
+                .andExpect(jsonPath("$.uploadHeaders['If-None-Match']").value("*"));
     }
 
     @Test

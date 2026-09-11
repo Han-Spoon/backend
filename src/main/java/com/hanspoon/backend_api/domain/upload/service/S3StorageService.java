@@ -1,6 +1,7 @@
 package com.hanspoon.backend_api.domain.upload.service;
 
 import com.hanspoon.backend_api.domain.upload.dto.UploadTicketResponse;
+import com.hanspoon.backend_api.domain.upload.dto.VerifiedUpload;
 import com.hanspoon.backend_api.global.config.S3Properties;
 import com.hanspoon.backend_api.global.exception.BusinessException;
 import com.hanspoon.backend_api.global.exception.ErrorCode;
@@ -64,7 +65,10 @@ public class S3StorageService {
                     builder.signatureDuration(properties.uploadUrlTtl()).putObjectRequest(putRequest));
 
             return new UploadTicketResponse(
-                    key, signedRequest.url().toString(), Instant.now().plus(properties.uploadUrlTtl()));
+                    key,
+                    signedRequest.url().toString(),
+                    Instant.now().plus(properties.uploadUrlTtl()),
+                    Map.of("Content-Type", normalized, "If-None-Match", "*"));
         } catch (RuntimeException exception) {
             throw new BusinessException(ErrorCode.STORAGE_PRESIGN_ERROR, "Failed to presign upload URL.", exception);
         }
@@ -95,10 +99,13 @@ public class S3StorageService {
     }
 
     // 객체가 실제로 올라왔는지, 크기·타입이 정책에 맞는지 확인.
-    public HeadObjectResponse verifyUploadObject(String key) {
+    public VerifiedUpload verifyUploadObject(String key) {
         try {
-            HeadObjectResponse object = s3Client.headObject(
-                    builder -> builder.bucket(properties.bucket()).key(key));
+            HeadObjectRequest request = HeadObjectRequest.builder()
+                    .bucket(properties.bucket())
+                    .key(key)
+                    .build();
+            HeadObjectResponse object = s3Client.headObject(request);
 
             if (object.contentLength() > properties.maxFileSize()) {
                 throw new BusinessException(ErrorCode.FILE_TOO_LARGE);
@@ -108,7 +115,8 @@ public class S3StorageService {
                 throw new BusinessException(ErrorCode.INVALID_CONTENT_TYPE);
             }
 
-            return object;
+            return new VerifiedUpload(
+                    key, object.versionId(), object.eTag(), object.contentLength(), object.contentType());
         } catch (S3Exception exception) {
             if (exception.statusCode() == 404) {
                 throw new BusinessException(ErrorCode.UPLOAD_NOT_FOUND, "Object not found: " + key, exception);
@@ -117,10 +125,14 @@ public class S3StorageService {
         }
     }
 
-    // presigned GET URL 발급 (객체 조회)
-    public String createReadUrl(String key) {
-        GetObjectRequest getRequest =
-                GetObjectRequest.builder().bucket(properties.bucket()).key(key).build();
+    /** 로컬 개발과 단계적 롤백을 위한 URL fallback. 운영 기본 경로는 S3 IAM 직접 조회다. */
+    public String createReadUrl(String key, String versionId) {
+        GetObjectRequest.Builder requestBuilder =
+                GetObjectRequest.builder().bucket(properties.bucket()).key(key);
+        if (versionId != null && !versionId.isBlank()) {
+            requestBuilder.versionId(versionId);
+        }
+        GetObjectRequest getRequest = requestBuilder.build();
 
         try {
             return presigner

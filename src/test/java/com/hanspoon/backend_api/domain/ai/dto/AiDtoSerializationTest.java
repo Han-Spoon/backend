@@ -157,7 +157,16 @@ class AiDtoSerializationTest {
                       "future_unknown_field": "ignored"
                     },
                     "retake_suggestions": [],
-                    "reasons": []
+                    "reasons": [],
+                    "preprocessing_attempted": true,
+                    "preprocessing_applied": true,
+                    "selected_ocr_attempt": "preprocessed",
+                    "ocr_attempt_count": 2,
+                    "retry_skipped_reason": null,
+                    "ocr_processing_time_ms": 842,
+                    "ocr_budget_ms": 16000,
+                    "image_fetch_source": "s3_iam",
+                    "queue_wait_ms": 4
                   },
                   "menu_analyses": [
                     {
@@ -183,6 +192,11 @@ class AiDtoSerializationTest {
         assertThat(result.menuImage().storageKey()).isEqualTo("scans/menu_001.jpg");
         assertThat(result.scanQuality().status()).isEqualTo("usable");
         assertThat(result.scanQuality().imageQuality().glareRatio()).isEqualTo(0.02);
+        assertThat(result.scanQuality().preprocessingApplied()).isTrue();
+        assertThat(result.scanQuality().ocrAttemptCount()).isEqualTo(2);
+        assertThat(result.scanQuality().ocrProcessingTimeMs()).isEqualTo(842L);
+        assertThat(result.scanQuality().imageFetchSource()).isEqualTo("s3_iam");
+        assertThat(result.scanQuality().queueWaitMs()).isEqualTo(4L);
         assertThat(result.menuAnalyses()).hasSize(1);
         assertThat(result.menuAnalyses().get(0).priceText()).isEqualTo("9000");
         assertThat(result.menuAnalyses().get(0).riskLevel()).isNull();
@@ -207,10 +221,14 @@ class AiDtoSerializationTest {
 
     @Test
     void serializesOcrRequestInSnakeCase() throws Exception {
-        OcrRequest request = new OcrRequest("camera", "scans/menu_003.jpg", "https://example.com/scans/menu_003.jpg");
+        OcrRequest request = OcrRequest.forS3("camera", "scans/menu_003.jpg", null, "version-1", "\"etag-1\"");
 
         String json = objectMapper.writeValueAsString(request);
 
-        assertThat(json).contains("\"storage_key\":\"scans/menu_003.jpg\"").contains("\"image_url\":");
+        assertThat(json)
+                .contains("\"storage_key\":\"scans/menu_003.jpg\"")
+                .contains("\"image_url\":null")
+                .contains("\"version_id\":\"version-1\"")
+                .contains("\"expected_etag\":\"\\\"etag-1\\\"\"");
     }
 }
