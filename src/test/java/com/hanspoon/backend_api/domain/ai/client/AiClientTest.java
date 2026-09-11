@@ -38,7 +38,8 @@ class AiClientTest {
     void setUp() {
         builder = RestClient.builder().baseUrl(BASE_URL);
         server = MockRestServiceServer.bindTo(builder).build();
-        aiClient = new AiClient(builder.build());
+        RestClient client = builder.build();
+        aiClient = new AiClient(client, client, client);
     }
 
     @Test
@@ -56,7 +57,7 @@ class AiClientTest {
                 .andExpect(method(HttpMethod.POST))
                 .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
 
-        OcrResponse response = aiClient.requestOcr(new OcrRequest("upload", "k", "u"));
+        OcrResponse response = aiClient.requestOcr(new OcrRequest("upload", "k", "u", "v1", "etag-1"));
 
         assertThat(response.scanSession().menuCount()).isEqualTo(1);
         assertThat(response.menuAnalyses()).hasSize(1);
@@ -67,10 +68,21 @@ class AiClientTest {
     void requestOcrMapsErrorStatusToBusinessException() {
         server.expect(requestTo(BASE_URL + "/v1/ocr")).andRespond(withStatus(HttpStatus.BAD_GATEWAY));
 
-        assertThatThrownBy(() -> aiClient.requestOcr(new OcrRequest("upload", "k", "u")))
+        assertThatThrownBy(() -> aiClient.requestOcr(new OcrRequest("upload", "k", "u", "v1", "etag-1")))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.OCR_SERVICE_ERROR);
+        server.verify();
+    }
+
+    @Test
+    void requestOcrMapsCapacityResponseToOverloaded() {
+        server.expect(requestTo(BASE_URL + "/v1/ocr")).andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
+
+        assertThatThrownBy(() -> aiClient.requestOcr(new OcrRequest("upload", "k", "u", "v1", "etag-1")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.AI_SERVICE_OVERLOADED);
         server.verify();
     }
 
@@ -80,7 +92,7 @@ class AiClientTest {
             throw new IOException("connection refused");
         });
 
-        assertThatThrownBy(() -> aiClient.requestOcr(new OcrRequest("upload", "k", "u")))
+        assertThatThrownBy(() -> aiClient.requestOcr(new OcrRequest("upload", "k", "u", "v1", "etag-1")))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.AI_SERVICE_UNAVAILABLE);
