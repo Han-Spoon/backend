@@ -2,9 +2,12 @@ package com.hanspoon.backend_api.domain.upload.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.hanspoon.backend_api.domain.upload.dto.UploadTicketResponse;
+import com.hanspoon.backend_api.domain.upload.dto.VerifiedUpload;
 import com.hanspoon.backend_api.global.config.S3Properties;
 import com.hanspoon.backend_api.global.exception.BusinessException;
 import com.hanspoon.backend_api.global.exception.ErrorCode;
@@ -15,6 +18,9 @@ import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 class S3StorageServiceTest {
@@ -45,6 +51,9 @@ class S3StorageServiceTest {
                 .contains("X-Amz-Signature=")
                 .contains("X-Amz-Expires=");
         assertThat(ticket.expiresAt()).isNotNull();
+        assertThat(ticket.uploadHeaders())
+                .containsEntry("Content-Type", "image/jpeg")
+                .containsEntry("If-None-Match", "*");
     }
 
     @Test
@@ -85,15 +94,86 @@ class S3StorageServiceTest {
     }
 
     @Test
+    void verifyUploadObjectReturnsVersionAndEtagFromHeadObject() {
+        S3Client s3Client = mock(S3Client.class);
+        S3StorageService storageService = new S3StorageService(presigner(), s3Client, properties);
+        String key = "scans/" + USER + "/abc.jpg";
+        when(s3Client.headObject(any(HeadObjectRequest.class)))
+                .thenReturn(HeadObjectResponse.builder()
+                        .versionId("version-1")
+                        .eTag("\"etag-1\"")
+                        .contentLength(123L)
+                        .contentType("image/jpeg")
+                        .build());
+
+        VerifiedUpload upload = storageService.verifyUploadObject(key);
+
+        assertThat(upload.storageKey()).isEqualTo(key);
+        assertThat(upload.versionId()).isEqualTo("version-1");
+        assertThat(upload.eTag()).isEqualTo("\"etag-1\"");
+        assertThat(upload.contentLength()).isEqualTo(123L);
+        assertThat(upload.contentType()).isEqualTo("image/jpeg");
+    }
+
+    @Test
+    void verifyUploadObjectRejectsOversizedObject() {
+        S3Client s3Client = mock(S3Client.class);
+        S3StorageService storageService = new S3StorageService(presigner(), s3Client, properties);
+        when(s3Client.headObject(any(HeadObjectRequest.class)))
+                .thenReturn(HeadObjectResponse.builder()
+                        .contentLength(properties.maxFileSize() + 1)
+                        .contentType("image/jpeg")
+                        .build());
+
+        assertThatThrownBy(() -> storageService.verifyUploadObject("scans/" + USER + "/large.jpg"))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.FILE_TOO_LARGE);
+    }
+
+    @Test
+    void verifyUploadObjectRejectsUnexpectedContentType() {
+        S3Client s3Client = mock(S3Client.class);
+        S3StorageService storageService = new S3StorageService(presigner(), s3Client, properties);
+        when(s3Client.headObject(any(HeadObjectRequest.class)))
+                .thenReturn(HeadObjectResponse.builder()
+                        .contentLength(123L)
+                        .contentType("image/gif")
+                        .build());
+
+        assertThatThrownBy(() -> storageService.verifyUploadObject("scans/" + USER + "/fake.jpg"))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_CONTENT_TYPE);
+    }
+
+    @Test
+    void verifyUploadObjectMapsMissingObject() {
+        S3Client s3Client = mock(S3Client.class);
+        S3StorageService storageService = new S3StorageService(presigner(), s3Client, properties);
+        when(s3Client.headObject(any(HeadObjectRequest.class)))
+                .thenThrow(
+                        S3Exception.builder().statusCode(404).message("missing").build());
+
+        assertThatThrownBy(() -> storageService.verifyUploadObject("scans/" + USER + "/missing.jpg"))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.UPLOAD_NOT_FOUND);
+    }
+
+    @Test
     void objectUriReturnsS3Scheme() {
         assertThat(service.objectUri("scans/" + USER + "/abc.jpg"))
                 .isEqualTo("s3://" + BUCKET + "/scans/" + USER + "/abc.jpg");
     }
 
     @Test
-    void createReadUrlIssuesPresignedGet() {
+    void createReadUrlPinsFallbackToTheVerifiedVersion() {
         String key = "scans/" + USER + "/abc.jpg";
 
-        assertThat(service.createReadUrl(key)).contains(key).contains("X-Amz-Signature=");
+        assertThat(service.createReadUrl(key, "version-1"))
+                .contains(key)
+                .contains("versionId=version-1")
+                .contains("X-Amz-Signature=");
     }
 }

@@ -29,7 +29,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ResponseEntity<ProblemDetail> handleBusinessException(BusinessException exception, WebRequest request) {
         ProblemDetail problemDetail = exception.getBody();
         enrich(problemDetail, exception.getErrorCode().getCode(), request);
-        return ResponseEntity.status(exception.getStatusCode()).body(problemDetail);
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(exception.getStatusCode());
+        if (exception.getErrorCode() == ErrorCode.SCAN_CAPACITY_EXCEEDED
+                || exception.getErrorCode() == ErrorCode.AI_SERVICE_OVERLOADED) {
+            response.header(HttpHeaders.RETRY_AFTER, "2");
+        }
+        return response.body(problemDetail);
     }
 
     @ExceptionHandler(Exception.class)

@@ -37,6 +37,9 @@ public enum ErrorCode {
 
     // ── 스캔 ────────────────────────────────────────────────────────────
     SCAN_NOT_FOUND(HttpStatus.NOT_FOUND, "SCAN_NOT_FOUND", "Scan not found."),
+    SCAN_CAPACITY_EXCEEDED(
+            HttpStatus.SERVICE_UNAVAILABLE, "SCAN_CAPACITY_EXCEEDED", "Scan capacity is temporarily exhausted."),
+    SCAN_PROCESSING_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "SCAN_PROCESSING_TIMEOUT", "Scan processing timed out."),
 
     // ── 소통 카드 ───────────────────────────────────────────────────────
     CARD_NOT_FOUND(HttpStatus.NOT_FOUND, "CARD_NOT_FOUND", "Saved card not found."),
@@ -46,6 +49,9 @@ public enum ErrorCode {
     RULE_ENGINE_ERROR(HttpStatus.BAD_GATEWAY, "RULE_ENGINE_ERROR", "Rule engine evaluation failed."),
     RESULT_SERVICE_ERROR(HttpStatus.BAD_GATEWAY, "RESULT_SERVICE_ERROR", "Result generation failed."),
     AI_SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "AI_SERVICE_UNAVAILABLE", "AI service is unavailable."),
+    AI_SERVICE_OVERLOADED(
+            HttpStatus.SERVICE_UNAVAILABLE, "AI_SERVICE_OVERLOADED", "AI service is temporarily overloaded."),
+    AI_RESULT_MISMATCH(HttpStatus.BAD_GATEWAY, "AI_RESULT_MISMATCH", "AI menu results are inconsistent."),
     ;
 
     private final HttpStatus status;

@@ -34,6 +34,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "images" {
     status = "Enabled"
     filter { prefix = "scans/" }
     expiration { days = 90 }
+    # Versioning 버킷에서 expiration은 삭제 마커만 만들므로 실제 원본 버전도 정리한다.
+    noncurrent_version_expiration { noncurrent_days = 1 }
   }
 
   # 대표 메뉴 이미지는 영구 보관, 옛 버전은 정리

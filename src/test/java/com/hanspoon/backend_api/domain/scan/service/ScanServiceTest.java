@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -16,6 +17,7 @@ import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
 import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
+import com.hanspoon.backend_api.domain.upload.dto.VerifiedUpload;
 import com.hanspoon.backend_api.domain.upload.service.S3StorageService;
 import com.hanspoon.backend_api.global.common.PageResponse;
 import com.hanspoon.backend_api.global.exception.BusinessException;
@@ -29,6 +31,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.task.TaskRejectedException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -48,6 +52,9 @@ class ScanServiceTest {
     @Mock
     private ScanProcessor scanProcessor;
 
+    @Mock
+    private ScanStateWriter scanStateWriter;
+
     @InjectMocks
     private ScanService scanService;
 
@@ -55,14 +62,70 @@ class ScanServiceTest {
     void startScanSavesSessionTriggersProcessorAndReturnsProcessing() {
         UUID userId = UUID.randomUUID();
         String key = "scans/" + userId + "/2f1c9d3e-0000-4000-8000-000000000001.jpg";
+        VerifiedUpload upload = new VerifiedUpload(key, "version-1", "\"etag-1\"", 123L, "image/jpeg");
         when(s3StorageService.resolveKey(userId, key)).thenReturn(key);
-        when(scanSessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(s3StorageService.verifyUploadObject(key)).thenReturn(upload);
+        when(scanSessionRepository.saveAndFlush(any(ScanSession.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0, ScanSession.class));
 
         ScanCreatedResponse response = scanService.startScan(userId, new StartScanRequest(key, "upload"));
 
         assertThat(response.status()).isEqualTo(ScanStatus.PROCESSING);
         assertThat(response.scanId()).isNotNull();
-        verify(scanProcessor).process(eq(response.scanId()), eq(userId), eq(key), eq("upload"));
+        verify(scanProcessor).process(eq(response.scanId()), eq(userId), eq(upload), eq("upload"));
+    }
+
+    @Test
+    void startScanReturnsExistingSessionForTheSameStorageKey() {
+        UUID userId = UUID.randomUUID();
+        String key = "scans/" + userId + "/same.jpg";
+        ScanSession existing = ScanSession.start(userId, key);
+        when(s3StorageService.resolveKey(userId, key)).thenReturn(key);
+        when(scanSessionRepository.findByUserIdAndStorageKey(userId, key)).thenReturn(Optional.of(existing));
+
+        ScanCreatedResponse response = scanService.startScan(userId, new StartScanRequest(key, "upload"));
+
+        assertThat(response.scanId()).isEqualTo(existing.getId());
+        verify(s3StorageService, never()).verifyUploadObject(any());
+        verify(scanProcessor, never()).process(any(), any(), any(), any());
+    }
+
+    @Test
+    void concurrentDuplicateStartReturnsTheSessionCreatedByTheWinner() {
+        UUID userId = UUID.randomUUID();
+        String key = "scans/" + userId + "/race.jpg";
+        VerifiedUpload upload = new VerifiedUpload(key, "version-1", "\"etag-1\"", 123L, "image/jpeg");
+        ScanSession winner = ScanSession.start(userId, key);
+        when(s3StorageService.resolveKey(userId, key)).thenReturn(key);
+        when(scanSessionRepository.findByUserIdAndStorageKey(userId, key))
+                .thenReturn(Optional.empty(), Optional.of(winner));
+        when(s3StorageService.verifyUploadObject(key)).thenReturn(upload);
+        when(scanSessionRepository.saveAndFlush(any()))
+                .thenThrow(new DataIntegrityViolationException("duplicate storage key"));
+
+        ScanCreatedResponse response = scanService.startScan(userId, new StartScanRequest(key, "upload"));
+
+        assertThat(response.scanId()).isEqualTo(winner.getId());
+        verify(scanProcessor, never()).process(any(), any(), any(), any());
+    }
+
+    @Test
+    void startScanDeletesSessionAndReturnsCapacityErrorWhenExecutorRejects() {
+        UUID userId = UUID.randomUUID();
+        String key = "scans/" + userId + "/full.jpg";
+        VerifiedUpload upload = new VerifiedUpload(key, "version-1", "\"etag-1\"", 123L, "image/jpeg");
+        when(s3StorageService.resolveKey(userId, key)).thenReturn(key);
+        when(s3StorageService.verifyUploadObject(key)).thenReturn(upload);
+        when(scanSessionRepository.saveAndFlush(any(ScanSession.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0, ScanSession.class));
+        doThrow(new TaskRejectedException("full")).when(scanProcessor).process(any(), any(), any(), any());
+
+        assertThatThrownBy(() -> scanService.startScan(userId, new StartScanRequest(key, "upload")))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.SCAN_CAPACITY_EXCEEDED);
+
+        verify(scanStateWriter).deleteRejected(any());
     }
 
     @Test
@@ -94,6 +157,21 @@ class ScanServiceTest {
         assertThat(response.menuCount()).isEqualTo(2);
         assertThat(response.riskyMenuCount()).isEqualTo(1);
         assertThat(response.menus()).isEmpty();
+    }
+
+    @Test
+    void getScanReturnsFailureCodeWithoutInternalExceptionDetails() {
+        UUID userId = UUID.randomUUID();
+        ScanSession session = ScanSession.start(userId, "scans/" + userId + "/failed.jpg");
+        session.markFailed(ErrorCode.AI_SERVICE_OVERLOADED.getCode());
+        when(scanSessionRepository.findByIdAndUserId(session.getId(), userId)).thenReturn(Optional.of(session));
+        when(menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(session.getId()))
+                .thenReturn(List.of());
+
+        var response = scanService.getScan(userId, session.getId());
+
+        assertThat(response.status()).isEqualTo(ScanStatus.FAILED);
+        assertThat(response.failureCode()).isEqualTo("AI_SERVICE_OVERLOADED");
     }
 
     @Test

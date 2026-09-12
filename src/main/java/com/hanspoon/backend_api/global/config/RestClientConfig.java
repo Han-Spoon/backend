@@ -17,18 +17,37 @@ public class RestClientConfig {
         return RestClient.builder();
     }
 
-    /**
-     * AI 서비스(OCR + Rule Engine) 호출용 RestClient.
-     * OCR + 룰엔진 + 결과생성 파이프라인이 길어 read-timeout 을 넉넉히 둔다.
-     */
-    @Bean
-    public RestClient aiServiceRestClient(
+    @Bean("aiOcrRestClient")
+    public RestClient aiOcrRestClient(
             RestClient.Builder builder,
             @Value("${app.ai-service.base-url:http://localhost:8000}") String aiServiceBaseUrl,
-            @Value("${app.ai-service.connect-timeout:3s}") Duration connectTimeout,
-            @Value("${app.ai-service.read-timeout:30s}") Duration readTimeout) {
+            @Value("${app.ai-service.connect-timeout:500ms}") Duration connectTimeout,
+            @Value("${app.ai-service.ocr-read-timeout:18s}") Duration readTimeout) {
+        return aiClient(builder, aiServiceBaseUrl, connectTimeout, readTimeout);
+    }
 
-        return builder.baseUrl(aiServiceBaseUrl)
+    @Bean("aiRuleEngineRestClient")
+    public RestClient aiRuleEngineRestClient(
+            RestClient.Builder builder,
+            @Value("${app.ai-service.base-url:http://localhost:8000}") String aiServiceBaseUrl,
+            @Value("${app.ai-service.connect-timeout:500ms}") Duration connectTimeout,
+            @Value("${app.ai-service.rule-engine-read-timeout:2s}") Duration readTimeout) {
+        return aiClient(builder, aiServiceBaseUrl, connectTimeout, readTimeout);
+    }
+
+    @Bean("aiResultRestClient")
+    public RestClient aiResultRestClient(
+            RestClient.Builder builder,
+            @Value("${app.ai-service.base-url:http://localhost:8000}") String aiServiceBaseUrl,
+            @Value("${app.ai-service.connect-timeout:500ms}") Duration connectTimeout,
+            @Value("${app.ai-service.result-read-timeout:7s}") Duration readTimeout) {
+        return aiClient(builder, aiServiceBaseUrl, connectTimeout, readTimeout);
+    }
+
+    private RestClient aiClient(
+            RestClient.Builder builder, String baseUrl, Duration connectTimeout, Duration readTimeout) {
+        return builder.clone()
+                .baseUrl(baseUrl)
                 .requestFactory(clientHttpRequestFactory(connectTimeout, readTimeout))
                 .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
