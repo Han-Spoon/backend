@@ -67,7 +67,8 @@ class AuthServiceTest {
                 userAuthIdentityRepository,
                 userSessionRepository,
                 userProfileRepository,
-                Duration.ofDays(14));
+                Duration.ofDays(14),
+                Duration.ofSeconds(30));
     }
 
     private Jwt googleJwt(String sub, String email, String name) {
@@ -148,6 +149,54 @@ class AuthServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(ex -> ((BusinessException) ex).getErrorCode())
                 .isEqualTo(ErrorCode.INVALID_TOKEN);
+    }
+
+    @Test
+    void refresh_revokedWithinGrace_stillRotates() {
+        // 응답 유실·다중 탭으로 이미 폐기된 토큰이 재사용되는 경우
+        UUID userId = UUID.randomUUID();
+        Instant now = Instant.now();
+        String rawToken = "rotated-5s-ago";
+        String hash = refreshTokenSupport.sha256Hex(rawToken);
+        UserSession session = UserSession.issue(userId, hash, now.plus(Duration.ofDays(7)), now);
+        session.revoke(now.minus(Duration.ofSeconds(5)));
+
+        when(userSessionRepository.findByRefreshTokenHash(hash)).thenReturn(Optional.of(session));
+        when(jwtTokenProvider.createAccessToken(userId)).thenReturn("new-access-token");
+
+        TokenResult result = authService.refresh(rawToken);
+
+        assertThat(result.accessToken()).isEqualTo("new-access-token");
+        assertThat(result.refreshToken()).isNotBlank().isNotEqualTo(rawToken);
+    }
+
+    @Test
+    void refresh_revokedBeyondGrace_throwsInvalidToken() {
+        UUID userId = UUID.randomUUID();
+        Instant now = Instant.now();
+        String rawToken = "rotated-long-ago";
+        String hash = refreshTokenSupport.sha256Hex(rawToken);
+        UserSession session = UserSession.issue(userId, hash, now.plus(Duration.ofDays(7)), now);
+        session.revoke(now.minus(Duration.ofMinutes(5)));
+
+        when(userSessionRepository.findByRefreshTokenHash(hash)).thenReturn(Optional.of(session));
+
+        assertThatThrownBy(() -> authService.refresh(rawToken))
+                .isInstanceOf(BusinessException.class)
+                .extracting(ex -> ((BusinessException) ex).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_TOKEN);
+    }
+
+    @Test
+    void refresh_reusedWithinGrace_doesNotExtendGraceWindow() {
+        UUID userId = UUID.randomUUID();
+        Instant now = Instant.now();
+        Instant revokedAt = now.minus(Duration.ofSeconds(5));
+        UserSession session = UserSession.issue(userId, "hash", now.plus(Duration.ofDays(7)), now);
+        session.revoke(revokedAt);
+        session.revoke(now);
+
+        assertThat(session.getRevokedAt()).isEqualTo(revokedAt);
     }
 
     @Test
