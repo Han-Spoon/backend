@@ -35,7 +35,8 @@ class SecurityErrorResponseIntegrationTest {
         mockMvc.perform(get(PROTECTED_ENDPOINT))
                 .andExpect(status().isUnauthorized())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
-                .andExpect(jsonPath("$.code").value("INVALID_TOKEN"));
+                .andExpect(jsonPath("$.code").value("INVALID_TOKEN"))
+                .andExpect(jsonPath("$.errorId").isNotEmpty());
     }
 
     @Test
@@ -45,6 +46,7 @@ class SecurityErrorResponseIntegrationTest {
         mockMvc.perform(get(PROTECTED_ENDPOINT).header(HttpHeaders.AUTHORIZATION, "Bearer not-a-jwt"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
-                .andExpect(jsonPath("$.code").value("INVALID_TOKEN"));
+                .andExpect(jsonPath("$.code").value("INVALID_TOKEN"))
+                .andExpect(jsonPath("$.errorId").isNotEmpty());
     }
 }

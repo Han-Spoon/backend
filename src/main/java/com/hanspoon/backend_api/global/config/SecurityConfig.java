@@ -7,7 +7,10 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
+import java.util.UUID;
 import javax.crypto.SecretKey;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -35,6 +38,8 @@ import tools.jackson.databind.ObjectMapper;
 @Configuration
 @EnableMethodSecurity
 public class SecurityConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(SecurityConfig.class);
 
     private static final String[] PUBLIC_ENDPOINTS = {
         "/",
@@ -104,21 +109,39 @@ public class SecurityConfig {
 
     @Bean
     public AuthenticationEntryPoint authenticationEntryPoint(ObjectMapper objectMapper) {
-        return (request, response, exception) ->
-                writeProblemDetail(objectMapper, response, HttpStatus.UNAUTHORIZED, ErrorCode.INVALID_TOKEN);
+        return (request, response, exception) -> {
+            String errorId = UUID.randomUUID().toString();
+            log.warn(
+                    "Authentication rejected: errorId={}, method={}, path={}, exception={}, cause={}",
+                    errorId,
+                    request.getMethod(),
+                    request.getRequestURI(),
+                    exception.getClass().getSimpleName(),
+                    rootCauseName(exception));
+            writeProblemDetail(objectMapper, response, HttpStatus.UNAUTHORIZED, ErrorCode.INVALID_TOKEN, errorId);
+        };
     }
 
     @Bean
     public AccessDeniedHandler accessDeniedHandler(ObjectMapper objectMapper) {
-        return (request, response, exception) ->
-                writeProblemDetail(objectMapper, response, HttpStatus.FORBIDDEN, ErrorCode.ACCESS_DENIED);
+        return (request, response, exception) -> {
+            String errorId = UUID.randomUUID().toString();
+            log.warn(
+                    "Access denied: errorId={}, method={}, path={}, exception={}",
+                    errorId,
+                    request.getMethod(),
+                    request.getRequestURI(),
+                    exception.getClass().getSimpleName());
+            writeProblemDetail(objectMapper, response, HttpStatus.FORBIDDEN, ErrorCode.ACCESS_DENIED, errorId);
+        };
     }
 
     private void writeProblemDetail(
             ObjectMapper objectMapper,
             jakarta.servlet.http.HttpServletResponse response,
             HttpStatus status,
-            ErrorCode errorCode)
+            ErrorCode errorCode,
+            String errorId)
             throws IOException {
 
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(status, errorCode.getMessage());
@@ -126,9 +149,18 @@ public class SecurityConfig {
         problemDetail.setType(URI.create("https://api.han-spoon.site/problems/" + errorCode.getCode()));
         problemDetail.setProperty("code", errorCode.getCode());
         problemDetail.setProperty("timestamp", OffsetDateTime.now());
+        problemDetail.setProperty("errorId", errorId);
 
         response.setStatus(status.value());
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         objectMapper.writeValue(response.getOutputStream(), problemDetail);
+    }
+
+    private String rootCauseName(Throwable throwable) {
+        Throwable current = throwable;
+        while (current.getCause() != null && current.getCause() != current) {
+            current = current.getCause();
+        }
+        return current.getClass().getSimpleName();
     }
 }
