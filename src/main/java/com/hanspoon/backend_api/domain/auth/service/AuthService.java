@@ -32,6 +32,7 @@ public class AuthService {
     private final UserSessionRepository userSessionRepository;
     private final UserProfileRepository userProfileRepository;
     private final Duration refreshTokenExpiration;
+    private final Duration refreshRotationGrace;
 
     public AuthService(
             GoogleIdTokenVerifier googleIdTokenVerifier,
@@ -41,7 +42,8 @@ public class AuthService {
             UserAuthIdentityRepository userAuthIdentityRepository,
             UserSessionRepository userSessionRepository,
             UserProfileRepository userProfileRepository,
-            @Value("${app.security.jwt.refresh-token-expiration}") Duration refreshTokenExpiration) {
+            @Value("${app.security.jwt.refresh-token-expiration}") Duration refreshTokenExpiration,
+            @Value("${app.security.jwt.refresh-rotation-grace}") Duration refreshRotationGrace) {
 
         this.googleIdTokenVerifier = googleIdTokenVerifier;
         this.jwtTokenProvider = jwtTokenProvider;
@@ -51,6 +53,7 @@ public class AuthService {
         this.userSessionRepository = userSessionRepository;
         this.userProfileRepository = userProfileRepository;
         this.refreshTokenExpiration = refreshTokenExpiration;
+        this.refreshRotationGrace = refreshRotationGrace;
     }
 
     @Transactional
@@ -104,7 +107,7 @@ public class AuthService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_TOKEN, "Invalid refresh token."));
 
         Instant now = Instant.now();
-        if (!session.isActive(now)) {
+        if (!session.isActive(now) && !session.isWithinRotationGrace(now, refreshRotationGrace)) {
             throw new BusinessException(ErrorCode.INVALID_TOKEN, "Expired or revoked refresh token.");
         }
 
