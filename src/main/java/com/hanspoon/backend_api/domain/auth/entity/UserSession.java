@@ -4,6 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AccessLevel;
@@ -49,6 +50,12 @@ public class UserSession {
 
     public boolean isActive(Instant now) {
         return revokedAt == null && expiresAt.isAfter(now);
+    }
+
+    public boolean isWithinRotationGrace(Instant now, Duration grace) {
+        return revokedAt != null
+                && expiresAt.isAfter(now)
+                && revokedAt.plus(grace).isAfter(now);
     }
 
     public void revoke(Instant now) {
