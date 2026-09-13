@@ -213,7 +213,8 @@ public class ScanProcessor {
                     o.descriptionEn(),
                     o.priceText(),
                     o.isSpicy(),
-                    o.imageUrl(),
+                    // AI 제공 URL은 출처·만료를 보장할 수 없다. 백엔드 소유의 크롭·서명 체계 도입 전에는 저장하지 않는다.
+                    null,
                     f.riskLevel(),
                     f.hits(),
                     f.message(),
@@ -241,6 +242,15 @@ public class ScanProcessor {
 
     private void logOcrCompleted(UUID scanId, long backendDurationMs, OcrResponse ocr) {
         var quality = ocr.scanQuality();
+        if (quality != null
+                && quality.imageQuality() != null
+                && Boolean.FALSE.equals(quality.imageQuality().available())
+                && quality.imageQuality().error() != null) {
+            log.warn(
+                    "Image quality analysis unavailable: {} (reason={})",
+                    scanId,
+                    quality.imageQuality().error());
+        }
         log.info(
                 "OCR completed: {} (backendMs={}, aiMs={}, qualityStatus={}, score={}, rawLines={}, priceMatches={}, "
                         + "priceAnchors={}, pairCoverage={}, meanOcrConfidence={}, meanPairConfidence={}, "

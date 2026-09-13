@@ -93,9 +93,9 @@ class ScanProcessorTest {
     }
 
     private static com.hanspoon.backend_api.domain.ai.dto.ocr.MenuAnalysis ocrMenu(
-            String name, String price, boolean spicy, int order) {
+            String name, String price, boolean spicy, int order, String imageUrl) {
         return new com.hanspoon.backend_api.domain.ai.dto.ocr.MenuAnalysis(
-                name, null, "", null, price, null, spicy, null, order);
+                name, null, "", null, price, null, spicy, imageUrl, order);
     }
 
     private OcrResponse usableOcr() {
@@ -128,7 +128,9 @@ class ScanProcessorTest {
                         16_000L,
                         "s3_iam",
                         0L),
-                List.of(ocrMenu("samgyeopsal", "9000", false, 1), ocrMenu("doenjang", "8000", true, 2)),
+                List.of(
+                        ocrMenu("samgyeopsal", "9000", false, 1, "https://ai.invalid/crop.jpg"),
+                        ocrMenu("doenjang", "8000", true, 2, null)),
                 null);
     }
 
@@ -221,6 +223,7 @@ class ScanProcessorTest {
         // OCR 가격 + FinalOutput 위험도·태그의 동일 행 머지 확인
         assertThat(saved.get(0).getMenuNameKo()).isEqualTo("samgyeopsal");
         assertThat(saved.get(0).getPriceText()).isEqualTo("9000");
+        assertThat(saved.get(0).getImageUrl()).isNull();
         assertThat(saved.get(0).getRiskLevel()).isEqualTo(RiskLevel.DANGER);
         assertThat(saved.get(0).getHitTags()).containsExactly("is_pork");
         assertThat(saved.get(0).getDisplayOrder()).isEqualTo(1);

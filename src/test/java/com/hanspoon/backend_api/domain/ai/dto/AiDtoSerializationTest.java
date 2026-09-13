@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.hanspoon.backend_api.domain.ai.dto.common.EscalationCase;
 import com.hanspoon.backend_api.domain.ai.dto.common.RiskLevel;
+import com.hanspoon.backend_api.domain.ai.dto.ocr.ImageQuality;
 import com.hanspoon.backend_api.domain.ai.dto.ocr.OcrRequest;
 import com.hanspoon.backend_api.domain.ai.dto.ocr.OcrResponse;
 import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleMenuAnalysis;
@@ -16,6 +17,25 @@ import tools.jackson.databind.json.JsonMapper;
 class AiDtoSerializationTest {
 
     private final JsonMapper objectMapper = JsonMapper.builder().build();
+
+    @Test
+    void deserializesImageQualityAnalysisError() throws Exception {
+        String json =
+                """
+                {
+                  "available": false,
+                  "error": "이미지 품질 분석 패키지를 불러오지 못했습니다.",
+                  "score": null,
+                  "reasons": [],
+                  "suggestions": []
+                }
+                """;
+
+        ImageQuality result = objectMapper.readValue(json, ImageQuality.class);
+
+        assertThat(result.available()).isFalse();
+        assertThat(result.error()).isEqualTo("이미지 품질 분석 패키지를 불러오지 못했습니다.");
+    }
 
     @Test
     void deserializesDangerMenu() throws Exception {
