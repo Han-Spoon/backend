@@ -105,6 +105,7 @@ public class ScanService {
                 session.getScannedAt(),
                 menus,
                 session.getRetakeReasons(),
+                session.getRetakeSuggestions(),
                 session.getFailureCode());
     }
 

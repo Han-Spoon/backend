@@ -129,7 +129,7 @@ class ScanPersistenceIntegrationTest {
         ScanSession session = scanSessionRepository.save(
                 ScanSession.create(user.getId(), "blur.jpg", null, null, ScanStatus.PROCESSING, Instant.now()));
 
-        session.applyNeedsRetake(List.of("too blurry", "low light"));
+        session.applyNeedsRetake(List.of("too blurry", "low light"), List.of("카메라의 초점을 맞춰 다시 촬영해 주세요."));
         scanSessionRepository.save(session);
         entityManager.flush();
         entityManager.clear();
@@ -137,6 +137,7 @@ class ScanPersistenceIntegrationTest {
         ScanSession reloaded = scanSessionRepository.findById(session.getId()).orElseThrow();
         assertThat(reloaded.getScanStatus()).isEqualTo(ScanStatus.NEEDS_RETAKE);
         assertThat(reloaded.getRetakeReasons()).containsExactly("too blurry", "low light");
+        assertThat(reloaded.getRetakeSuggestions()).containsExactly("카메라의 초점을 맞춰 다시 촬영해 주세요.");
     }
 
     @Test

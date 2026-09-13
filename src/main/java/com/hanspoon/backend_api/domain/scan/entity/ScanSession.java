@@ -63,6 +63,10 @@ public class ScanSession extends BaseEntity {
     @Column(name = "retake_reasons", columnDefinition = "jsonb")
     private List<String> retakeReasons;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "retake_suggestions", columnDefinition = "jsonb")
+    private List<String> retakeSuggestions;
+
     private ScanSession(
             UUID userId,
             String storageKey,
@@ -124,11 +128,12 @@ public class ScanSession extends BaseEntity {
         this.title = title;
     }
 
-    /** 재촬영 필요 시 상태 + OCR 이 제공한 사유를 반영. */
-    public void applyNeedsRetake(List<String> retakeReasons) {
+    /** 재촬영 필요 시 상태와 OCR 이 제공한 사유·개선 안내를 반영. */
+    public void applyNeedsRetake(List<String> retakeReasons, List<String> retakeSuggestions) {
         ensureProcessing();
         this.scanStatus = ScanStatus.NEEDS_RETAKE;
         this.retakeReasons = retakeReasons;
+        this.retakeSuggestions = retakeSuggestions;
         this.failureCode = null;
     }
 

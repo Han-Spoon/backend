@@ -13,6 +13,10 @@ import tools.jackson.databind.annotation.JsonNaming;
  * @param rawLineCount OCR 원본 라인 수
  * @param priceMatchCount 가격 매칭된 메뉴 수
  * @param priceMatchRatio 가격 매칭 비율
+ * @param priceAnchorCount OCR에서 감지된 가격 후보 수
+ * @param pairCoverage 감지된 가격 후보 중 메뉴와 매칭된 비율
+ * @param meanOcrConfidence OCR 라인 평균 신뢰도
+ * @param meanPairConfidence 메뉴명-가격 쌍 평균 신뢰도
  * @param imageWidth 이미지 가로 px
  * @param imageHeight 이미지 세로 px
  * @param imageQuality 이미지 품질 세부 분석
@@ -36,6 +40,10 @@ public record ScanQuality(
         Integer rawLineCount,
         Integer priceMatchCount,
         Double priceMatchRatio,
+        Integer priceAnchorCount,
+        Double pairCoverage,
+        Double meanOcrConfidence,
+        Double meanPairConfidence,
         Integer imageWidth,
         Integer imageHeight,
         ImageQuality imageQuality,

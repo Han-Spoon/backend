@@ -110,6 +110,10 @@ class ScanProcessorTest {
                         20,
                         2,
                         1.0,
+                        2,
+                        1.0,
+                        0.91,
+                        0.88,
                         1280,
                         960,
                         null,
@@ -259,10 +263,14 @@ class ScanProcessorTest {
                         1,
                         0,
                         0.0,
+                        1,
+                        0.0,
+                        0.42,
+                        null,
                         100,
                         100,
                         null,
-                        List.of(),
+                        List.of("카메라의 초점을 맞춰 다시 촬영해 주세요."),
                         List.of("too blurry"),
                         true,
                         true,
@@ -285,6 +293,7 @@ class ScanProcessorTest {
 
         assertThat(session.getScanStatus()).isEqualTo(ScanStatus.NEEDS_RETAKE);
         assertThat(session.getRetakeReasons()).containsExactly("too blurry");
+        assertThat(session.getRetakeSuggestions()).containsExactly("카메라의 초점을 맞춰 다시 촬영해 주세요.");
         verify(aiClient, never()).judge(any());
         verify(menuAnalysisRepository, never()).saveAll(any());
     }

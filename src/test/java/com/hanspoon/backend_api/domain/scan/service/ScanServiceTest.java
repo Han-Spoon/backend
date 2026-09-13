@@ -207,6 +207,22 @@ class ScanServiceTest {
     }
 
     @Test
+    void getScanReturnsRetakeReasonsAndSuggestions() {
+        UUID userId = UUID.randomUUID();
+        ScanSession session = ScanSession.start(userId, "scans/" + userId + "/blurred.jpg");
+        session.applyNeedsRetake(List.of("이미지가 흐려 메뉴판 판독이 어렵습니다."), List.of("카메라의 초점을 맞춰 다시 촬영해 주세요."));
+        when(scanSessionRepository.findByIdAndUserId(session.getId(), userId)).thenReturn(Optional.of(session));
+        when(menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(session.getId()))
+                .thenReturn(List.of());
+
+        var response = scanService.getScan(userId, session.getId());
+
+        assertThat(response.status()).isEqualTo(ScanStatus.NEEDS_RETAKE);
+        assertThat(response.retakeReasons()).containsExactly("이미지가 흐려 메뉴판 판독이 어렵습니다.");
+        assertThat(response.retakeSuggestions()).containsExactly("카메라의 초점을 맞춰 다시 촬영해 주세요.");
+    }
+
+    @Test
     void getScanReturnsNullTitleWhenNotEditedAndRawScannedAt() {
         UUID userId = UUID.randomUUID();
         Instant scannedAt = Instant.parse("2026-06-06T12:00:00Z");

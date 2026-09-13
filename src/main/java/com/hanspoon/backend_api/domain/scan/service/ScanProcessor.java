@@ -100,7 +100,7 @@ public class ScanProcessor {
 
             if (isNeedsRetake(ocr)) {
                 scanStateWriter.applyNeedsRetake(
-                        scanId, ocr.scanQuality() != null ? ocr.scanQuality().reasons() : null);
+                        scanId, ocr.scanQuality().reasons(), ocr.scanQuality().retakeSuggestions());
                 log.info("Scan needs retake: {}", scanId);
                 return;
             }
@@ -241,11 +241,26 @@ public class ScanProcessor {
     private void logOcrCompleted(UUID scanId, long backendDurationMs, OcrResponse ocr) {
         var quality = ocr.scanQuality();
         log.info(
-                "OCR completed: {} (backendMs={}, aiMs={}, attempts={}, preprocessingApplied={}, selectedAttempt={}, "
-                        + "retrySkippedReason={}, fetchSource={}, aiQueueMs={})",
+                "OCR completed: {} (backendMs={}, aiMs={}, qualityStatus={}, score={}, rawLines={}, priceMatches={}, "
+                        + "priceAnchors={}, pairCoverage={}, meanOcrConfidence={}, meanPairConfidence={}, "
+                        + "imageWidth={}, imageHeight={}, imageQualityScore={}, attempts={}, preprocessingApplied={}, "
+                        + "selectedAttempt={}, retrySkippedReason={}, fetchSource={}, aiQueueMs={})",
                 scanId,
                 backendDurationMs,
                 quality != null ? quality.ocrProcessingTimeMs() : null,
+                quality != null ? quality.status() : null,
+                quality != null ? quality.score() : null,
+                quality != null ? quality.rawLineCount() : null,
+                quality != null ? quality.priceMatchCount() : null,
+                quality != null ? quality.priceAnchorCount() : null,
+                quality != null ? quality.pairCoverage() : null,
+                quality != null ? quality.meanOcrConfidence() : null,
+                quality != null ? quality.meanPairConfidence() : null,
+                quality != null ? quality.imageWidth() : null,
+                quality != null ? quality.imageHeight() : null,
+                quality != null && quality.imageQuality() != null
+                        ? quality.imageQuality().score()
+                        : null,
                 quality != null ? quality.ocrAttemptCount() : null,
                 quality != null ? quality.preprocessingApplied() : null,
                 quality != null ? quality.selectedOcrAttempt() : null,
