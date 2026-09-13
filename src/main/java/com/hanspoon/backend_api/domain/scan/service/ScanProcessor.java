@@ -94,7 +94,7 @@ public class ScanProcessor {
 
             scanStateWriter.applyOcrResult(
                     scanId,
-                    toMenuImage(scanId, source, storageKey, ocr),
+                    toMenuImage(scanId, source, upload, ocr),
                     ocr.scanSession() != null ? ocr.scanSession().menuCount() : null,
                     parseScannedAt(ocr.scanSession() != null ? ocr.scanSession().scannedAt() : null));
 
@@ -149,19 +149,20 @@ public class ScanProcessor {
         }
     }
 
-    private MenuImage toMenuImage(UUID scanId, String source, String storageKey, OcrResponse ocr) {
+    private MenuImage toMenuImage(UUID scanId, String source, VerifiedUpload upload, OcrResponse ocr) {
         String resolvedSource = source;
-        String mimeType = null;
-        Long fileSize = null;
-        if (ocr.menuImage() != null) {
-            if (resolvedSource == null) {
-                resolvedSource = ocr.menuImage().source();
-            }
-            mimeType = ocr.menuImage().mimeType();
-            fileSize = ocr.menuImage().fileSize();
+        if (resolvedSource == null && ocr.menuImage() != null) {
+            resolvedSource = ocr.menuImage().source();
         }
         return MenuImage.create(
-                scanId, resolvedSource, storageKey, s3StorageService.objectUri(storageKey), mimeType, fileSize);
+                scanId,
+                resolvedSource,
+                upload.storageKey(),
+                s3StorageService.objectUri(upload.storageKey()),
+                upload.contentType(),
+                upload.contentLength(),
+                upload.versionId(),
+                upload.eTag());
     }
 
     private boolean isNeedsRetake(OcrResponse ocr) {

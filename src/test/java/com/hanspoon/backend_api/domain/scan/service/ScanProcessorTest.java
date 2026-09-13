@@ -103,7 +103,7 @@ class ScanProcessorTest {
                 new com.hanspoon.backend_api.domain.ai.dto.ocr.ScanSession(
                         "menu.jpg", 2, null, "completed", "2026-06-05T00:00:00Z"),
                 new com.hanspoon.backend_api.domain.ai.dto.ocr.MenuImage(
-                        "upload", STORAGE_KEY, "https://s3/presigned", "image/jpeg", 123L),
+                        "upload", STORAGE_KEY, "https://s3/presigned", "image/png", 999L),
                 new com.hanspoon.backend_api.domain.ai.dto.ocr.ScanQuality(
                         "usable",
                         80,
@@ -202,7 +202,16 @@ class ScanProcessorTest {
         assertThat(session.getScanStatus()).isEqualTo(ScanStatus.COMPLETED);
         assertThat(session.getMenuCount()).isEqualTo(2);
         assertThat(session.getRiskyMenuCount()).isEqualTo(1);
-        verify(menuImageRepository).save(any());
+        ArgumentCaptor<com.hanspoon.backend_api.domain.scan.entity.MenuImage> imageCaptor =
+                ArgumentCaptor.forClass(com.hanspoon.backend_api.domain.scan.entity.MenuImage.class);
+        verify(menuImageRepository).save(imageCaptor.capture());
+        var savedImage = imageCaptor.getValue();
+        assertThat(savedImage.getStorageKey()).isEqualTo(STORAGE_KEY);
+        assertThat(savedImage.getImageUrl()).isEqualTo("s3://test-bucket/" + STORAGE_KEY);
+        assertThat(savedImage.getMimeType()).isEqualTo(VERIFIED_UPLOAD.contentType());
+        assertThat(savedImage.getFileSize()).isEqualTo(VERIFIED_UPLOAD.contentLength());
+        assertThat(savedImage.getObjectVersionId()).isEqualTo(VERSION_ID);
+        assertThat(savedImage.getETag()).isEqualTo(ETAG);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<MenuAnalysis>> captor = ArgumentCaptor.forClass(List.class);

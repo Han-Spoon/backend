@@ -66,7 +66,9 @@ class ScanPersistenceIntegrationTest {
                 "scans/menu_001.jpg",
                 "https://example.com/scans/menu_001.jpg",
                 "image/jpeg",
-                123456L));
+                123456L,
+                "version-1",
+                "\"etag-1\""));
 
         menuAnalysisRepository.save(MenuAnalysis.create(
                 sessionId,
@@ -96,6 +98,8 @@ class ScanPersistenceIntegrationTest {
                 menuImageRepository.findByScanSessionId(sessionId).orElseThrow();
         assertThat(reloadedImage.getStorageKey()).isEqualTo("scans/menu_001.jpg");
         assertThat(reloadedImage.getSource()).isEqualTo("upload");
+        assertThat(reloadedImage.getObjectVersionId()).isEqualTo("version-1");
+        assertThat(reloadedImage.getETag()).isEqualTo("\"etag-1\"");
 
         List<MenuAnalysis> analyses = menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(sessionId);
         assertThat(analyses).hasSize(1);
@@ -147,7 +151,8 @@ class ScanPersistenceIntegrationTest {
         ScanSession session = scanSessionRepository.save(
                 ScanSession.create(userId, "del.jpg", 1, 0, ScanStatus.COMPLETED, Instant.now()));
         UUID sessionId = session.getId();
-        menuImageRepository.save(MenuImage.create(sessionId, "upload", "scans/del.jpg", "u", "image/jpeg", 1L));
+        menuImageRepository.save(
+                MenuImage.create(sessionId, "upload", "scans/del.jpg", "u", "image/jpeg", 1L, null, null));
         menuAnalysisRepository.save(MenuAnalysis.create(
                 sessionId,
                 1,
