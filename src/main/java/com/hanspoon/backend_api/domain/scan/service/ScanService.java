@@ -140,6 +140,8 @@ public class ScanService {
                 m.getDisplayOrder(),
                 m.getMenuNameKo(),
                 m.getMenuNameEn(),
+                m.getDescriptionKo(),
+                m.getDescriptionEn(),
                 m.getPriceText(),
                 m.getIsSpicy(),
                 m.getRiskLevel(),

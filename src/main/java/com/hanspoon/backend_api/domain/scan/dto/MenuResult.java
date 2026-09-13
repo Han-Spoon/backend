@@ -12,6 +12,8 @@ import java.util.List;
  * @param displayOrder 표시 순서
  * @param menuNameKo 한국어 메뉴명
  * @param menuNameEn 영어 메뉴명
+ * @param descriptionKo 한국어 메뉴 설명
+ * @param descriptionEn 영어 메뉴 설명
  * @param priceText 가격 문자열
  * @param isSpicy 매움 여부
  * @param riskLevel 위험도 (danger | caution | safe)
@@ -24,6 +26,8 @@ public record MenuResult(
         Integer displayOrder,
         String menuNameKo,
         String menuNameEn,
+        String descriptionKo,
+        String descriptionEn,
         String priceText,
         Boolean isSpicy,
         RiskLevel riskLevel,

@@ -13,6 +13,7 @@ import com.hanspoon.backend_api.domain.scan.dto.ScanCreatedResponse;
 import com.hanspoon.backend_api.domain.scan.dto.ScanHistoryItem;
 import com.hanspoon.backend_api.domain.scan.dto.StartScanRequest;
 import com.hanspoon.backend_api.domain.scan.dto.UpdateScanTitleRequest;
+import com.hanspoon.backend_api.domain.scan.entity.MenuAnalysis;
 import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
@@ -157,6 +158,37 @@ class ScanServiceTest {
         assertThat(response.menuCount()).isEqualTo(2);
         assertThat(response.riskyMenuCount()).isEqualTo(1);
         assertThat(response.menus()).isEmpty();
+    }
+
+    @Test
+    void getScanReturnsPersistedMenuDescriptions() {
+        UUID userId = UUID.randomUUID();
+        ScanSession session = ScanSession.create(userId, null, 1, 0, ScanStatus.COMPLETED, Instant.now());
+        UUID scanId = session.getId();
+        MenuAnalysis menu = MenuAnalysis.create(
+                scanId,
+                1,
+                "파돈불고기",
+                "Green Onion Bulgogi",
+                "파돈불고기 200g과 된장찌개",
+                "200g green onion bulgogi with soybean paste stew",
+                "14,000",
+                false,
+                null,
+                null,
+                List.of(),
+                null,
+                null);
+        when(scanSessionRepository.findByIdAndUserId(scanId, userId)).thenReturn(Optional.of(session));
+        when(menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(scanId))
+                .thenReturn(List.of(menu));
+
+        var response = scanService.getScan(userId, scanId);
+
+        assertThat(response.menus()).singleElement().satisfies(result -> {
+            assertThat(result.descriptionKo()).isEqualTo("파돈불고기 200g과 된장찌개");
+            assertThat(result.descriptionEn()).isEqualTo("200g green onion bulgogi with soybean paste stew");
+        });
     }
 
     @Test
