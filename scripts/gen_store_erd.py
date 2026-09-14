@@ -149,8 +149,8 @@ table(580, BOT_Y+50, 'scan_sessions', [
   ('FK','사용자','user_id','UUID','N'),
   ('SEC','V5 가게 연결 (미적용)'),
   ('FK','가게','store_id','BIGINT','Y'),
-  ('','가게명 스냅샷','store_name_snapshot','VARCHAR(200)','N'),
-  ('','가게 매칭 방식','store_match_method','VARCHAR(20)','N'),
+  ('','가게명 스냅샷','store_name_snapshot','VARCHAR(200)','Y'),
+  ('','가게 매칭 방식','store_match_method','VARCHAR(20)','Y'),
   ('SEC','V2 스캔 멱등 · 실패코드'),
   ('UQ','S3 객체 키','storage_key','VARCHAR(512)','Y'),
   ('','실패 코드','failure_code','VARCHAR(64)','Y'),
@@ -161,7 +161,7 @@ table(580, BOT_Y+50, 'scan_sessions', [
   ('','스캔 시각','scanned_at','TIMESTAMPTZ','Y'),
   ('','재촬영 사유','retake_reasons','JSONB','Y'),
   ('','재촬영 제안','retake_suggestions','JSONB','Y'),
-], 'exist', '⚠ 사용자 GPS 원본 컬럼 없음 (위치정보법)')
+], 'exist', 'store context 3개 all-or-none · 사용자 GPS 원본 없음')
 
 yy = BOT_Y + 50
 yy += table(1100, yy, 'menu_images', [

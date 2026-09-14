@@ -252,8 +252,9 @@ COMMENT ON TABLE store_external_refs IS
 
 -- ─────────────────────────────────────────────────────────────
 -- 스캔 세션 연결
--- store_id 를 NULL 허용으로 둔 이유: 세션은 이미지 업로드 시점에 생성되고 가게 선택은 그 다음이다.
--- AI 파이프라인의 "store_id 없으면 heavy path 금지"는 scan_status 로 게이트한다(컬럼 제약이 아님).
+-- 기존 운영 스캔은 가게 정보 없이 생성됐으므로 세 컬럼을 NULL 허용한다.
+-- 신규 스캔은 애플리케이션이 가게 선택 후 시작하고, store-scoped AI(③ 이후)는 store_id가
+-- 확정된 세션만 호출한다. 현재 OCR·정규화 경로와 과거 이력 조회는 NULL이어도 유지한다.
 --
 -- 사용자 GPS 원본 컬럼은 의도적으로 두지 않는다. 개인위치정보(위치정보법)에 해당해
 -- 저장 시 동의·보관기간·파기 의무가 발생하고, 스캔 이력과 결합되면 동선이 된다.
@@ -261,17 +262,29 @@ COMMENT ON TABLE store_external_refs IS
 -- ─────────────────────────────────────────────────────────────
 ALTER TABLE scan_sessions
     ADD COLUMN store_id            BIGINT       NULL,
-    ADD COLUMN store_name_snapshot VARCHAR(200) NOT NULL DEFAULT '',
-    ADD COLUMN store_match_method  VARCHAR(20)  NOT NULL DEFAULT 'none';
+    ADD COLUMN store_name_snapshot VARCHAR(200) NULL,
+    ADD COLUMN store_match_method  VARCHAR(20)  NULL;
 
 ALTER TABLE scan_sessions
     -- RESTRICT: 스캔 이력이 참조하는 가게는 삭제 불가. 검색 제외는 stores.status 비활성 전이로 표현한다.
     ADD CONSTRAINT fk_scan_sessions_store FOREIGN KEY (store_id)
         REFERENCES stores (id) ON DELETE RESTRICT,
-    ADD CONSTRAINT ck_scan_sessions_match_method CHECK (store_match_method IN
-        ('none', 'gps_candidate', 'name_search', 'kakao_fallback', 'user_created'));
+    ADD CONSTRAINT ck_scan_sessions_match_method CHECK (store_match_method IS NULL OR store_match_method IN
+        ('gps_candidate', 'name_search', 'kakao_fallback', 'user_created')),
+    ADD CONSTRAINT ck_scan_sessions_store_context CHECK (
+        (store_id IS NULL AND store_name_snapshot IS NULL AND store_match_method IS NULL)
+        OR
+        (store_id IS NOT NULL
+            AND store_name_snapshot IS NOT NULL
+            AND btrim(store_name_snapshot) <> ''
+            AND store_match_method IS NOT NULL)
+    );
 
 CREATE INDEX idx_scan_sessions_store ON scan_sessions (store_id) WHERE store_id IS NOT NULL;
 
 COMMENT ON COLUMN scan_sessions.store_name_snapshot IS
-    '스캔 시점 상호명 동결. 분기 갱신으로 상호명이 바뀌거나 폐업해도 과거 이력 표시는 변하지 않아야 한다.';
+    '스캔 시점 상호명 동결. 서버가 stores.name에서 복사하며 클라이언트 입력을 신뢰하지 않는다.';
+COMMENT ON COLUMN scan_sessions.store_id IS
+    '가게 도입 전 레거시 스캔만 NULL. 신규 store-scoped AI 호출은 값이 확정된 세션에만 허용한다.';
+COMMENT ON COLUMN scan_sessions.store_match_method IS
+    '가게 식별 경로. 의사결정 근거로 사용하지 않는 관측용 메타데이터이며 store context와 함께 저장한다.';
