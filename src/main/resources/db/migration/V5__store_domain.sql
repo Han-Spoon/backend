@@ -11,7 +11,7 @@
 --
 -- 데이터 타입 근거: 전국 CSV 실측 최대 길이
 --   상가업소번호 20 · 상호명 32 · 지점명 9 · 도로명주소 34 · 층정보 4 · 행정동코드 8
---   (사용자 제출 가게를 감안해 여유를 둔 값으로 지정)
+--   향후 다른 공공데이터 원천을 수용할 여유를 둔 값으로 지정.
 
 -- 반경 검색(GiST) / 상호명 유사도(GIN trigram)에 필요.
 -- AWS RDS PostgreSQL 16. 세 확장 모두 RDS 지원 목록에 있고, 접속 계정(hanspoon_app)이
@@ -107,6 +107,7 @@ CREATE TABLE store_import_batches (
     CONSTRAINT pk_store_import_batches PRIMARY KEY (id),
     CONSTRAINT uq_store_import_batches UNIQUE (source, source_version),
     CONSTRAINT ck_store_import_batches_source CHECK (source IN ('sbiz', 'localdata')),
+    CONSTRAINT ck_store_import_batches_version CHECK (source_version ~ '^[0-9]{6}$'),
     CONSTRAINT ck_store_import_batches_status CHECK (status IN ('running', 'completed', 'failed')),
     CONSTRAINT ck_store_import_batches_row_count CHECK (row_count >= 0),
     CONSTRAINT ck_store_import_batches_finished_at CHECK (
@@ -121,7 +122,7 @@ CREATE TABLE store_import_batches (
 CREATE TABLE stores (
     id               BIGINT       GENERATED ALWAYS AS IDENTITY,
 
-    -- 원천 식별자. 멱등 upsert 키. localdata/user_submitted 출처면 NULL
+    -- 원천 식별자. 멱등 upsert 키. localdata 출처면 NULL
     -- (PostgreSQL UNIQUE 는 NULL 을 서로 다른 값으로 보므로 다중 NULL 허용).
     sbiz_store_no    VARCHAR(24)  NULL,
 
@@ -131,9 +132,8 @@ CREATE TABLE stores (
     -- 매칭용 정규형. 애플리케이션이 따로 채우지 않도록 생성 컬럼으로 둔다.
     name_normalized  VARCHAR(200) GENERATED ALWAYS AS (normalize_store_name(name)) STORED,
 
-    -- 분류
-    -- 공공데이터 행은 항상 분류가 있지만, 신규 사용자 제보는 검증 전까지 분류를 모를 수 있다.
-    category_id      BIGINT       NULL,
+    -- 분류. 공공데이터 원천만 수용하므로 업종 분류와 적재 배치를 반드시 추적한다.
+    category_id      BIGINT       NOT NULL,
     ksic_code        VARCHAR(6)   NULL,   -- 원천 결측 존재(전국 한식 343건)
 
     -- 위치. 행정동은 코드만 보존한다 — 행정동'명'을 함께 저장하지 않으므로 이행 종속이 없고,
@@ -150,8 +150,7 @@ CREATE TABLE stores (
     inactive_at      TIMESTAMPTZ  NULL,
     -- 공공데이터 수록 여부와 서비스의 검증 완료는 다른 개념이다. 실제 검증 전에는 NULL.
     verified_at      TIMESTAMPTZ  NULL,
-    submitted_by     UUID         NULL,   -- origin='user_submitted' 인 경우의 제보자
-    last_batch_id    BIGINT       NULL,
+    last_batch_id    BIGINT       NOT NULL,
 
     created_at       TIMESTAMPTZ  NOT NULL DEFAULT now(),
     updated_at       TIMESTAMPTZ  NOT NULL DEFAULT now(),
@@ -164,26 +163,19 @@ CREATE TABLE stores (
         REFERENCES ksic_codes (code),
     CONSTRAINT fk_stores_batch FOREIGN KEY (last_batch_id)
         REFERENCES store_import_batches (id),
-    CONSTRAINT fk_stores_submitter FOREIGN KEY (submitted_by)
-        REFERENCES users (id) ON DELETE SET NULL,
-    -- 원천 실측 이상치 0건. 사용자 제출 가게의 오입력을 막는 방어선.
+    -- 원천 실측 이상치 0건. 잘못된 공공데이터 적재를 막는 방어선.
     CONSTRAINT ck_stores_lat CHECK (lat BETWEEN 33 AND 39),
     CONSTRAINT ck_stores_lng CHECK (lng BETWEEN 124 AND 132),
-    CONSTRAINT ck_stores_name CHECK (btrim(name) <> ''),
+    CONSTRAINT ck_stores_name CHECK (btrim(name) <> '' AND name = btrim(name)),
     CONSTRAINT ck_stores_name_normalized CHECK (name_normalized <> ''),
     CONSTRAINT ck_stores_status CHECK (status IN ('active', 'inactive')),
-    CONSTRAINT ck_stores_origin CHECK (origin IN ('sbiz', 'localdata', 'user_submitted')),
+    CONSTRAINT ck_stores_origin CHECK (origin IN ('sbiz', 'localdata')),
     CONSTRAINT ck_stores_inactive_at CHECK ((status = 'inactive') = (inactive_at IS NOT NULL)),
     -- 출처별 식별자·배치 관계를 DB에서도 강제해 잘못 조합된 가게 행을 막는다.
-    CONSTRAINT ck_stores_sbiz_identity CHECK ((origin = 'sbiz') = (sbiz_store_no IS NOT NULL)),
-    CONSTRAINT ck_stores_batch_origin CHECK (
-        (origin IN ('sbiz', 'localdata')) = (last_batch_id IS NOT NULL)
-    ),
-    CONSTRAINT ck_stores_submitter_origin CHECK (submitted_by IS NULL OR origin = 'user_submitted'),
-    CONSTRAINT ck_stores_category_origin CHECK (category_id IS NOT NULL OR origin = 'user_submitted')
+    CONSTRAINT ck_stores_sbiz_identity CHECK ((origin = 'sbiz') = (sbiz_store_no IS NOT NULL))
 );
 
--- 반경 후보 검색. status 동등조건을 부분 인덱스 조건으로 흡수해 스캔 대상을 영업중 행으로 한정.
+-- 반경 후보 검색. status 동등조건을 부분 인덱스 조건으로 흡수해 스캔 대상을 영업중 행으로 한정한다.
 CREATE INDEX idx_stores_geo_active ON stores USING gist (ll_to_earth(lat, lng))
     WHERE status = 'active';
 -- 상호명 유사도 매칭(실측: 상호명 단독으로는 고유율 83% 라 좌표와 병행 필수).
@@ -197,28 +189,6 @@ COMMENT ON COLUMN stores.status IS '데이터 소스 기준 노출 상태. inact
 COMMENT ON COLUMN stores.verified_at IS '서비스가 사업자·관리자 검증을 완료한 시각. 공공데이터 수록만으로 채우지 않는다.';
 COMMENT ON COLUMN stores.origin IS '레코드 출처. 이 스캔에서 어떻게 식별했는지(match_method)와는 다른 축이다.';
 COMMENT ON COLUMN stores.name_normalized IS '매칭 전용 정규형(생성 컬럼). 표시에는 name 을 쓸 것. 검색어도 normalize_store_name() 을 거쳐야 한다.';
-
--- ─────────────────────────────────────────────────────────────
--- 별칭 — 두 종류를 분리한다.
---   가게별 별칭은 store 에 종속되지만, 브랜드 표기 변형(서브웨이 ↔ 써브웨이)은 특정 가게와 무관.
---   후자를 store_aliases 에 넣으면 같은 브랜드 지점 수만큼 행이 복제되어 삽입·수정 이상이 생김.
--- ─────────────────────────────────────────────────────────────
-CREATE TABLE store_aliases (
-    id                BIGINT       GENERATED ALWAYS AS IDENTITY,
-    store_id          BIGINT       NOT NULL,
-    alias             VARCHAR(200) NOT NULL,
-    alias_normalized  VARCHAR(200) GENERATED ALWAYS AS (normalize_store_name(alias)) STORED,
-    source            VARCHAR(20)  NOT NULL DEFAULT 'manual',
-    created_at        TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT pk_store_aliases PRIMARY KEY (id),
-    CONSTRAINT fk_store_aliases_store FOREIGN KEY (store_id)
-        REFERENCES stores (id) ON DELETE CASCADE,
-    CONSTRAINT ck_store_aliases_source CHECK (source IN ('manual', 'user_reported')),
-    CONSTRAINT ck_store_aliases_alias CHECK (btrim(alias) <> '' AND alias_normalized <> '')
-);
-CREATE UNIQUE INDEX uq_store_aliases ON store_aliases (store_id, alias_normalized);
-CREATE INDEX idx_store_aliases_trgm ON store_aliases USING gin (alias_normalized gin_trgm_ops);
 
 -- 전역 표기 변형 사전. 검색어를 대표표기로 치환한 뒤 stores 를 조회한다. store FK 없음(앱 레벨 조회).
 CREATE TABLE brand_aliases (
@@ -241,8 +211,9 @@ CREATE TABLE brand_aliases (
 
 -- ─────────────────────────────────────────────────────────────
 -- 외부 지도 서비스 참조
--- 컬럼이 아니라 테이블로 분리한 이유:
--- kakao에서 저장이 허용되는 필드만 담는 테이블로 격리해 약관 경계를 스키마에 남기기 위함.
+-- 컬럼이 아니라 테이블로 분리한 이유: stores 에 kakao_place_id 컬럼을 두면
+-- 그 옆에 kakao_name / kakao_address 를 추가하는 것이 한 줄 ALTER 로 가능해진다.
+-- 저장이 허용되는 필드만 담는 테이블로 격리해 약관 경계를 스키마에 남긴다.
 -- ─────────────────────────────────────────────────────────────
 CREATE TABLE store_external_refs (
     id            BIGINT       GENERATED ALWAYS AS IDENTITY,
@@ -259,7 +230,9 @@ CREATE TABLE store_external_refs (
     CONSTRAINT fk_store_external_refs_store FOREIGN KEY (store_id)
         REFERENCES stores (id) ON DELETE CASCADE,
     CONSTRAINT ck_store_external_refs_provider CHECK (provider IN ('kakao')),
-    CONSTRAINT ck_store_external_refs_external_id CHECK (btrim(external_id) <> '')
+    CONSTRAINT ck_store_external_refs_external_id CHECK (
+        btrim(external_id) <> '' AND external_id = btrim(external_id)
+    )
 );
 
 COMMENT ON TABLE store_external_refs IS
@@ -267,10 +240,13 @@ COMMENT ON TABLE store_external_refs IS
 
 -- ─────────────────────────────────────────────────────────────
 -- 스캔 세션 연결
--- 기존 운영 스캔은 가게 정보 없이 생성됐으므로 세 컬럼을 NULL 허용.
+-- 기존 운영 스캔은 가게 정보 없이 생성됐으므로 세 컬럼을 NULL 허용한다.
+-- 신규 스캔은 애플리케이션이 가게 선택 후 시작하고, store-scoped AI(③ 이후)는 store_id가
+-- 확정된 세션만 호출한다. 현재 OCR·정규화 경로와 과거 이력 조회는 NULL이어도 유지한다.
 --
--- 사용자 GPS 원본 컬럼은 개인위치정보(위치정보법) 위반에 해당해 의도적으로 두지 않음.
--- 후보 조회에만 쓰고 결과(store_id)만 남김.
+-- 사용자 GPS 원본 컬럼은 의도적으로 두지 않는다. 개인위치정보(위치정보법)에 해당해
+-- 저장 시 동의·보관기간·파기 의무가 발생하고, 스캔 이력과 결합되면 동선이 된다.
+-- 후보 조회에만 쓰고 결과(store_id)만 남긴다.
 -- ─────────────────────────────────────────────────────────────
 ALTER TABLE scan_sessions
     ADD COLUMN store_id            BIGINT       NULL,
@@ -282,7 +258,7 @@ ALTER TABLE scan_sessions
     ADD CONSTRAINT fk_scan_sessions_store FOREIGN KEY (store_id)
         REFERENCES stores (id) ON DELETE RESTRICT,
     ADD CONSTRAINT ck_scan_sessions_match_method CHECK (store_match_method IS NULL OR store_match_method IN
-        ('gps_candidate', 'name_search', 'kakao_fallback', 'user_created')),
+        ('gps_candidate', 'name_search', 'kakao_fallback')),
     ADD CONSTRAINT ck_scan_sessions_store_context CHECK (
         (store_id IS NULL AND store_name_snapshot IS NULL AND store_match_method IS NULL)
         OR

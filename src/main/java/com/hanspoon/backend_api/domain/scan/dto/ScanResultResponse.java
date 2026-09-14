@@ -12,6 +12,7 @@ import java.util.UUID;
  * @param scanId 스캔 세션 id
  * @param status 스캔 상태 (processing | completed | failed | needs_retake)
  * @param title 유저가 수정한 제목(미수정이면 null). 기본 제목은 FE 가 scannedAt 을 로케일로 포맷해 표시
+ * @param store 스캔 시점 가게 정보. 가게 도입 전 레거시 스캔은 null
  * @param menuCount 추출된 메뉴 수
  * @param riskyMenuCount 위험/주의 메뉴 수
  * @param scannedAt 스캔 시각
@@ -25,6 +26,7 @@ public record ScanResultResponse(
         UUID scanId,
         ScanStatus status,
         String title,
+        ScanStoreSummary store,
         Integer menuCount,
         Integer riskyMenuCount,
         Instant scannedAt,

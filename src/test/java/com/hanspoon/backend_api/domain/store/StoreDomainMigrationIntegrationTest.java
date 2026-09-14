@@ -70,15 +70,6 @@ class StoreDomainMigrationIntegrationTest {
     }
 
     @Test
-    void rejectsEmptyStoreAliasAndExternalId() {
-        long storeId = insertPublicStore(insertRootCategory(), insertCompletedBatch(), "store-valid", "한스푼");
-
-        assertThatThrownBy(() -> jdbcTemplate.update(
-                        "insert into store_aliases (store_id, alias, source) values (?, ?, 'manual')", storeId, "!!!"))
-                .isInstanceOf(DataIntegrityViolationException.class);
-    }
-
-    @Test
     void rejectsEmptyExternalStoreIdentifier() {
         long storeId = insertPublicStore(insertRootCategory(), insertCompletedBatch(), "store-external", "한그릇");
 
@@ -88,6 +79,36 @@ class StoreDomainMigrationIntegrationTest {
                         values (?, 'kakao', '   ', '')
                         """,
                         storeId))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void rejectsStoreWithoutCategory() {
+        long batchId = insertCompletedBatch();
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                        """
+                        insert into stores
+                            (sbiz_store_no, name, lat, lng, origin, last_batch_id)
+                        values ('missing-category', '분류없는식당', 37.5, 127.0, 'sbiz', ?)
+                        """,
+                        batchId))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void rejectsRemovedUserSubmittedOrigin() {
+        long categoryId = insertRootCategory();
+        long batchId = insertCompletedBatch();
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                        """
+                        insert into stores
+                            (name, category_id, lat, lng, origin, last_batch_id)
+                        values ('사용자제보식당', ?, 37.5, 127.0, 'user_submitted', ?)
+                        """,
+                        categoryId,
+                        batchId))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 

@@ -1,5 +1,6 @@
 package com.hanspoon.backend_api.domain.store.dto;
 
+import com.hanspoon.backend_api.domain.store.entity.StoreMatchMethod;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /** 사용자가 선택할 수 있는 가게 후보. 내부 검색 점수는 API 계약에 노출하지 않는다. */
@@ -14,4 +15,5 @@ public record StoreCandidateResponse(
         @Schema(description = "사용자 위치와의 거리(m)", example = "42") int distanceMeters,
         @Schema(description = "상권업종 소분류 코드", example = "I20101") String categoryCode,
         @Schema(description = "상권업종 소분류명", example = "한식 일반 음식점업") String categoryName,
-        @Schema(description = "서비스 검증 완료 여부", example = "true") boolean verified) {}
+        @Schema(description = "서비스 검증 완료 여부", example = "true") boolean verified,
+        @Schema(description = "후보 검색 경로", example = "gps_candidate") StoreMatchMethod matchMethod) {}

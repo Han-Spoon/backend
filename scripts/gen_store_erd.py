@@ -60,7 +60,7 @@ W, H = 2130, 1490
 TOP_Y, TOP_H, BOT_Y, BOT_H = 112, 680, 830, 546
 panel(40,   TOP_Y, 490, TOP_H, '참조 마스터 · BIGINT PK',  'ref')
 panel(560,  TOP_Y, 490, TOP_H, '가게 마스터 · V5 예정 (미적용)',        'core')
-panel(1080, TOP_Y, 490, TOP_H, '별칭 · 외부참조',            'sat')
+panel(1080, TOP_Y, 490, TOP_H, '브랜드 별칭 · 외부참조',     'sat')
 panel(40,   BOT_Y, 1530, BOT_H, '기존 백엔드 스키마 · UUID PK (V1 배포됨)', 'exist')
 panel(1600, TOP_Y, 490, 1264, 'AI 연계 스키마 (catoin) · 백엔드 소유, 미구현', 'ai', dashed=True)
 
@@ -94,7 +94,7 @@ table(580, TOP_Y+50, 'stores', [
   ('','지점명','branch_name','VARCHAR(100)','N'),
   ('GEN','정규화 상호명','name_normalized','VARCHAR(200)','N'),
   ('SEC','분류'),
-  ('FK','업종 소분류','category_id','BIGINT','Y'),
+  ('FK','업종 소분류','category_id','BIGINT','N'),
   ('FK','표준산업분류','ksic_code','VARCHAR(6)','Y'),
   ('SEC','위치'),
   ('','행정동 코드','admin_dong_code','VARCHAR(8)','N'),
@@ -107,21 +107,13 @@ table(580, TOP_Y+50, 'stores', [
   ('','레코드 출처','origin','VARCHAR(20)','N'),
   ('','비활성 시각','inactive_at','TIMESTAMPTZ','Y'),
   ('','검증 완료 시각','verified_at','TIMESTAMPTZ','Y'),
-  ('FK','제출 사용자','submitted_by','UUID','Y'),
-  ('FK','최종 적재 배치','last_batch_id','BIGINT','Y'),
+  ('FK','최종 적재 배치','last_batch_id','BIGINT','N'),
   ('SEC','감사'),
   ('','생성 시각','created_at','TIMESTAMPTZ','N'),
   ('','수정 시각','updated_at','TIMESTAMPTZ','N'),
 ], 'core', '359,832건 · 156MB · 반경검색 실측 1.87ms')
 
 y = TOP_Y + 50
-y += table(1100, y, 'store_aliases', [
-  ('PK','별칭 식별자','id','BIGINT','N'),
-  ('FK','가게','store_id','BIGINT','N'),
-  ('','별칭','alias','VARCHAR(200)','N'),
-  ('GEN','정규화 별칭','alias_normalized','VARCHAR(200)','N'),
-  ('','별칭 출처','source','VARCHAR(20)','N'),
-], 'sat', '가게별 별칭 (사용자 제보)') + 22
 y += table(1100, y, 'brand_aliases', [
   ('PK','변형 식별자','id','BIGINT','N'),
   ('UQ','정규화 변형표기','variant_normalized','VARCHAR(200)','N'),
@@ -226,17 +218,15 @@ def link(d, dashed=False):
 def lab(t, x, y): out.append(f'<text class="lbl" x="{x}" y="{y}">{esc(t)}</text>')
 
 SC, KS, IB, ST = 'store_categories','ksic_codes','store_import_batches','stores'
-AL, EX, US, SS = 'store_aliases','store_external_refs','users','scan_sessions'
+EX, US, SS = 'store_external_refs','users','scan_sessions'
 MI, MA, SM, IRS = 'menu_images','menu_analyses','store_menus','ingredient_risk_scores'
 
 link(f'M {rr(SC)} {ry(SC,0)} H 534 V {ry(ST,7)} H {rl(ST)}');  lab('1:N', 516, ry(SC,0)-6)
 link(f'M {rl(SC)} {ry(SC,4)} H 49 V {ry(SC,0)} H {rl(SC)}')      # 자기참조 상위분류
 lab('self', 26, (ry(SC,0)+ry(SC,4))//2)
 link(f'M {rr(KS)} {ry(KS,0)} H 542 V {ry(ST,8)} H {rl(ST)}')
-link(f'M {rr(IB)} {ry(IB,0)} H 550 V {ry(ST,21)} H {rl(ST)}')
+link(f'M {rr(IB)} {ry(IB,0)} H 550 V {ry(ST,20)} H {rl(ST)}')
 link(f'M {rr(ST)} {ry(ST,0)} H 1065 V {ry(EX,1)} H {rl(EX)}'); lab('1:N', 1036, ry(ST,0)-6)
-link(f'M 1065 {ry(AL,1)} H {rl(AL)}')
-link(f'M 640 {rb(ST)} V 812 H 285 V {rt(US)}');                lab('submitted_by', 300, 806)
 link(f'M 805 {rb(ST)} V {rt(SS)}');                            lab('1:N (NULL 허용)', 813, 790)
 link(f'M {rr(US)} {ry(US,0)} H 545 V {ry(SS,1)} H {rl(SS)}');  lab('1:N', 516, ry(US,0)-6)
 link(f'M {rr(SS)} {ry(SS,0)} H 1065 V {ry(MI,1)} H {rl(MI)}'); lab('1:1', 1036, ry(SS,0)-6)

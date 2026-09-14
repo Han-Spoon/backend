@@ -16,6 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.hanspoon.backend_api.domain.scan.dto.ScanCreatedResponse;
 import com.hanspoon.backend_api.domain.scan.dto.ScanHistoryItem;
 import com.hanspoon.backend_api.domain.scan.dto.ScanResultResponse;
+import com.hanspoon.backend_api.domain.scan.dto.ScanStoreSummary;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.service.ScanService;
 import com.hanspoon.backend_api.global.common.PageResponse;
@@ -73,9 +74,18 @@ class ScanControllerTest {
         when(scanService.startScan(eq(USER_ID), any()))
                 .thenReturn(new ScanCreatedResponse(scanId, ScanStatus.PROCESSING));
 
-        mockMvc.perform(post("/api/v1/scans")
-                        .contentType("application/json")
-                        .content("{\"storageKey\":\"menu-x.jpg\",\"source\":\"upload\"}"))
+        mockMvc.perform(
+                        post("/api/v1/scans")
+                                .contentType("application/json")
+                                .content(
+                                        """
+                                {
+                                  "storageKey": "menu-x.jpg",
+                                  "source": "upload",
+                                  "storeId": 42,
+                                  "storeMatchMethod": "gps_candidate"
+                                }
+                                """))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.scanId").value(scanId.toString()))
                 .andExpect(jsonPath("$.status").value("processing"));
@@ -89,11 +99,37 @@ class ScanControllerTest {
 
     @Test
     void startScanRejectsUnknownSource() throws Exception {
-        mockMvc.perform(post("/api/v1/scans")
-                        .contentType("application/json")
-                        .content("{\"storageKey\":\"menu-x.jpg\",\"source\":\"external-url\"}"))
+        mockMvc.perform(
+                        post("/api/v1/scans")
+                                .contentType("application/json")
+                                .content(
+                                        """
+                                {
+                                  "storageKey": "menu-x.jpg",
+                                  "source": "external-url",
+                                  "storeId": 42,
+                                  "storeMatchMethod": "gps_candidate"
+                                }
+                                """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    void startScanRejectsUnknownStoreMatchMethod() throws Exception {
+        mockMvc.perform(
+                        post("/api/v1/scans")
+                                .contentType("application/json")
+                                .content(
+                                        """
+                                {
+                                  "storageKey": "menu-x.jpg",
+                                  "source": "upload",
+                                  "storeId": 42,
+                                  "storeMatchMethod": "user_created"
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -101,9 +137,18 @@ class ScanControllerTest {
         when(scanService.startScan(eq(USER_ID), any()))
                 .thenThrow(new BusinessException(ErrorCode.SCAN_CAPACITY_EXCEEDED));
 
-        mockMvc.perform(post("/api/v1/scans")
-                        .contentType("application/json")
-                        .content("{\"storageKey\":\"menu-x.jpg\",\"source\":\"upload\"}"))
+        mockMvc.perform(
+                        post("/api/v1/scans")
+                                .contentType("application/json")
+                                .content(
+                                        """
+                                {
+                                  "storageKey": "menu-x.jpg",
+                                  "source": "upload",
+                                  "storeId": 42,
+                                  "storeMatchMethod": "gps_candidate"
+                                }
+                                """))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(header().string("Retry-After", "2"))
                 .andExpect(jsonPath("$.code").value("SCAN_CAPACITY_EXCEEDED"));
@@ -114,19 +159,32 @@ class ScanControllerTest {
         UUID scanId = UUID.randomUUID();
         when(scanService.getScan(eq(USER_ID), eq(scanId)))
                 .thenReturn(new ScanResultResponse(
-                        scanId, ScanStatus.COMPLETED, null, 2, 1, null, List.of(), null, null, null));
+                        scanId,
+                        ScanStatus.COMPLETED,
+                        null,
+                        new ScanStoreSummary(42L, "한스푼"),
+                        2,
+                        1,
+                        null,
+                        List.of(),
+                        null,
+                        null,
+                        null));
 
         mockMvc.perform(get("/api/v1/scans/{scanId}", scanId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.scanId").value(scanId.toString()))
                 .andExpect(jsonPath("$.status").value("completed"))
+                .andExpect(jsonPath("$.store.storeId").value(42))
+                .andExpect(jsonPath("$.store.name").value("한스푼"))
                 .andExpect(jsonPath("$.menuCount").value(2));
     }
 
     @Test
     void getScansReturnsPage() throws Exception {
         UUID scanId = UUID.randomUUID();
-        ScanHistoryItem item = new ScanHistoryItem(scanId, "강남 삼겹살집", ScanStatus.COMPLETED, 2, 1, null);
+        ScanHistoryItem item = new ScanHistoryItem(
+                scanId, "강남 삼겹살집", new ScanStoreSummary(42L, "한스푼"), ScanStatus.COMPLETED, 2, 1, null);
         when(scanService.getScans(eq(USER_ID), any())).thenReturn(new PageResponse<>(List.of(item), 0, 20, 1, 1));
 
         mockMvc.perform(get("/api/v1/scans?page=0&size=20"))
@@ -134,14 +192,15 @@ class ScanControllerTest {
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.page").value(0))
                 .andExpect(jsonPath("$.items[0].scanId").value(scanId.toString()))
-                .andExpect(jsonPath("$.items[0].title").value("강남 삼겹살집"));
+                .andExpect(jsonPath("$.items[0].title").value("강남 삼겹살집"))
+                .andExpect(jsonPath("$.items[0].store.name").value("한스푼"));
     }
 
     @Test
     void updateTitleReturns200() throws Exception {
         UUID scanId = UUID.randomUUID();
         when(scanService.updateTitle(eq(USER_ID), eq(scanId), any()))
-                .thenReturn(new ScanHistoryItem(scanId, "새 제목", ScanStatus.COMPLETED, 2, 1, null));
+                .thenReturn(new ScanHistoryItem(scanId, "새 제목", null, ScanStatus.COMPLETED, 2, 1, null));
 
         mockMvc.perform(patch("/api/v1/scans/{scanId}", scanId)
                         .contentType("application/json")

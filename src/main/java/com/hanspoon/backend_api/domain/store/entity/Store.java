@@ -8,12 +8,11 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
-import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** 공개 데이터와 사용자 제출를 통합한 가게 마스터. */
+/** 상가정보와 LOCALDATA 등 공공 원천을 통합한 가게 마스터. */
 @Entity
 @Table(name = "stores")
 @Getter
@@ -38,7 +37,7 @@ public class Store extends BaseEntity {
     private String nameNormalized;
 
     // 대량 후보 조회에서 불필요한 연관 엔티티 로딩을 막기 위해 FK를 값으로 매핑한다.
-    @Column(name = "category_id")
+    @Column(name = "category_id", nullable = false)
     private Long categoryId;
 
     @Column(name = "ksic_code", length = 6)
@@ -71,10 +70,7 @@ public class Store extends BaseEntity {
     @Column(name = "verified_at")
     private Instant verifiedAt;
 
-    @Column(name = "submitted_by", columnDefinition = "uuid")
-    private UUID submittedBy;
-
-    @Column(name = "last_batch_id")
+    @Column(name = "last_batch_id", nullable = false)
     private Long lastBatchId;
 
     public boolean isActive() {

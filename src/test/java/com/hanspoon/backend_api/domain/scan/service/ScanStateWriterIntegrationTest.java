@@ -48,7 +48,7 @@ class ScanStateWriterIntegrationTest {
     void commitsOcrResultAndFailureInIndependentTransactions() {
         User user = userRepository.save(User.create(uniqueEmail("tx"), "tx-user", "ko"));
         String storageKey = "scans/" + user.getId() + "/tx.jpg";
-        ScanSession session = scanSessionRepository.saveAndFlush(ScanSession.start(user.getId(), storageKey));
+        ScanSession session = scanSessionRepository.saveAndFlush(ScanSession.startLegacy(user.getId(), storageKey));
 
         scanStateWriter.applyOcrResult(
                 session.getId(),
@@ -78,9 +78,9 @@ class ScanStateWriterIntegrationTest {
     void databaseConstraintRejectsDuplicateStorageKeyForTheSameUser() {
         User user = userRepository.save(User.create(uniqueEmail("idempotency"), "idempotent-user", "ko"));
         String storageKey = "scans/" + user.getId() + "/same.jpg";
-        scanSessionRepository.saveAndFlush(ScanSession.start(user.getId(), storageKey));
+        scanSessionRepository.saveAndFlush(ScanSession.startLegacy(user.getId(), storageKey));
 
-        assertThatThrownBy(() -> scanSessionRepository.saveAndFlush(ScanSession.start(user.getId(), storageKey)))
+        assertThatThrownBy(() -> scanSessionRepository.saveAndFlush(ScanSession.startLegacy(user.getId(), storageKey)))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -88,7 +88,7 @@ class ScanStateWriterIntegrationTest {
     void recoversProcessingSessionLeftBehindByAStoppedWorker() {
         User user = userRepository.save(User.create(uniqueEmail("recovery"), "recovery-user", "ko"));
         String storageKey = "scans/" + user.getId() + "/stale.jpg";
-        ScanSession session = scanSessionRepository.saveAndFlush(ScanSession.start(user.getId(), storageKey));
+        ScanSession session = scanSessionRepository.saveAndFlush(ScanSession.startLegacy(user.getId(), storageKey));
         jdbcTemplate.update(
                 "update scan_sessions set updated_at = ? where id = ?",
                 Timestamp.from(Instant.now().minus(Duration.ofMinutes(3))),

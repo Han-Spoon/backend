@@ -3,6 +3,7 @@ package com.hanspoon.backend_api.domain.store.service;
 import com.hanspoon.backend_api.domain.store.dto.StoreCandidateListResponse;
 import com.hanspoon.backend_api.domain.store.dto.StoreCandidateResponse;
 import com.hanspoon.backend_api.domain.store.dto.StoreCandidateSearchRequest;
+import com.hanspoon.backend_api.domain.store.entity.StoreMatchMethod;
 import com.hanspoon.backend_api.domain.store.repository.StoreCandidateProjection;
 import com.hanspoon.backend_api.domain.store.repository.StoreRepository;
 import java.util.List;
@@ -34,11 +35,13 @@ public class StoreSearchService {
                         request.resolvedRadiusMeters(),
                         request.resolvedLimit());
 
-        return new StoreCandidateListResponse(
-                candidates.stream().map(StoreSearchService::toResponse).toList());
+        StoreMatchMethod matchMethod = query == null ? StoreMatchMethod.GPS_CANDIDATE : StoreMatchMethod.NAME_SEARCH;
+        return new StoreCandidateListResponse(candidates.stream()
+                .map(candidate -> toResponse(candidate, matchMethod))
+                .toList());
     }
 
-    private static StoreCandidateResponse toResponse(StoreCandidateProjection candidate) {
+    private static StoreCandidateResponse toResponse(StoreCandidateProjection candidate, StoreMatchMethod matchMethod) {
         return new StoreCandidateResponse(
                 candidate.getStoreId(),
                 candidate.getName(),
@@ -49,6 +52,7 @@ public class StoreSearchService {
                 candidate.getDistanceMeters(),
                 candidate.getCategoryCode(),
                 candidate.getCategoryName(),
-                Boolean.TRUE.equals(candidate.getVerified()));
+                Boolean.TRUE.equals(candidate.getVerified()),
+                matchMethod);
     }
 }

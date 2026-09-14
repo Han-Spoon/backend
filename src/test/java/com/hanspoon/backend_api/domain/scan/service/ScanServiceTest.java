@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -18,6 +19,10 @@ import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
 import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
+import com.hanspoon.backend_api.domain.store.entity.Store;
+import com.hanspoon.backend_api.domain.store.entity.StoreMatchMethod;
+import com.hanspoon.backend_api.domain.store.entity.StoreStatus;
+import com.hanspoon.backend_api.domain.store.repository.StoreRepository;
 import com.hanspoon.backend_api.domain.upload.dto.VerifiedUpload;
 import com.hanspoon.backend_api.domain.upload.service.S3StorageService;
 import com.hanspoon.backend_api.global.common.PageResponse;
@@ -51,6 +56,9 @@ class ScanServiceTest {
     private MenuAnalysisRepository menuAnalysisRepository;
 
     @Mock
+    private StoreRepository storeRepository;
+
+    @Mock
     private ScanProcessor scanProcessor;
 
     @Mock
@@ -64,15 +72,23 @@ class ScanServiceTest {
         UUID userId = UUID.randomUUID();
         String key = "scans/" + userId + "/2f1c9d3e-0000-4000-8000-000000000001.jpg";
         VerifiedUpload upload = new VerifiedUpload(key, "version-1", "\"etag-1\"", 123L, "image/jpeg");
+        Store store = store(42L, "한스푼");
         when(s3StorageService.resolveKey(userId, key)).thenReturn(key);
+        when(storeRepository.findByIdAndStatus(42L, StoreStatus.ACTIVE)).thenReturn(Optional.of(store));
         when(s3StorageService.verifyUploadObject(key)).thenReturn(upload);
         when(scanSessionRepository.saveAndFlush(any(ScanSession.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0, ScanSession.class));
 
-        ScanCreatedResponse response = scanService.startScan(userId, new StartScanRequest(key, "upload"));
+        ScanCreatedResponse response =
+                scanService.startScan(userId, new StartScanRequest(key, "upload", 42L, StoreMatchMethod.GPS_CANDIDATE));
 
         assertThat(response.status()).isEqualTo(ScanStatus.PROCESSING);
         assertThat(response.scanId()).isNotNull();
+        verify(scanSessionRepository)
+                .saveAndFlush(org.mockito.ArgumentMatchers.argThat(
+                        session -> session.getStoreId().equals(42L)
+                                && session.getStoreNameSnapshot().equals("한스푼")
+                                && session.getStoreMatchMethod() == StoreMatchMethod.GPS_CANDIDATE));
         verify(scanProcessor).process(eq(response.scanId()), eq(userId), eq(upload), eq("upload"));
     }
 
@@ -80,11 +96,12 @@ class ScanServiceTest {
     void startScanReturnsExistingSessionForTheSameStorageKey() {
         UUID userId = UUID.randomUUID();
         String key = "scans/" + userId + "/same.jpg";
-        ScanSession existing = ScanSession.start(userId, key);
+        ScanSession existing = ScanSession.start(userId, key, 42L, "한스푼", StoreMatchMethod.GPS_CANDIDATE);
         when(s3StorageService.resolveKey(userId, key)).thenReturn(key);
         when(scanSessionRepository.findByUserIdAndStorageKey(userId, key)).thenReturn(Optional.of(existing));
 
-        ScanCreatedResponse response = scanService.startScan(userId, new StartScanRequest(key, "upload"));
+        ScanCreatedResponse response =
+                scanService.startScan(userId, new StartScanRequest(key, "upload", 42L, StoreMatchMethod.GPS_CANDIDATE));
 
         assertThat(response.scanId()).isEqualTo(existing.getId());
         verify(s3StorageService, never()).verifyUploadObject(any());
@@ -96,17 +113,55 @@ class ScanServiceTest {
         UUID userId = UUID.randomUUID();
         String key = "scans/" + userId + "/race.jpg";
         VerifiedUpload upload = new VerifiedUpload(key, "version-1", "\"etag-1\"", 123L, "image/jpeg");
-        ScanSession winner = ScanSession.start(userId, key);
+        Store store = store(42L, "한스푼");
+        ScanSession winner = ScanSession.start(userId, key, 42L, "한스푼", StoreMatchMethod.GPS_CANDIDATE);
         when(s3StorageService.resolveKey(userId, key)).thenReturn(key);
         when(scanSessionRepository.findByUserIdAndStorageKey(userId, key))
                 .thenReturn(Optional.empty(), Optional.of(winner));
+        when(storeRepository.findByIdAndStatus(42L, StoreStatus.ACTIVE)).thenReturn(Optional.of(store));
         when(s3StorageService.verifyUploadObject(key)).thenReturn(upload);
         when(scanSessionRepository.saveAndFlush(any()))
                 .thenThrow(new DataIntegrityViolationException("duplicate storage key"));
 
-        ScanCreatedResponse response = scanService.startScan(userId, new StartScanRequest(key, "upload"));
+        ScanCreatedResponse response =
+                scanService.startScan(userId, new StartScanRequest(key, "upload", 42L, StoreMatchMethod.GPS_CANDIDATE));
 
         assertThat(response.scanId()).isEqualTo(winner.getId());
+        verify(scanProcessor, never()).process(any(), any(), any(), any());
+    }
+
+    @Test
+    void startScanRejectsMissingOrInactiveStoreBeforeVerifyingUpload() {
+        UUID userId = UUID.randomUUID();
+        String key = "scans/" + userId + "/missing-store.jpg";
+        when(s3StorageService.resolveKey(userId, key)).thenReturn(key);
+        when(storeRepository.findByIdAndStatus(404L, StoreStatus.ACTIVE)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> scanService.startScan(
+                        userId, new StartScanRequest(key, "upload", 404L, StoreMatchMethod.NAME_SEARCH)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.STORE_NOT_FOUND);
+
+        verify(s3StorageService, never()).verifyUploadObject(any());
+        verify(scanProcessor, never()).process(any(), any(), any(), any());
+    }
+
+    @Test
+    void duplicateStorageKeyWithDifferentStoreContextReturnsConflict() {
+        UUID userId = UUID.randomUUID();
+        String key = "scans/" + userId + "/different-store.jpg";
+        ScanSession existing = ScanSession.start(userId, key, 42L, "한스푼", StoreMatchMethod.GPS_CANDIDATE);
+        when(s3StorageService.resolveKey(userId, key)).thenReturn(key);
+        when(scanSessionRepository.findByUserIdAndStorageKey(userId, key)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> scanService.startScan(
+                        userId, new StartScanRequest(key, "upload", 43L, StoreMatchMethod.GPS_CANDIDATE)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.SCAN_REQUEST_CONFLICT);
+
+        verify(s3StorageService, never()).verifyUploadObject(any());
         verify(scanProcessor, never()).process(any(), any(), any(), any());
     }
 
@@ -115,13 +170,16 @@ class ScanServiceTest {
         UUID userId = UUID.randomUUID();
         String key = "scans/" + userId + "/full.jpg";
         VerifiedUpload upload = new VerifiedUpload(key, "version-1", "\"etag-1\"", 123L, "image/jpeg");
+        Store store = store(42L, "한스푼");
         when(s3StorageService.resolveKey(userId, key)).thenReturn(key);
+        when(storeRepository.findByIdAndStatus(42L, StoreStatus.ACTIVE)).thenReturn(Optional.of(store));
         when(s3StorageService.verifyUploadObject(key)).thenReturn(upload);
         when(scanSessionRepository.saveAndFlush(any(ScanSession.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0, ScanSession.class));
         doThrow(new TaskRejectedException("full")).when(scanProcessor).process(any(), any(), any(), any());
 
-        assertThatThrownBy(() -> scanService.startScan(userId, new StartScanRequest(key, "upload")))
+        assertThatThrownBy(() -> scanService.startScan(
+                        userId, new StartScanRequest(key, "upload", 42L, StoreMatchMethod.GPS_CANDIDATE)))
                 .isInstanceOf(BusinessException.class)
                 .extracting(error -> ((BusinessException) error).getErrorCode())
                 .isEqualTo(ErrorCode.SCAN_CAPACITY_EXCEEDED);
@@ -144,7 +202,11 @@ class ScanServiceTest {
     @Test
     void getScanReturnsResultForOwner() {
         UUID userId = UUID.randomUUID();
-        ScanSession session = ScanSession.create(userId, "custom title", 2, 1, ScanStatus.COMPLETED, null);
+        ScanSession session = ScanSession.start(
+                userId, "scans/" + userId + "/completed.jpg", 42L, "한스푼", StoreMatchMethod.GPS_CANDIDATE);
+        session.changeTitle("custom title");
+        session.applyOcrResult(2, Instant.now());
+        session.applyRuleEngineResult(1, ScanStatus.COMPLETED);
         UUID scanId = session.getId();
         when(scanSessionRepository.findByIdAndUserId(scanId, userId)).thenReturn(Optional.of(session));
         when(menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(scanId))
@@ -155,6 +217,8 @@ class ScanServiceTest {
         assertThat(response.scanId()).isEqualTo(scanId);
         assertThat(response.status()).isEqualTo(ScanStatus.COMPLETED);
         assertThat(response.title()).isEqualTo("custom title");
+        assertThat(response.store().storeId()).isEqualTo(42L);
+        assertThat(response.store().name()).isEqualTo("한스푼");
         assertThat(response.menuCount()).isEqualTo(2);
         assertThat(response.riskyMenuCount()).isEqualTo(1);
         assertThat(response.menus()).isEmpty();
@@ -194,7 +258,7 @@ class ScanServiceTest {
     @Test
     void getScanReturnsFailureCodeWithoutInternalExceptionDetails() {
         UUID userId = UUID.randomUUID();
-        ScanSession session = ScanSession.start(userId, "scans/" + userId + "/failed.jpg");
+        ScanSession session = ScanSession.startLegacy(userId, "scans/" + userId + "/failed.jpg");
         session.markFailed(ErrorCode.AI_SERVICE_OVERLOADED.getCode());
         when(scanSessionRepository.findByIdAndUserId(session.getId(), userId)).thenReturn(Optional.of(session));
         when(menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(session.getId()))
@@ -209,7 +273,7 @@ class ScanServiceTest {
     @Test
     void getScanReturnsRetakeReasonsAndSuggestions() {
         UUID userId = UUID.randomUUID();
-        ScanSession session = ScanSession.start(userId, "scans/" + userId + "/blurred.jpg");
+        ScanSession session = ScanSession.startLegacy(userId, "scans/" + userId + "/blurred.jpg");
         session.applyNeedsRetake(List.of("이미지가 흐려 메뉴판 판독이 어렵습니다."), List.of("카메라의 초점을 맞춰 다시 촬영해 주세요."));
         when(scanSessionRepository.findByIdAndUserId(session.getId(), userId)).thenReturn(Optional.of(session));
         when(menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(session.getId()))
@@ -307,5 +371,12 @@ class ScanServiceTest {
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.SCAN_NOT_FOUND);
         verify(scanSessionRepository, never()).delete(any());
+    }
+
+    private Store store(Long id, String name) {
+        Store store = mock(Store.class);
+        when(store.getId()).thenReturn(id);
+        when(store.getName()).thenReturn(name);
+        return store;
     }
 }

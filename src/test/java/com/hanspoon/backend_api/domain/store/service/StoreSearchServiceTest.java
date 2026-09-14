@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.hanspoon.backend_api.domain.store.dto.StoreCandidateListResponse;
 import com.hanspoon.backend_api.domain.store.dto.StoreCandidateSearchRequest;
+import com.hanspoon.backend_api.domain.store.entity.StoreMatchMethod;
 import com.hanspoon.backend_api.domain.store.repository.StoreCandidateProjection;
 import com.hanspoon.backend_api.domain.store.repository.StoreRepository;
 import java.util.List;
@@ -38,6 +39,7 @@ class StoreSearchServiceTest {
         assertThat(response.items().getFirst().storeId()).isEqualTo(42L);
         assertThat(response.items().getFirst().name()).isEqualTo("한스푼");
         assertThat(response.items().getFirst().verified()).isTrue();
+        assertThat(response.items().getFirst().matchMethod()).isEqualTo(StoreMatchMethod.GPS_CANDIDATE);
         verify(storeRepository).findNearbyCandidates(37.4979, 127.0276, 100, 20);
         verifyNoMoreInteractions(storeRepository);
     }

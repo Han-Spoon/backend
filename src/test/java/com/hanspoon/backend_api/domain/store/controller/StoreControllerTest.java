@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.hanspoon.backend_api.domain.store.dto.StoreCandidateListResponse;
 import com.hanspoon.backend_api.domain.store.dto.StoreCandidateResponse;
 import com.hanspoon.backend_api.domain.store.dto.StoreCandidateSearchRequest;
+import com.hanspoon.backend_api.domain.store.entity.StoreMatchMethod;
 import com.hanspoon.backend_api.domain.store.service.StoreSearchService;
 import com.hanspoon.backend_api.global.exception.GlobalExceptionHandler;
 import java.util.List;
@@ -38,7 +39,17 @@ class StoreControllerTest {
     void returnsStoreCandidates() throws Exception {
         when(storeSearchService.findCandidates(any()))
                 .thenReturn(new StoreCandidateListResponse(List.of(new StoreCandidateResponse(
-                        42L, "한스푼", "강남점", "서울특별시 강남구 테헤란로 1", 37.4978, 127.0275, 42, "I20101", "한식 일반 음식점업", true))));
+                        42L,
+                        "한스푼",
+                        "강남점",
+                        "서울특별시 강남구 테헤란로 1",
+                        37.4978,
+                        127.0275,
+                        42,
+                        "I20101",
+                        "한식 일반 음식점업",
+                        true,
+                        StoreMatchMethod.NAME_SEARCH))));
 
         mockMvc.perform(
                         post("/api/v1/stores/candidates")
@@ -55,7 +66,8 @@ class StoreControllerTest {
                 .andExpect(jsonPath("$.items[0].storeId").value(42))
                 .andExpect(jsonPath("$.items[0].name").value("한스푼"))
                 .andExpect(jsonPath("$.items[0].distanceMeters").value(42))
-                .andExpect(jsonPath("$.items[0].verified").value(true));
+                .andExpect(jsonPath("$.items[0].verified").value(true))
+                .andExpect(jsonPath("$.items[0].matchMethod").value("name_search"));
 
         ArgumentCaptor<StoreCandidateSearchRequest> requestCaptor =
                 ArgumentCaptor.forClass(StoreCandidateSearchRequest.class);
