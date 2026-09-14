@@ -47,7 +47,7 @@ class AiClientTest {
         String body =
                 """
                 {
-                  "scan_session": {"title": "m.jpg", "menu_count": 1, "scan_status": "completed"},
+                  "scan_session": {"store_id": 42, "title": "m.jpg", "menu_count": 1, "scan_status": "completed"},
                   "menu_image": {"source": "upload"},
                   "scan_quality": {"status": "usable", "score": 80},
                   "menu_analyses": [{"menu_name_ko": "x", "is_spicy": false, "display_order": 1}]
@@ -57,8 +57,9 @@ class AiClientTest {
                 .andExpect(method(HttpMethod.POST))
                 .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
 
-        OcrResponse response = aiClient.requestOcr(new OcrRequest("upload", "k", "u", "v1", "etag-1"));
+        OcrResponse response = aiClient.requestOcr(new OcrRequest(42L, "upload", "k", "u", "v1", "etag-1"));
 
+        assertThat(response.scanSession().storeId()).isEqualTo(42L);
         assertThat(response.scanSession().menuCount()).isEqualTo(1);
         assertThat(response.menuAnalyses()).hasSize(1);
         server.verify();
@@ -68,7 +69,7 @@ class AiClientTest {
     void requestOcrMapsErrorStatusToBusinessException() {
         server.expect(requestTo(BASE_URL + "/v1/ocr")).andRespond(withStatus(HttpStatus.BAD_GATEWAY));
 
-        assertThatThrownBy(() -> aiClient.requestOcr(new OcrRequest("upload", "k", "u", "v1", "etag-1")))
+        assertThatThrownBy(() -> aiClient.requestOcr(new OcrRequest(42L, "upload", "k", "u", "v1", "etag-1")))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.OCR_SERVICE_ERROR);
@@ -79,7 +80,7 @@ class AiClientTest {
     void requestOcrMapsCapacityResponseToOverloaded() {
         server.expect(requestTo(BASE_URL + "/v1/ocr")).andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
 
-        assertThatThrownBy(() -> aiClient.requestOcr(new OcrRequest("upload", "k", "u", "v1", "etag-1")))
+        assertThatThrownBy(() -> aiClient.requestOcr(new OcrRequest(42L, "upload", "k", "u", "v1", "etag-1")))
                 .isInstanceOf(BusinessException.class)
                 .extracting(error -> ((BusinessException) error).getErrorCode())
                 .isEqualTo(ErrorCode.AI_SERVICE_OVERLOADED);
@@ -92,7 +93,7 @@ class AiClientTest {
             throw new IOException("connection refused");
         });
 
-        assertThatThrownBy(() -> aiClient.requestOcr(new OcrRequest("upload", "k", "u", "v1", "etag-1")))
+        assertThatThrownBy(() -> aiClient.requestOcr(new OcrRequest(42L, "upload", "k", "u", "v1", "etag-1")))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.AI_SERVICE_UNAVAILABLE);
@@ -104,7 +105,7 @@ class AiClientTest {
         String body =
                 """
                 {
-                  "scan_session": {"title": "m.jpg", "menu_count": 1, "risky_menu_count": 1, "scan_status": "completed"},
+                  "scan_session": {"store_id": 42, "title": "m.jpg", "menu_count": 1, "risky_menu_count": 1, "scan_status": "completed"},
                   "menu_image": {"source": "upload"},
                   "scan_quality": {"status": "usable", "score": 80},
                   "menu_analyses": [
@@ -117,7 +118,7 @@ class AiClientTest {
                 .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
 
         RuleEngineRequest request =
-                new RuleEngineRequest(new RuleProfile("halal", false, null, true, List.of(), false), null);
+                new RuleEngineRequest(42L, new RuleProfile("halal", false, null, true, List.of(), false), null);
         RuleEngineResponse response = aiClient.judge(request);
 
         assertThat(response.scanSession().riskyMenuCount()).isEqualTo(1);
@@ -130,7 +131,7 @@ class AiClientTest {
         server.expect(requestTo(BASE_URL + "/v1/ruleengine")).andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
 
         RuleEngineRequest request =
-                new RuleEngineRequest(new RuleProfile(null, false, null, false, List.of(), false), null);
+                new RuleEngineRequest(42L, new RuleProfile(null, false, null, false, List.of(), false), null);
 
         assertThatThrownBy(() -> aiClient.judge(request))
                 .isInstanceOf(BusinessException.class)
@@ -144,7 +145,7 @@ class AiClientTest {
         String body =
                 """
                 {
-                  "scan_session": {"title": "m.jpg", "menu_count": 1, "scan_status": "completed"},
+                  "scan_session": {"store_id": 42, "title": "m.jpg", "menu_count": 1, "scan_status": "completed"},
                   "menu_image": {"source": "upload"},
                   "scan_quality": {"status": "usable", "score": 80},
                   "menu_analyses": [
@@ -161,6 +162,7 @@ class AiClientTest {
 
         FinalResultResponse response = aiClient.result(new RuleEngineResponse(null, null, null, List.of()));
 
+        assertThat(response.scanSession().storeId()).isEqualTo(42L);
         assertThat(response.menuAnalyses()).hasSize(1);
         assertThat(response.menuAnalyses().get(0).riskLevel()).isEqualTo(RiskLevel.CAUTION);
         assertThat(response.menuAnalyses().get(0).message().ko()).isEqualTo("broth?");

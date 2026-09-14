@@ -6,6 +6,7 @@ import tools.jackson.databind.annotation.JsonNaming;
 /**
  * OCR 요청 (백엔드 → AI 서비스). 검증된 S3 객체 식별 정보를 전달한다.
  *
+ * @param storeId 스캔 세션에 고정된 가게 ID
  * @param source 이미지 소스 ("camera" | "upload")
  * @param storageKey 스토리지 키 (예: "scans/menu_003.jpg")
  * @param imageUrl 레거시 호환 필드. 운영 S3 IAM 경로에서는 null
@@ -13,9 +14,15 @@ import tools.jackson.databind.annotation.JsonNaming;
  * @param expectedEtag 검증 시점의 S3 객체 ETag
  */
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public record OcrRequest(String source, String storageKey, String imageUrl, String versionId, String expectedEtag) {
+public record OcrRequest(
+        Long storeId, String source, String storageKey, String imageUrl, String versionId, String expectedEtag) {
     public static OcrRequest forS3(
-            String source, String storageKey, String fallbackImageUrl, String versionId, String expectedEtag) {
-        return new OcrRequest(source, storageKey, fallbackImageUrl, versionId, expectedEtag);
+            Long storeId,
+            String source,
+            String storageKey,
+            String fallbackImageUrl,
+            String versionId,
+            String expectedEtag) {
+        return new OcrRequest(storeId, source, storageKey, fallbackImageUrl, versionId, expectedEtag);
     }
 }

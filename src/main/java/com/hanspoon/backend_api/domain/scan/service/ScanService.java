@@ -4,6 +4,7 @@ import com.hanspoon.backend_api.domain.scan.dto.MenuResult;
 import com.hanspoon.backend_api.domain.scan.dto.ScanCreatedResponse;
 import com.hanspoon.backend_api.domain.scan.dto.ScanHistoryItem;
 import com.hanspoon.backend_api.domain.scan.dto.ScanResultResponse;
+import com.hanspoon.backend_api.domain.scan.dto.ScanStoreSummary;
 import com.hanspoon.backend_api.domain.scan.dto.StartScanRequest;
 import com.hanspoon.backend_api.domain.scan.dto.UpdateScanTitleRequest;
 import com.hanspoon.backend_api.domain.scan.entity.MenuAnalysis;
@@ -11,6 +12,9 @@ import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
 import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
+import com.hanspoon.backend_api.domain.store.entity.Store;
+import com.hanspoon.backend_api.domain.store.entity.StoreStatus;
+import com.hanspoon.backend_api.domain.store.repository.StoreRepository;
 import com.hanspoon.backend_api.domain.upload.dto.VerifiedUpload;
 import com.hanspoon.backend_api.domain.upload.service.S3StorageService;
 import com.hanspoon.backend_api.global.common.PageResponse;
@@ -34,6 +38,7 @@ public class ScanService {
     private final S3StorageService s3StorageService;
     private final ScanSessionRepository scanSessionRepository;
     private final MenuAnalysisRepository menuAnalysisRepository;
+    private final StoreRepository storeRepository;
     private final ScanProcessor scanProcessor;
     private final ScanStateWriter scanStateWriter;
 
@@ -41,11 +46,13 @@ public class ScanService {
             S3StorageService s3StorageService,
             ScanSessionRepository scanSessionRepository,
             MenuAnalysisRepository menuAnalysisRepository,
+            StoreRepository storeRepository,
             ScanProcessor scanProcessor,
             ScanStateWriter scanStateWriter) {
         this.s3StorageService = s3StorageService;
         this.scanSessionRepository = scanSessionRepository;
         this.menuAnalysisRepository = menuAnalysisRepository;
+        this.storeRepository = storeRepository;
         this.scanProcessor = scanProcessor;
         this.scanStateWriter = scanStateWriter;
     }
@@ -57,8 +64,14 @@ public class ScanService {
         // storageKey는 서버가 발급하고 덮어쓰기가 금지된 객체 키이므로 스캔 멱등 키로 사용할 수 있다.
         var existing = scanSessionRepository.findByUserIdAndStorageKey(userId, storageKey);
         if (existing.isPresent()) {
-            return toCreatedResponse(existing.get());
+            return existingResponse(existing.get(), request);
         }
+
+        Store store = request.storeId() == null
+                ? null
+                : storeRepository
+                        .findByIdAndStatus(request.storeId(), StoreStatus.ACTIVE)
+                        .orElseThrow(() -> new BusinessException(ErrorCode.STORE_NOT_FOUND));
 
         // presigned PUT 은 서버가 내용을 모르므로 실제 업로드 여부·크기·타입을 여기서 확인한다.
         // 비동기로 넘긴 뒤 실패하면 사용자는 폴링만 하다 FAILED 를 받게 된다.
@@ -68,11 +81,15 @@ public class ScanService {
         ScanSession session;
         try {
             // DB 고유 인덱스가 동시에 들어온 동일 요청까지 방어한다.
-            session = scanSessionRepository.saveAndFlush(ScanSession.start(userId, storageKey));
+            session = scanSessionRepository.saveAndFlush(
+                    store == null
+                            ? ScanSession.startWithoutStore(userId, storageKey)
+                            : ScanSession.start(
+                                    userId, storageKey, store.getId(), store.getName(), request.storeMatchMethod()));
         } catch (DataIntegrityViolationException exception) {
             return scanSessionRepository
                     .findByUserIdAndStorageKey(userId, storageKey)
-                    .map(ScanService::toCreatedResponse)
+                    .map(winner -> existingResponse(winner, request))
                     .orElseThrow(() -> exception);
         }
 
@@ -100,6 +117,7 @@ public class ScanService {
                 session.getId(),
                 session.getScanStatus(),
                 session.getTitle(),
+                toStoreSummary(session),
                 session.getMenuCount(),
                 session.getRiskyMenuCount(),
                 session.getScannedAt(),
@@ -153,5 +171,18 @@ public class ScanService {
 
     private static ScanCreatedResponse toCreatedResponse(ScanSession session) {
         return new ScanCreatedResponse(session.getId(), session.getScanStatus());
+    }
+
+    private static ScanCreatedResponse existingResponse(ScanSession existing, StartScanRequest request) {
+        if (!existing.hasSameStoreContext(request.storeId(), request.storeMatchMethod())) {
+            throw new BusinessException(ErrorCode.SCAN_REQUEST_CONFLICT);
+        }
+        return toCreatedResponse(existing);
+    }
+
+    private static ScanStoreSummary toStoreSummary(ScanSession session) {
+        return session.getStoreId() == null
+                ? null
+                : new ScanStoreSummary(session.getStoreId(), session.getStoreNameSnapshot());
     }
 }

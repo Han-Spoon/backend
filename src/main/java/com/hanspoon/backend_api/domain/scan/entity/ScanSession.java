@@ -1,5 +1,6 @@
 package com.hanspoon.backend_api.domain.scan.entity;
 
+import com.hanspoon.backend_api.domain.store.entity.StoreMatchMethod;
 import com.hanspoon.backend_api.global.common.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -8,6 +9,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -35,6 +37,16 @@ public class ScanSession extends BaseEntity {
     /** 업로드 객체 하나당 스캔 세션 하나만 생성하기 위한 멱등 키. 기존 데이터는 null일 수 있다. */
     @Column(name = "storage_key", length = 512)
     private String storageKey;
+
+    @Column(name = "store_id")
+    private Long storeId;
+
+    /** 가게명이 변경되거나 비활성화돼도 과거 스캔 이력을 보존하는 서버 생성 스냅샷. */
+    @Column(name = "store_name_snapshot", length = 200)
+    private String storeNameSnapshot;
+
+    @Column(name = "store_match_method", length = 20)
+    private StoreMatchMethod storeMatchMethod;
 
     @Column(name = "title", length = 255)
     private String title;
@@ -70,6 +82,9 @@ public class ScanSession extends BaseEntity {
     private ScanSession(
             UUID userId,
             String storageKey,
+            Long storeId,
+            String storeNameSnapshot,
+            StoreMatchMethod storeMatchMethod,
             String title,
             Integer menuCount,
             Integer riskyMenuCount,
@@ -78,6 +93,9 @@ public class ScanSession extends BaseEntity {
         this.id = UUID.randomUUID();
         this.userId = userId;
         this.storageKey = storageKey;
+        this.storeId = storeId;
+        this.storeNameSnapshot = storeNameSnapshot;
+        this.storeMatchMethod = storeMatchMethod;
         this.title = title;
         this.menuCount = menuCount;
         this.riskyMenuCount = riskyMenuCount;
@@ -92,11 +110,36 @@ public class ScanSession extends BaseEntity {
             Integer riskyMenuCount,
             ScanStatus scanStatus,
             Instant scannedAt) {
-        return new ScanSession(userId, null, title, menuCount, riskyMenuCount, scanStatus, scannedAt);
+        return new ScanSession(userId, null, null, null, null, title, menuCount, riskyMenuCount, scanStatus, scannedAt);
     }
 
-    public static ScanSession start(UUID userId, String storageKey) {
-        return new ScanSession(userId, storageKey, null, null, null, ScanStatus.PROCESSING, null);
+    public static ScanSession start(
+            UUID userId, String storageKey, Long storeId, String storeNameSnapshot, StoreMatchMethod storeMatchMethod) {
+        return new ScanSession(
+                userId,
+                storageKey,
+                storeId,
+                storeNameSnapshot,
+                storeMatchMethod,
+                null,
+                null,
+                null,
+                ScanStatus.PROCESSING,
+                null);
+    }
+
+    /** 사용자가 가게 연결을 건너뛴 신규 스캔. 세 가게 컨텍스트 컬럼은 모두 null로 유지한다. */
+    public static ScanSession startWithoutStore(UUID userId, String storageKey) {
+        return new ScanSession(userId, storageKey, null, null, null, null, null, null, ScanStatus.PROCESSING, null);
+    }
+
+    /** 가게 도입 전 세션을 재현하는 테스트·마이그레이션 전용 팩토리. 신규 스캔에서 사용하지 않는다. */
+    public static ScanSession startLegacy(UUID userId, String storageKey) {
+        return new ScanSession(userId, storageKey, null, null, null, null, null, null, ScanStatus.PROCESSING, null);
+    }
+
+    public boolean hasSameStoreContext(Long storeId, StoreMatchMethod storeMatchMethod) {
+        return Objects.equals(this.storeId, storeId) && this.storeMatchMethod == storeMatchMethod;
     }
 
     /** OCR 완료 후 메뉴 수/스캔 시각 반영. */
