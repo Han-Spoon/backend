@@ -7,6 +7,7 @@ import tools.jackson.databind.annotation.JsonNaming;
 /**
  * scan_sessions 테이블 매핑. riskyMenuCount 는 OCR 단계에선 null, 룰엔진이 채운다.
  *
+ * @param storeId 가게 ID
  * @param title 원본 이미지 파일명
  * @param menuCount 추출된 메뉴 수
  * @param riskyMenuCount 위험/주의 메뉴 수 (OCR 단계 null)
@@ -16,4 +17,4 @@ import tools.jackson.databind.annotation.JsonNaming;
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ScanSession(
-        String title, Integer menuCount, Integer riskyMenuCount, String scanStatus, String scannedAt) {}
+        Long storeId, String title, Integer menuCount, Integer riskyMenuCount, String scanStatus, String scannedAt) {}
