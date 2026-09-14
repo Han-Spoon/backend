@@ -1,4 +1,5 @@
 import argparse
+import io
 import unittest
 from pathlib import Path
 
@@ -8,18 +9,18 @@ from scripts import load_stores
 class LoadStoresSafetyTest(unittest.TestCase):
 
     def test_full_default_snapshot_allows_sweep(self):
-        args = self.args(sweep_closed=True)
+        args = self.args(sweep_inactive=True)
 
         load_stores.validate_sweep_scope(args, self.files())
 
     def test_region_filter_rejects_sweep(self):
-        args = self.args(sweep_closed=True, regions="서울")
+        args = self.args(sweep_inactive=True, regions="서울")
 
         with self.assertRaisesRegex(SystemExit, "--regions"):
             load_stores.validate_sweep_scope(args, self.files(["서울"]))
 
     def test_non_default_category_rejects_sweep(self):
-        args = self.args(sweep_closed=True, category="I202")
+        args = self.args(sweep_inactive=True, category="I202")
 
         with self.assertRaisesRegex(SystemExit, "기본 적재 범위"):
             load_stores.validate_sweep_scope(args, self.files())
@@ -28,16 +29,16 @@ class LoadStoresSafetyTest(unittest.TestCase):
         regions = load_stores.FULL_DATASET_REGIONS - {"서울"}
 
         with self.assertRaisesRegex(SystemExit, "서울"):
-            load_stores.validate_sweep_scope(self.args(sweep_closed=True), self.files(regions))
+            load_stores.validate_sweep_scope(self.args(sweep_inactive=True), self.files(regions))
 
     def test_duplicate_region_rejects_sweep(self):
         files = self.files() + [Path("상가_정보_서울_202606.csv")]
 
         with self.assertRaisesRegex(SystemExit, r"중복=\['서울'\]"):
-            load_stores.validate_sweep_scope(self.args(sweep_closed=True), files)
+            load_stores.validate_sweep_scope(self.args(sweep_inactive=True), files)
 
     def test_partial_load_without_sweep_is_allowed(self):
-        args = self.args(sweep_closed=False, regions="서울", category="I202")
+        args = self.args(sweep_inactive=False, regions="서울", category="I202")
 
         load_stores.validate_sweep_scope(args, self.files(["서울"]))
 
@@ -52,10 +53,26 @@ class LoadStoresSafetyTest(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "예상한 CSV 파일명"):
             load_stores.resolve_version([Path("stores.csv")], None)
 
+    def test_inactive_sweep_sql_does_not_claim_store_is_closed(self):
+        output = io.StringIO()
+
+        load_stores.emit(output, [], load_stores.MIDDLE_CATEGORY, True, "202606")
+
+        sql = output.getvalue()
+        self.assertIn("status = 'inactive'", sql)
+        self.assertIn("inactive_at = now()", sql)
+        self.assertNotIn("is_verified", sql)
+        self.assertNotIn("status = 'closed'", sql)
+
+    def test_legacy_sweep_option_maps_to_inactive_sweep(self):
+        args = load_stores.parse_args(["--csv-dir", "/tmp", "--sweep-closed"])
+
+        self.assertTrue(args.sweep_inactive)
+
     @staticmethod
     def args(**overrides) -> argparse.Namespace:
         values = {
-            "sweep_closed": False,
+            "sweep_inactive": False,
             "regions": None,
             "category": load_stores.MIDDLE_CATEGORY,
         }

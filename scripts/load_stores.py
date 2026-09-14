@@ -9,7 +9,7 @@
 
 사용 예
   # 전국 적재 (로컬 docker)
-  python3 scripts/load_stores.py --csv-dir ~/Downloads/소상공인..._20260630 --sweep-closed
+  python3 scripts/load_stores.py --csv-dir ~/Downloads/소상공인..._20260630 --sweep-inactive
 
   # 개발용 일부 지역만
   python3 scripts/load_stores.py --csv-dir ... --regions 경북,서울
@@ -47,20 +47,20 @@ COL = {  # CSV 헤더 → 내부 키
 }
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--csv-dir", required=True, type=Path, help="지역별 CSV 가 들어있는 디렉터리")
     p.add_argument("--source-version", help="스냅샷 버전. 미지정 시 파일명에서 추출 (예: 202606)")
     p.add_argument("--regions", help="쉼표 구분 지역 필터 (예: 경북,서울). 미지정 시 전체")
     p.add_argument("--category", default=MIDDLE_CATEGORY, help=f"적재할 상권업종 중분류 코드 (기본 {MIDDLE_CATEGORY})")
-    p.add_argument("--sweep-closed", action="store_true",
-                   help="이번 배치에 없는 sbiz 가게를 폐업 처리. 전국 16개·기본 업종의 완전한 적재에서만 허용")
+    p.add_argument("--sweep-inactive", "--sweep-closed", dest="sweep_inactive", action="store_true",
+                   help="이번 배치에 없는 sbiz 가게를 비활성 처리. 전국 16개·기본 업종의 완전한 적재에서만 허용")
     p.add_argument("--psql", help="psql 실행 명령. 미지정 시 자동 탐지")
     p.add_argument("--dsn", default="postgresql://hanspoon:hanspoon@localhost:5432/hanspoon",
                    help="로컬 psql 사용 시 접속 문자열")
     p.add_argument("--container", default="hanspoon-postgres", help="docker 폴백에 사용할 컨테이너 이름")
     p.add_argument("--out", type=Path, help="실행하지 않고 SQL 을 이 파일에 기록")
-    return p.parse_args()
+    return p.parse_args(argv)
 
 
 def resolve_psql(a: argparse.Namespace) -> list[str]:
@@ -110,7 +110,7 @@ def version_of(files: list[Path]) -> str:
 def resolve_version(files: list[Path], override: str | None) -> str:
     """파일명 버전을 기준으로 배치 버전을 확정한다.
 
-    사용자가 잘못된 버전을 강제로 지정하면 동일 스냅샷의 감사 기록과 폐업 스윕 범위가
+    사용자가 잘못된 버전을 강제로 지정하면 동일 스냅샷의 감사 기록과 비활성 스윕 범위가
     어긋날 수 있으므로, override는 파일명에서 확인한 버전과 같을 때만 허용한다.
     """
     detected = version_of(files)
@@ -120,14 +120,14 @@ def resolve_version(files: list[Path], override: str | None) -> str:
 
 
 def validate_sweep_scope(a: argparse.Namespace, files: list[Path]) -> None:
-    """폐업 스윕이 전국·기본 업종의 완전한 스냅샷에서만 실행되도록 강제한다."""
-    if not a.sweep_closed:
+    """비활성 스윕이 전국·기본 업종의 완전한 스냅샷에서만 실행되도록 강제한다."""
+    if not a.sweep_inactive:
         return
     if a.regions:
-        sys.exit("--sweep-closed는 --regions와 함께 사용할 수 없습니다.")
+        sys.exit("--sweep-inactive는 --regions와 함께 사용할 수 없습니다.")
     if a.category != MIDDLE_CATEGORY:
         sys.exit(
-            f"--sweep-closed는 기본 적재 범위({MIDDLE_CATEGORY})에서만 사용할 수 있습니다. "
+            f"--sweep-inactive는 기본 적재 범위({MIDDLE_CATEGORY})에서만 사용할 수 있습니다. "
             f"현재 범위: {a.category}"
         )
 
@@ -138,7 +138,7 @@ def validate_sweep_scope(a: argparse.Namespace, files: list[Path]) -> None:
     unexpected = sorted(counts.keys() - FULL_DATASET_REGIONS)
     if missing or unexpected or duplicates:
         sys.exit(
-            "--sweep-closed에는 전국 전체 스냅샷이 필요합니다. "
+            "--sweep-inactive에는 전국 전체 스냅샷이 필요합니다. "
             f"누락={missing or '없음'}, 예상외={unexpected or '없음'}, 중복={duplicates or '없음'}"
         )
 
@@ -250,12 +250,12 @@ ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name;
 INSERT INTO stores (
   sbiz_store_no, name, branch_name, category_id, ksic_code,
   admin_dong_code, road_address, floor_info, lat, lng,
-  status, is_verified, origin, last_batch_id, created_at, updated_at)
+  status, origin, last_batch_id, created_at, updated_at)
 SELECT s.sbiz_store_no, s.name, coalesce(s.branch_name, ''), c.id,
        (SELECT k.code FROM ksic_codes k WHERE k.code = NULLIF(s.ksic_code, '')),
        coalesce(s.admin_dong_code, ''), coalesce(s.road_address, ''), coalesce(s.floor_info, ''),
        s.lat, s.lng,
-       'active', true, 'sbiz', :batch_id, now(), now()
+       'active', 'sbiz', :batch_id, now(), now()
 FROM stg_store s
 JOIN store_categories c ON c.code = s.category_code
 ON CONFLICT (sbiz_store_no) DO UPDATE SET
@@ -270,17 +270,17 @@ ON CONFLICT (sbiz_store_no) DO UPDATE SET
   lng             = EXCLUDED.lng,
   last_batch_id   = EXCLUDED.last_batch_id,
   updated_at      = now(),
-  -- 폐업 처리됐던 가게가 스냅샷에 다시 나타나면 영업중으로 되돌린다.
-  status    = CASE WHEN stores.status = 'closed' THEN 'active' ELSE stores.status END,
-  closed_at = CASE WHEN stores.status = 'closed' THEN NULL   ELSE stores.closed_at END;
+  -- 이전 스냅샷에서 빠졌던 가게가 다시 나타나면 활성 상태로 되돌린다.
+  status      = CASE WHEN stores.status = 'inactive' THEN 'active' ELSE stores.status END,
+  inactive_at = CASE WHEN stores.status = 'inactive' THEN NULL     ELSE stores.inactive_at END;
 
 """)
 
     if sweep:
         w.write("""\
--- 이번 스냅샷에 없는 sbiz 가게를 폐업 처리. 
+-- 이번 스냅샷에 없는 sbiz 가게를 비활성 처리. 실제 폐업 확정으로 해석하지 않는다.
 -- Python 사전 검증을 통과한 전국 16개·기본 업종의 완전한 스냅샷에서만 실행된다.
-UPDATE stores SET status = 'closed', closed_at = now(), updated_at = now()
+UPDATE stores SET status = 'inactive', inactive_at = now(), updated_at = now()
 WHERE origin = 'sbiz' AND status = 'active' AND last_batch_id IS DISTINCT FROM :batch_id;
 
 """)
@@ -296,7 +296,7 @@ COMMIT;
 SELECT (SELECT count(*) FROM store_categories) AS categories,
        (SELECT count(*) FROM ksic_codes)       AS ksic_codes,
        (SELECT count(*) FROM stores WHERE status = 'active') AS active_stores,
-       (SELECT count(*) FROM stores WHERE status = 'closed') AS closed_stores;
+       (SELECT count(*) FROM stores WHERE status = 'inactive') AS inactive_stores;
 ANALYZE stores;
 """)
     return stat
@@ -308,11 +308,11 @@ def main() -> None:
     version = resolve_version(files, a.source_version)
     validate_sweep_scope(a, files)
     print(f"대상 파일 {len(files)}개 · 스냅샷 {version} · 중분류 {a.category}"
-          f"{' · 폐업 스윕 ON' if a.sweep_closed else ''}", file=sys.stderr)
+          f"{' · 비활성 스윕 ON' if a.sweep_inactive else ''}", file=sys.stderr)
 
     if a.out:
         with a.out.open("w", encoding="utf-8") as fh:
-            stat = emit(fh, files, a.category, a.sweep_closed, version)
+            stat = emit(fh, files, a.category, a.sweep_inactive, version)
         print(f"SQL 기록: {a.out} ({a.out.stat().st_size / 1e6:.1f} MB)", file=sys.stderr)
     else:
         cmd = resolve_psql(a)
@@ -320,7 +320,7 @@ def main() -> None:
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, text=True, encoding="utf-8")
         assert proc.stdin is not None
         try:
-            stat = emit(proc.stdin, files, a.category, a.sweep_closed, version)
+            stat = emit(proc.stdin, files, a.category, a.sweep_inactive, version)
         finally:
             proc.stdin.close()
         if proc.wait() != 0:
