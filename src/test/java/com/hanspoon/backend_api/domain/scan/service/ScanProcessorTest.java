@@ -93,9 +93,9 @@ class ScanProcessorTest {
     }
 
     private static com.hanspoon.backend_api.domain.ai.dto.ocr.MenuAnalysis ocrMenu(
-            String name, String price, boolean spicy, int order) {
+            String name, String price, boolean spicy, int order, String imageUrl) {
         return new com.hanspoon.backend_api.domain.ai.dto.ocr.MenuAnalysis(
-                name, null, "", null, price, null, spicy, null, order);
+                name, null, "", null, price, null, spicy, imageUrl, order);
     }
 
     private OcrResponse usableOcr() {
@@ -103,13 +103,17 @@ class ScanProcessorTest {
                 new com.hanspoon.backend_api.domain.ai.dto.ocr.ScanSession(
                         "menu.jpg", 2, null, "completed", "2026-06-05T00:00:00Z"),
                 new com.hanspoon.backend_api.domain.ai.dto.ocr.MenuImage(
-                        "upload", STORAGE_KEY, "https://s3/presigned", "image/jpeg", 123L),
+                        "upload", STORAGE_KEY, "https://s3/presigned", "image/png", 999L),
                 new com.hanspoon.backend_api.domain.ai.dto.ocr.ScanQuality(
                         "usable",
                         80,
                         20,
                         2,
                         1.0,
+                        2,
+                        1.0,
+                        0.91,
+                        0.88,
                         1280,
                         960,
                         null,
@@ -124,7 +128,9 @@ class ScanProcessorTest {
                         16_000L,
                         "s3_iam",
                         0L),
-                List.of(ocrMenu("samgyeopsal", "9000", false, 1), ocrMenu("doenjang", "8000", true, 2)),
+                List.of(
+                        ocrMenu("samgyeopsal", "9000", false, 1, "https://ai.invalid/crop.jpg"),
+                        ocrMenu("doenjang", "8000", true, 2, null)),
                 null);
     }
 
@@ -198,7 +204,16 @@ class ScanProcessorTest {
         assertThat(session.getScanStatus()).isEqualTo(ScanStatus.COMPLETED);
         assertThat(session.getMenuCount()).isEqualTo(2);
         assertThat(session.getRiskyMenuCount()).isEqualTo(1);
-        verify(menuImageRepository).save(any());
+        ArgumentCaptor<com.hanspoon.backend_api.domain.scan.entity.MenuImage> imageCaptor =
+                ArgumentCaptor.forClass(com.hanspoon.backend_api.domain.scan.entity.MenuImage.class);
+        verify(menuImageRepository).save(imageCaptor.capture());
+        var savedImage = imageCaptor.getValue();
+        assertThat(savedImage.getStorageKey()).isEqualTo(STORAGE_KEY);
+        assertThat(savedImage.getImageUrl()).isEqualTo("s3://test-bucket/" + STORAGE_KEY);
+        assertThat(savedImage.getMimeType()).isEqualTo(VERIFIED_UPLOAD.contentType());
+        assertThat(savedImage.getFileSize()).isEqualTo(VERIFIED_UPLOAD.contentLength());
+        assertThat(savedImage.getObjectVersionId()).isEqualTo(VERSION_ID);
+        assertThat(savedImage.getETag()).isEqualTo(ETAG);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<MenuAnalysis>> captor = ArgumentCaptor.forClass(List.class);
@@ -208,6 +223,7 @@ class ScanProcessorTest {
         // OCR 가격 + FinalOutput 위험도·태그의 동일 행 머지 확인
         assertThat(saved.get(0).getMenuNameKo()).isEqualTo("samgyeopsal");
         assertThat(saved.get(0).getPriceText()).isEqualTo("9000");
+        assertThat(saved.get(0).getImageUrl()).isNull();
         assertThat(saved.get(0).getRiskLevel()).isEqualTo(RiskLevel.DANGER);
         assertThat(saved.get(0).getHitTags()).containsExactly("is_pork");
         assertThat(saved.get(0).getDisplayOrder()).isEqualTo(1);
@@ -259,10 +275,14 @@ class ScanProcessorTest {
                         1,
                         0,
                         0.0,
+                        1,
+                        0.0,
+                        0.42,
+                        null,
                         100,
                         100,
                         null,
-                        List.of(),
+                        List.of("카메라의 초점을 맞춰 다시 촬영해 주세요."),
                         List.of("too blurry"),
                         true,
                         true,
@@ -285,6 +305,7 @@ class ScanProcessorTest {
 
         assertThat(session.getScanStatus()).isEqualTo(ScanStatus.NEEDS_RETAKE);
         assertThat(session.getRetakeReasons()).containsExactly("too blurry");
+        assertThat(session.getRetakeSuggestions()).containsExactly("카메라의 초점을 맞춰 다시 촬영해 주세요.");
         verify(aiClient, never()).judge(any());
         verify(menuAnalysisRepository, never()).saveAll(any());
     }

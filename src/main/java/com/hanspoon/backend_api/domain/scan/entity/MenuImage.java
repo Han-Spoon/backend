@@ -35,6 +35,14 @@ public class MenuImage extends BaseEntity {
     @Column(name = "storage_key", length = 512)
     private String storageKey;
 
+    /** 검증 시점의 S3 객체 버전. 같은 키의 객체가 변경돼도 실제 분석 대상을 식별한다. */
+    @Column(name = "object_version_id", length = 1024)
+    private String objectVersionId;
+
+    /** 검증 시점의 S3 ETag. AI가 읽은 객체와 업로드 검증 결과의 동일성 확인에 사용한다. */
+    @Column(name = "etag", length = 255)
+    private String eTag;
+
     @Column(name = "image_url", length = 1024)
     private String imageUrl;
 
@@ -45,18 +53,34 @@ public class MenuImage extends BaseEntity {
     private Long fileSize;
 
     private MenuImage(
-            UUID scanSessionId, String source, String storageKey, String imageUrl, String mimeType, Long fileSize) {
+            UUID scanSessionId,
+            String source,
+            String storageKey,
+            String imageUrl,
+            String mimeType,
+            Long fileSize,
+            String objectVersionId,
+            String eTag) {
         this.id = UUID.randomUUID();
         this.scanSessionId = scanSessionId;
         this.source = source;
         this.storageKey = storageKey;
+        this.objectVersionId = objectVersionId;
+        this.eTag = eTag;
         this.imageUrl = imageUrl;
         this.mimeType = mimeType;
         this.fileSize = fileSize;
     }
 
     public static MenuImage create(
-            UUID scanSessionId, String source, String storageKey, String imageUrl, String mimeType, Long fileSize) {
-        return new MenuImage(scanSessionId, source, storageKey, imageUrl, mimeType, fileSize);
+            UUID scanSessionId,
+            String source,
+            String storageKey,
+            String imageUrl,
+            String mimeType,
+            Long fileSize,
+            String objectVersionId,
+            String eTag) {
+        return new MenuImage(scanSessionId, source, storageKey, imageUrl, mimeType, fileSize, objectVersionId, eTag);
     }
 }

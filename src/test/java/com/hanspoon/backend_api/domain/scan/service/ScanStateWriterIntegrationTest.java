@@ -52,7 +52,15 @@ class ScanStateWriterIntegrationTest {
 
         scanStateWriter.applyOcrResult(
                 session.getId(),
-                MenuImage.create(session.getId(), "upload", storageKey, "s3://test/" + storageKey, "image/jpeg", 123L),
+                MenuImage.create(
+                        session.getId(),
+                        "upload",
+                        storageKey,
+                        "s3://test/" + storageKey,
+                        "image/jpeg",
+                        123L,
+                        "version-1",
+                        "\"etag-1\""),
                 2,
                 Instant.parse("2026-09-11T00:00:00Z"));
 

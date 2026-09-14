@@ -105,6 +105,7 @@ public class ScanService {
                 session.getScannedAt(),
                 menus,
                 session.getRetakeReasons(),
+                session.getRetakeSuggestions(),
                 session.getFailureCode());
     }
 
@@ -140,6 +141,8 @@ public class ScanService {
                 m.getDisplayOrder(),
                 m.getMenuNameKo(),
                 m.getMenuNameEn(),
+                m.getDescriptionKo(),
+                m.getDescriptionEn(),
                 m.getPriceText(),
                 m.getIsSpicy(),
                 m.getRiskLevel(),

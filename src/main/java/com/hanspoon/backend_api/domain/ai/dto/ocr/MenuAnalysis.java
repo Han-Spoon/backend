@@ -15,7 +15,7 @@ import tools.jackson.databind.annotation.JsonNaming;
  * @param priceText 가격 문자열 (보정된 원 단위)
  * @param riskLevel 위험도 (OCR 단계 null)
  * @param isSpicy 매움 여부
- * @param imageUrl 개별 메뉴 이미지 URL
+ * @param imageUrl 개별 메뉴 이미지 URL. 현재 AI 크롭 미구현이며, 향후에도 백엔드 검증 전에는 저장·공개하지 않음.
  * @param displayOrder 화면 표시 순서
  */
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)

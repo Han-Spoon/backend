@@ -113,8 +113,8 @@ class ScanControllerTest {
     void getScanReturnsResult() throws Exception {
         UUID scanId = UUID.randomUUID();
         when(scanService.getScan(eq(USER_ID), eq(scanId)))
-                .thenReturn(
-                        new ScanResultResponse(scanId, ScanStatus.COMPLETED, null, 2, 1, null, List.of(), null, null));
+                .thenReturn(new ScanResultResponse(
+                        scanId, ScanStatus.COMPLETED, null, 2, 1, null, List.of(), null, null, null));
 
         mockMvc.perform(get("/api/v1/scans/{scanId}", scanId))
                 .andExpect(status().isOk())

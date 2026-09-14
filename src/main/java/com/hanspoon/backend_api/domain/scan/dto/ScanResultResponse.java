@@ -17,6 +17,7 @@ import java.util.UUID;
  * @param scannedAt 스캔 시각
  * @param menus 메뉴별 분석 결과
  * @param retakeReasons 재촬영 사유 (status 가 NEEDS_RETAKE 일 때만 채워짐, 그 외 null). OCR 이 제공한 문자열 그대로(언어 혼재 가능, i18n 키 아님)
+ * @param retakeSuggestions 재촬영 방법 안내 (status 가 NEEDS_RETAKE 일 때만 채워짐, 그 외 null)
  * @param failureCode 실패 원인 코드 (status 가 FAILED 일 때만 채워짐)
  */
 @Schema(description = "스캔 결과 조회 응답")
@@ -29,4 +30,5 @@ public record ScanResultResponse(
         Instant scannedAt,
         List<MenuResult> menus,
         List<String> retakeReasons,
+        List<String> retakeSuggestions,
         String failureCode) {}

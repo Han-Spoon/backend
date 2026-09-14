@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.hanspoon.backend_api.domain.ai.dto.common.EscalationCase;
 import com.hanspoon.backend_api.domain.ai.dto.common.RiskLevel;
+import com.hanspoon.backend_api.domain.ai.dto.ocr.ImageQuality;
 import com.hanspoon.backend_api.domain.ai.dto.ocr.OcrRequest;
 import com.hanspoon.backend_api.domain.ai.dto.ocr.OcrResponse;
 import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleMenuAnalysis;
@@ -16,6 +17,25 @@ import tools.jackson.databind.json.JsonMapper;
 class AiDtoSerializationTest {
 
     private final JsonMapper objectMapper = JsonMapper.builder().build();
+
+    @Test
+    void deserializesImageQualityAnalysisError() throws Exception {
+        String json =
+                """
+                {
+                  "available": false,
+                  "error": "이미지 품질 분석 패키지를 불러오지 못했습니다.",
+                  "score": null,
+                  "reasons": [],
+                  "suggestions": []
+                }
+                """;
+
+        ImageQuality result = objectMapper.readValue(json, ImageQuality.class);
+
+        assertThat(result.available()).isFalse();
+        assertThat(result.error()).isEqualTo("이미지 품질 분석 패키지를 불러오지 못했습니다.");
+    }
 
     @Test
     void deserializesDangerMenu() throws Exception {
@@ -142,6 +162,10 @@ class AiDtoSerializationTest {
                     "raw_line_count": 20,
                     "price_match_count": 2,
                     "price_match_ratio": 1.0,
+                    "price_anchor_count": 3,
+                    "pair_coverage": 0.67,
+                    "mean_ocr_confidence": 0.91,
+                    "mean_pair_confidence": 0.88,
                     "image_width": 1280,
                     "image_height": 960,
                     "image_quality": {
@@ -156,7 +180,7 @@ class AiDtoSerializationTest {
                       "suggestions": [],
                       "future_unknown_field": "ignored"
                     },
-                    "retake_suggestions": [],
+                    "retake_suggestions": ["카메라의 초점을 맞춰 다시 촬영해 주세요."],
                     "reasons": [],
                     "preprocessing_attempted": true,
                     "preprocessing_applied": true,
@@ -191,7 +215,12 @@ class AiDtoSerializationTest {
         assertThat(result.scanSession().riskyMenuCount()).isNull();
         assertThat(result.menuImage().storageKey()).isEqualTo("scans/menu_001.jpg");
         assertThat(result.scanQuality().status()).isEqualTo("usable");
+        assertThat(result.scanQuality().priceAnchorCount()).isEqualTo(3);
+        assertThat(result.scanQuality().pairCoverage()).isEqualTo(0.67);
+        assertThat(result.scanQuality().meanOcrConfidence()).isEqualTo(0.91);
+        assertThat(result.scanQuality().meanPairConfidence()).isEqualTo(0.88);
         assertThat(result.scanQuality().imageQuality().glareRatio()).isEqualTo(0.02);
+        assertThat(result.scanQuality().retakeSuggestions()).containsExactly("카메라의 초점을 맞춰 다시 촬영해 주세요.");
         assertThat(result.scanQuality().preprocessingApplied()).isTrue();
         assertThat(result.scanQuality().ocrAttemptCount()).isEqualTo(2);
         assertThat(result.scanQuality().ocrProcessingTimeMs()).isEqualTo(842L);
