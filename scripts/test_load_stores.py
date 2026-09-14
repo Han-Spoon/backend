@@ -2,6 +2,8 @@ import argparse
 import io
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from scripts import load_stores
 
@@ -68,6 +70,38 @@ class LoadStoresSafetyTest(unittest.TestCase):
         args = load_stores.parse_args(["--csv-dir", "/tmp", "--sweep-closed"])
 
         self.assertTrue(args.sweep_inactive)
+
+    def test_custom_psql_command_preserves_quoted_arguments(self):
+        args = SimpleNamespace(psql='psql "postgresql://user:p w@localhost/db"')
+
+        self.assertEqual(
+            ["psql", "postgresql://user:p w@localhost/db"],
+            load_stores.resolve_psql(args),
+        )
+
+    @patch("scripts.load_stores.subprocess.run")
+    def test_failed_batch_is_recorded_without_overwriting_completed_batch(self, run):
+        run.return_value = SimpleNamespace(returncode=0)
+
+        recorded = load_stores.record_failed_batch(["psql", "postgresql://secret-dsn"], "202606")
+
+        self.assertTrue(recorded)
+        command = run.call_args.args[0]
+        self.assertEqual("psql", command[0])
+        self.assertIn("ON_ERROR_STOP=1", command)
+        sql = command[-1]
+        self.assertIn("status = 'failed'", sql)
+        self.assertIn("status <> 'completed'", sql)
+
+    @patch("scripts.load_stores.subprocess.run")
+    def test_failed_batch_recording_failure_does_not_raise(self, run):
+        run.return_value = SimpleNamespace(returncode=1)
+
+        self.assertFalse(load_stores.record_failed_batch(["psql"], "202606"))
+
+    @patch("scripts.load_stores.subprocess.run", side_effect=OSError("psql disappeared"))
+    def test_failed_batch_recording_process_error_does_not_mask_original_failure(self, run):
+        self.assertFalse(load_stores.record_failed_batch(["psql"], "202606"))
 
     @staticmethod
     def args(**overrides) -> argparse.Namespace:

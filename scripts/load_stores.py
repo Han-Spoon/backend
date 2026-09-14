@@ -23,6 +23,7 @@ import argparse
 from collections import Counter
 import csv
 import io
+import shlex
 import shutil
 import subprocess
 import unicodedata
@@ -65,7 +66,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def resolve_psql(a: argparse.Namespace) -> list[str]:
     if a.psql:
-        return a.psql.split()
+        return shlex.split(a.psql)
     if shutil.which("psql"):
         return ["psql", a.dsn]
     if shutil.which("docker"):
@@ -74,6 +75,33 @@ def resolve_psql(a: argparse.Namespace) -> list[str]:
         if a.container in running:
             return ["docker", "exec", "-i", a.container, "psql", "-U", "hanspoon", "-d", "hanspoon"]
     sys.exit("psql 을 찾지 못했습니다. --psql 로 실행 명령을 직접 지정하세요.")
+
+
+def record_failed_batch(cmd: list[str], version: str) -> bool:
+    """본 적재 트랜잭션이 롤백된 뒤 실패 감사 기록을 별도 트랜잭션으로 남긴다.
+
+    같은 버전의 성공 이력이 이미 있으면 실패한 재실행이 완료 상태를 덮어쓰지 않는다.
+    DB 자체가 연결 불가한 경우에는 기록도 실패할 수 있으므로 원래 오류를 가리지 않고 False를 반환한다.
+    """
+    sql = f"""
+INSERT INTO store_import_batches
+    (source, source_version, row_count, status, started_at, finished_at)
+VALUES ('{SOURCE}', '{version}', 0, 'failed', now(), now())
+ON CONFLICT (source, source_version) DO UPDATE
+SET row_count = 0,
+    status = 'failed',
+    finished_at = now()
+WHERE store_import_batches.status <> 'completed';
+"""
+    try:
+        result = subprocess.run(
+            [*cmd, "-v", "ON_ERROR_STOP=1", "-c", sql],
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return False
+    return result.returncode == 0
 
 
 def file_metadata(f: Path) -> tuple[str, str]:
@@ -245,7 +273,7 @@ ON CONFLICT (code) DO UPDATE
 
 INSERT INTO ksic_codes (code, name)
 SELECT DISTINCT ON (code) code, name FROM stg_ksic ORDER BY code
-ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name;
+ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, updated_at = now();
 
 INSERT INTO stores (
   sbiz_store_no, name, branch_name, category_id, ksic_code,
@@ -316,7 +344,8 @@ def main() -> None:
         print(f"SQL 기록: {a.out} ({a.out.stat().st_size / 1e6:.1f} MB)", file=sys.stderr)
     else:
         cmd = resolve_psql(a)
-        print(f"실행: {' '.join(cmd[:3])} …", file=sys.stderr)
+        # DSN에는 비밀번호가 포함될 수 있으므로 실행 파일 이름 외에는 로그에 남기지 않는다.
+        print(f"실행: {cmd[0]} …", file=sys.stderr)
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, text=True, encoding="utf-8")
         assert proc.stdin is not None
         try:
@@ -324,6 +353,8 @@ def main() -> None:
         finally:
             proc.stdin.close()
         if proc.wait() != 0:
+            if not record_failed_batch(cmd, version):
+                print("경고: 적재 실패 감사 기록을 DB에 남기지 못했습니다.", file=sys.stderr)
             sys.exit(f"psql 실패 (exit {proc.returncode}) — 트랜잭션은 롤백되었습니다.")
 
     print(f"분류 {stat['cats']:,} · KSIC {stat['ksic']:,} · 가게 {stat['rows']:,}"

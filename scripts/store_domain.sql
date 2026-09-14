@@ -107,7 +107,13 @@ CREATE TABLE store_import_batches (
     CONSTRAINT pk_store_import_batches PRIMARY KEY (id),
     CONSTRAINT uq_store_import_batches UNIQUE (source, source_version),
     CONSTRAINT ck_store_import_batches_source CHECK (source IN ('sbiz', 'localdata')),
-    CONSTRAINT ck_store_import_batches_status CHECK (status IN ('running', 'completed', 'failed'))
+    CONSTRAINT ck_store_import_batches_version CHECK (source_version ~ '^[0-9]{6}$'),
+    CONSTRAINT ck_store_import_batches_status CHECK (status IN ('running', 'completed', 'failed')),
+    CONSTRAINT ck_store_import_batches_row_count CHECK (row_count >= 0),
+    CONSTRAINT ck_store_import_batches_finished_at CHECK (
+        (status = 'running' AND finished_at IS NULL)
+        OR (status IN ('completed', 'failed') AND finished_at IS NOT NULL)
+    )
 );
 
 -- ─────────────────────────────────────────────────────────────
@@ -164,7 +170,8 @@ CREATE TABLE stores (
     -- 원천 실측 이상치 0건. 사용자 제출 가게의 오입력을 막는 방어선.
     CONSTRAINT ck_stores_lat CHECK (lat BETWEEN 33 AND 39),
     CONSTRAINT ck_stores_lng CHECK (lng BETWEEN 124 AND 132),
-    CONSTRAINT ck_stores_name CHECK (btrim(name) <> ''),
+    CONSTRAINT ck_stores_name CHECK (btrim(name) <> '' AND name = btrim(name)),
+    CONSTRAINT ck_stores_name_normalized CHECK (name_normalized <> ''),
     CONSTRAINT ck_stores_status CHECK (status IN ('active', 'inactive')),
     CONSTRAINT ck_stores_origin CHECK (origin IN ('sbiz', 'localdata', 'user_submitted')),
     CONSTRAINT ck_stores_inactive_at CHECK ((status = 'inactive') = (inactive_at IS NOT NULL)),
@@ -181,7 +188,8 @@ CREATE TABLE stores (
 CREATE INDEX idx_stores_geo_active ON stores USING gist (ll_to_earth(lat, lng))
     WHERE status = 'active';
 -- 상호명 유사도 매칭(실측: 상호명 단독으로는 고유율 83% 라 좌표와 병행 필수).
-CREATE INDEX idx_stores_name_trgm ON stores USING gin (name_normalized gin_trgm_ops);
+CREATE INDEX idx_stores_name_trgm ON stores USING gin (name_normalized gin_trgm_ops)
+    WHERE status = 'active';
 CREATE INDEX idx_stores_category  ON stores (category_id) WHERE status = 'active';
 CREATE INDEX idx_stores_batch     ON stores (last_batch_id);
 
@@ -207,7 +215,10 @@ CREATE TABLE store_aliases (
     CONSTRAINT pk_store_aliases PRIMARY KEY (id),
     CONSTRAINT fk_store_aliases_store FOREIGN KEY (store_id)
         REFERENCES stores (id) ON DELETE CASCADE,
-    CONSTRAINT ck_store_aliases_source CHECK (source IN ('manual', 'user_reported'))
+    CONSTRAINT ck_store_aliases_source CHECK (source IN ('manual', 'user_reported')),
+    CONSTRAINT ck_store_aliases_alias CHECK (
+        btrim(alias) <> '' AND alias = btrim(alias) AND alias_normalized <> ''
+    )
 );
 CREATE UNIQUE INDEX uq_store_aliases ON store_aliases (store_id, alias_normalized);
 CREATE INDEX idx_store_aliases_trgm ON store_aliases USING gin (alias_normalized gin_trgm_ops);
@@ -221,7 +232,14 @@ CREATE TABLE brand_aliases (
     created_at            TIMESTAMPTZ  NOT NULL DEFAULT now(),
     updated_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT pk_brand_aliases PRIMARY KEY (id),
-    CONSTRAINT uq_brand_aliases_variant UNIQUE (variant_normalized)
+    CONSTRAINT uq_brand_aliases_variant UNIQUE (variant_normalized),
+    CONSTRAINT ck_brand_aliases_values CHECK (
+        variant_normalized <> ''
+        AND canonical_normalized <> ''
+        AND variant_normalized = normalize_store_name(variant_normalized)
+        AND canonical_normalized = normalize_store_name(canonical_normalized)
+        AND variant_normalized <> canonical_normalized
+    )
 );
 
 -- ─────────────────────────────────────────────────────────────
@@ -244,7 +262,10 @@ CREATE TABLE store_external_refs (
     CONSTRAINT uq_store_external_refs_store UNIQUE (store_id, provider),
     CONSTRAINT fk_store_external_refs_store FOREIGN KEY (store_id)
         REFERENCES stores (id) ON DELETE CASCADE,
-    CONSTRAINT ck_store_external_refs_provider CHECK (provider IN ('kakao'))
+    CONSTRAINT ck_store_external_refs_provider CHECK (provider IN ('kakao')),
+    CONSTRAINT ck_store_external_refs_external_id CHECK (
+        btrim(external_id) <> '' AND external_id = btrim(external_id)
+    )
 );
 
 COMMENT ON TABLE store_external_refs IS
