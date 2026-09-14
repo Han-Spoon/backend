@@ -18,6 +18,7 @@ import com.hanspoon.backend_api.domain.ai.dto.result.FinalResultResponse;
 import com.hanspoon.backend_api.domain.ai.dto.result.OwnerCard;
 import com.hanspoon.backend_api.domain.ai.dto.result.OwnerQuestion;
 import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RiskReason;
+import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleEngineRequest;
 import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleEngineResponse;
 import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleMenuAnalysis;
 import com.hanspoon.backend_api.domain.scan.entity.MenuAnalysis;
@@ -26,6 +27,7 @@ import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
 import com.hanspoon.backend_api.domain.scan.repository.MenuImageRepository;
 import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
+import com.hanspoon.backend_api.domain.store.entity.StoreMatchMethod;
 import com.hanspoon.backend_api.domain.upload.dto.VerifiedUpload;
 import com.hanspoon.backend_api.domain.upload.service.S3StorageService;
 import com.hanspoon.backend_api.domain.user.entity.ReligionType;
@@ -51,6 +53,7 @@ class ScanProcessorTest {
     private static final String STORAGE_KEY = "scans/11111111-1111-1111-1111-111111111111/abc.jpg";
     private static final String VERSION_ID = "version-1";
     private static final String ETAG = "\"etag-1\"";
+    private static final Long STORE_ID = 42L;
     private static final VerifiedUpload VERIFIED_UPLOAD =
             new VerifiedUpload(STORAGE_KEY, VERSION_ID, ETAG, 123L, "image/jpeg");
 
@@ -101,7 +104,7 @@ class ScanProcessorTest {
     private OcrResponse usableOcr() {
         return new OcrResponse(
                 new com.hanspoon.backend_api.domain.ai.dto.ocr.ScanSession(
-                        "menu.jpg", 2, null, "completed", "2026-06-05T00:00:00Z"),
+                        STORE_ID, "menu.jpg", 2, null, "completed", "2026-06-05T00:00:00Z"),
                 new com.hanspoon.backend_api.domain.ai.dto.ocr.MenuImage(
                         "upload", STORAGE_KEY, "https://s3/presigned", "image/png", 999L),
                 new com.hanspoon.backend_api.domain.ai.dto.ocr.ScanQuality(
@@ -134,14 +137,17 @@ class ScanProcessorTest {
                 null);
     }
 
+    private ScanSession processingSession(UUID userId) {
+        return ScanSession.start(userId, STORAGE_KEY, STORE_ID, "한스푼", StoreMatchMethod.GPS_CANDIDATE);
+    }
+
     @Test
     void completesScanAndMergesOcrWithRuleEngine() {
         UUID userId = UUID.randomUUID();
-        ScanSession session = ScanSession.create(userId, "menu.jpg", null, null, ScanStatus.PROCESSING, null);
+        ScanSession session = processingSession(userId);
         UUID scanId = session.getId();
         OcrResponse ocr = usableOcr();
 
-        when(scanSessionRepository.existsById(scanId)).thenReturn(true);
         when(scanSessionRepository.findById(scanId)).thenReturn(Optional.of(session));
         when(s3StorageService.objectUri(STORAGE_KEY)).thenReturn("s3://test-bucket/" + STORAGE_KEY);
         when(aiClient.requestOcr(any())).thenReturn(ocr);
@@ -149,7 +155,8 @@ class ScanProcessorTest {
         when(userProfileRepository.findByUserId(userId)).thenReturn(Optional.of(profile));
         when(userAllergyRepository.findByUserProfileId(profile.getId())).thenReturn(List.of());
         RuleEngineResponse judged = new RuleEngineResponse(
-                new com.hanspoon.backend_api.domain.ai.dto.ocr.ScanSession("menu.jpg", 2, 1, "completed", null),
+                new com.hanspoon.backend_api.domain.ai.dto.ocr.ScanSession(
+                        STORE_ID, "menu.jpg", 2, 1, "completed", null),
                 ocr.menuImage(),
                 ocr.scanQuality(),
                 List.of(
@@ -176,20 +183,24 @@ class ScanProcessorTest {
                                 null,
                                 null)));
         when(aiClient.judge(any())).thenReturn(judged);
-        FinalResultResponse finalResult = new FinalResultResponse(List.of(
-                new FinalMenu(
-                        "samgyeopsal",
-                        RiskLevel.DANGER,
-                        List.of("is_pork"),
-                        new FinalMessage("pork included", null, null),
-                        null),
-                new FinalMenu(
-                        "doenjang",
-                        RiskLevel.CAUTION,
-                        List.of(),
-                        new FinalMessage("broth unclear", null, null),
-                        new OwnerCard(
-                                "doenjang", "has_unclear_broth", new OwnerQuestion("use anchovy?", null, null)))));
+        FinalResultResponse finalResult = new FinalResultResponse(
+                judged.scanSession(),
+                List.of(
+                        new FinalMenu(
+                                "samgyeopsal",
+                                RiskLevel.DANGER,
+                                List.of("is_pork"),
+                                new FinalMessage("pork included", null, null),
+                                null),
+                        new FinalMenu(
+                                "doenjang",
+                                RiskLevel.CAUTION,
+                                List.of(),
+                                new FinalMessage("broth unclear", null, null),
+                                new OwnerCard(
+                                        "doenjang",
+                                        "has_unclear_broth",
+                                        new OwnerQuestion("use anchovy?", null, null)))));
         when(aiClient.result(any())).thenReturn(finalResult);
 
         scanProcessor.process(scanId, userId, VERIFIED_UPLOAD, "upload");
@@ -197,9 +208,15 @@ class ScanProcessorTest {
         ArgumentCaptor<OcrRequest> requestCaptor = ArgumentCaptor.forClass(OcrRequest.class);
         verify(aiClient).requestOcr(requestCaptor.capture());
         assertThat(requestCaptor.getValue().storageKey()).isEqualTo(STORAGE_KEY);
+        assertThat(requestCaptor.getValue().storeId()).isEqualTo(STORE_ID);
         assertThat(requestCaptor.getValue().imageUrl()).isNull();
         assertThat(requestCaptor.getValue().versionId()).isEqualTo(VERSION_ID);
         assertThat(requestCaptor.getValue().expectedEtag()).isEqualTo(ETAG);
+        ArgumentCaptor<RuleEngineRequest> ruleRequestCaptor = ArgumentCaptor.forClass(RuleEngineRequest.class);
+        verify(aiClient).judge(ruleRequestCaptor.capture());
+        assertThat(ruleRequestCaptor.getValue().storeId()).isEqualTo(STORE_ID);
+        assertThat(ruleRequestCaptor.getValue().ocrResult().scanSession().storeId())
+                .isEqualTo(STORE_ID);
 
         assertThat(session.getScanStatus()).isEqualTo(ScanStatus.COMPLETED);
         assertThat(session.getMenuCount()).isEqualTo(2);
@@ -234,13 +251,28 @@ class ScanProcessorTest {
     }
 
     @Test
+    void sendsNullStoreContextToAiWhenUserSkippedStoreSelection() {
+        UUID userId = UUID.randomUUID();
+        ScanSession session = ScanSession.startWithoutStore(userId, STORAGE_KEY);
+        when(scanSessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
+        when(aiClient.requestOcr(any())).thenReturn(null);
+
+        scanProcessor.process(session.getId(), userId, VERIFIED_UPLOAD, "upload");
+
+        ArgumentCaptor<OcrRequest> requestCaptor = ArgumentCaptor.forClass(OcrRequest.class);
+        verify(aiClient).requestOcr(requestCaptor.capture());
+        assertThat(requestCaptor.getValue().storeId()).isNull();
+        assertThat(session.getScanStatus()).isEqualTo(ScanStatus.FAILED);
+        assertThat(session.getFailureCode()).isEqualTo(ErrorCode.OCR_SERVICE_ERROR.getCode());
+    }
+
+    @Test
     void persistsOcrStateBeforeCallingRuleEngine() {
         UUID userId = UUID.randomUUID();
-        ScanSession session = ScanSession.create(userId, "menu.jpg", null, null, ScanStatus.PROCESSING, null);
+        ScanSession session = processingSession(userId);
         UUID scanId = session.getId();
         OcrResponse ocr = usableOcr();
 
-        when(scanSessionRepository.existsById(scanId)).thenReturn(true);
         when(scanSessionRepository.findById(scanId)).thenReturn(Optional.of(session));
         when(s3StorageService.objectUri(STORAGE_KEY)).thenReturn("s3://test-bucket/" + STORAGE_KEY);
         when(aiClient.requestOcr(any())).thenReturn(ocr);
@@ -264,10 +296,11 @@ class ScanProcessorTest {
     @Test
     void marksNeedsRetakeAndSkipsRuleEngine() {
         UUID userId = UUID.randomUUID();
-        ScanSession session = ScanSession.create(userId, "menu.jpg", null, null, ScanStatus.PROCESSING, null);
+        ScanSession session = processingSession(userId);
         UUID scanId = session.getId();
         OcrResponse ocr = new OcrResponse(
-                new com.hanspoon.backend_api.domain.ai.dto.ocr.ScanSession("menu.jpg", 0, null, "completed", null),
+                new com.hanspoon.backend_api.domain.ai.dto.ocr.ScanSession(
+                        STORE_ID, "menu.jpg", 0, null, "completed", null),
                 new com.hanspoon.backend_api.domain.ai.dto.ocr.MenuImage("upload", STORAGE_KEY, "u", "image/jpeg", 1L),
                 new com.hanspoon.backend_api.domain.ai.dto.ocr.ScanQuality(
                         "needs_retake",
@@ -296,7 +329,6 @@ class ScanProcessorTest {
                 List.of(),
                 null);
 
-        when(scanSessionRepository.existsById(scanId)).thenReturn(true);
         when(scanSessionRepository.findById(scanId)).thenReturn(Optional.of(session));
         when(s3StorageService.objectUri(STORAGE_KEY)).thenReturn("s3://test-bucket/" + STORAGE_KEY);
         when(aiClient.requestOcr(any())).thenReturn(ocr);
@@ -313,10 +345,9 @@ class ScanProcessorTest {
     @Test
     void marksFailedWhenOcrThrows() {
         UUID userId = UUID.randomUUID();
-        ScanSession session = ScanSession.create(userId, "menu.jpg", null, null, ScanStatus.PROCESSING, null);
+        ScanSession session = processingSession(userId);
         UUID scanId = session.getId();
 
-        when(scanSessionRepository.existsById(scanId)).thenReturn(true);
         when(scanSessionRepository.findById(scanId)).thenReturn(Optional.of(session));
         when(aiClient.requestOcr(any())).thenThrow(new BusinessException(ErrorCode.OCR_SERVICE_ERROR, "boom"));
 
@@ -327,22 +358,47 @@ class ScanProcessorTest {
     }
 
     @Test
+    void marksFailedBeforePersistenceWhenOcrChangesStoreContext() {
+        UUID userId = UUID.randomUUID();
+        ScanSession session = processingSession(userId);
+        UUID scanId = session.getId();
+        OcrResponse original = usableOcr();
+        OcrResponse mismatched = new OcrResponse(
+                new com.hanspoon.backend_api.domain.ai.dto.ocr.ScanSession(99L, "menu.jpg", 2, null, "completed", null),
+                original.menuImage(),
+                original.scanQuality(),
+                original.menuAnalyses(),
+                original.gptQualityJudgment());
+
+        when(scanSessionRepository.findById(scanId)).thenReturn(Optional.of(session));
+        when(aiClient.requestOcr(any())).thenReturn(mismatched);
+
+        scanProcessor.process(scanId, userId, VERIFIED_UPLOAD, "upload");
+
+        assertThat(session.getScanStatus()).isEqualTo(ScanStatus.FAILED);
+        assertThat(session.getFailureCode()).isEqualTo(ErrorCode.AI_RESULT_MISMATCH.getCode());
+        verify(menuImageRepository, never()).save(any());
+        verify(aiClient, never()).judge(any());
+    }
+
+    @Test
     void marksFailedWithoutSavingWhenFinalMenuCountDoesNotMatchOcr() {
         UUID userId = UUID.randomUUID();
-        ScanSession session = ScanSession.create(userId, "menu.jpg", null, null, ScanStatus.PROCESSING, null);
+        ScanSession session = processingSession(userId);
         UUID scanId = session.getId();
 
-        when(scanSessionRepository.existsById(scanId)).thenReturn(true);
         when(scanSessionRepository.findById(scanId)).thenReturn(Optional.of(session));
         when(s3StorageService.objectUri(STORAGE_KEY)).thenReturn("s3://test-bucket/" + STORAGE_KEY);
         when(aiClient.requestOcr(any())).thenReturn(usableOcr());
         UserProfile profile = UserProfile.create(userId, "KR", false, false, null, ReligionType.HALAL, true, true);
         when(userProfileRepository.findByUserId(userId)).thenReturn(Optional.of(profile));
         when(userAllergyRepository.findByUserProfileId(profile.getId())).thenReturn(List.of());
-        when(aiClient.judge(any())).thenReturn(new RuleEngineResponse(null, null, null, List.of()));
+        var aiSession = new com.hanspoon.backend_api.domain.ai.dto.ocr.ScanSession(
+                STORE_ID, "menu.jpg", 2, 1, "completed", null);
+        when(aiClient.judge(any())).thenReturn(new RuleEngineResponse(aiSession, null, null, List.of()));
         when(aiClient.result(any()))
                 .thenReturn(new FinalResultResponse(
-                        List.of(new FinalMenu("samgyeopsal", RiskLevel.DANGER, List.of(), null, null))));
+                        aiSession, List.of(new FinalMenu("samgyeopsal", RiskLevel.DANGER, List.of(), null, null))));
 
         scanProcessor.process(scanId, userId, VERIFIED_UPLOAD, "upload");
 

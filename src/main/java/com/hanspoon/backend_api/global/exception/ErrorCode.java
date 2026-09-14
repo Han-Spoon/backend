@@ -37,9 +37,16 @@ public enum ErrorCode {
 
     // ── 스캔 ────────────────────────────────────────────────────────────
     SCAN_NOT_FOUND(HttpStatus.NOT_FOUND, "SCAN_NOT_FOUND", "Scan not found."),
+    SCAN_REQUEST_CONFLICT(
+            HttpStatus.CONFLICT,
+            "SCAN_REQUEST_CONFLICT",
+            "The uploaded image is already linked to a different scan request."),
     SCAN_CAPACITY_EXCEEDED(
             HttpStatus.SERVICE_UNAVAILABLE, "SCAN_CAPACITY_EXCEEDED", "Scan capacity is temporarily exhausted."),
     SCAN_PROCESSING_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "SCAN_PROCESSING_TIMEOUT", "Scan processing timed out."),
+
+    // ── 가게 ────────────────────────────────────────────────────────────
+    STORE_NOT_FOUND(HttpStatus.NOT_FOUND, "STORE_NOT_FOUND", "Active store not found."),
 
     // ── 소통 카드 ───────────────────────────────────────────────────────
     CARD_NOT_FOUND(HttpStatus.NOT_FOUND, "CARD_NOT_FOUND", "Saved card not found."),

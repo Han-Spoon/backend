@@ -11,6 +11,7 @@ import java.util.UUID;
  *
  * @param scanId 스캔 세션 id
  * @param title 유저 편집 제목(미편집이면 null → FE 가 scannedAt 로케일 포맷)
+ * @param store 스캔 시점 가게 정보. 가게 도입 전 레거시 스캔은 null
  * @param status 스캔 상태
  * @param menuCount 추출 메뉴 수
  * @param riskyMenuCount 위험/주의 메뉴 수
@@ -18,15 +19,28 @@ import java.util.UUID;
  */
 @Schema(description = "스캔 이력 항목")
 public record ScanHistoryItem(
-        UUID scanId, String title, ScanStatus status, Integer menuCount, Integer riskyMenuCount, Instant scannedAt) {
+        UUID scanId,
+        String title,
+        ScanStoreSummary store,
+        ScanStatus status,
+        Integer menuCount,
+        Integer riskyMenuCount,
+        Instant scannedAt) {
 
     public static ScanHistoryItem from(ScanSession session) {
         return new ScanHistoryItem(
                 session.getId(),
                 session.getTitle(),
+                toStoreSummary(session),
                 session.getScanStatus(),
                 session.getMenuCount(),
                 session.getRiskyMenuCount(),
                 session.getScannedAt());
+    }
+
+    private static ScanStoreSummary toStoreSummary(ScanSession session) {
+        return session.getStoreId() == null
+                ? null
+                : new ScanStoreSummary(session.getStoreId(), session.getStoreNameSnapshot());
     }
 }

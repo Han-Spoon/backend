@@ -14,6 +14,7 @@ import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
 import com.hanspoon.backend_api.domain.scan.repository.MenuImageRepository;
 import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
+import com.hanspoon.backend_api.domain.store.entity.StoreMatchMethod;
 import com.hanspoon.backend_api.domain.user.entity.User;
 import com.hanspoon.backend_api.domain.user.repository.UserRepository;
 import jakarta.persistence.EntityManager;
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -48,8 +50,55 @@ class ScanPersistenceIntegrationTest {
     @Autowired
     private MenuAnalysisRepository menuAnalysisRepository;
 
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
     @PersistenceContext
     private EntityManager entityManager;
+
+    @Test
+    void persistsAndReloadsAtomicStoreContext() {
+        User user = userRepository.save(User.create("scan-store@example.com", "scanstore", "ko"));
+        Long categoryId = jdbcTemplate.queryForObject(
+                """
+                insert into store_categories(code, name, level)
+                values ('I2', '음식', 1)
+                returning id
+                """,
+                Long.class);
+        Long batchId = jdbcTemplate.queryForObject(
+                """
+                insert into store_import_batches(source, source_version)
+                values ('sbiz', '202609')
+                returning id
+                """,
+                Long.class);
+        Long storeId = jdbcTemplate.queryForObject(
+                """
+                insert into stores(
+                    sbiz_store_no, name, category_id, lat, lng, origin, last_batch_id
+                ) values ('SCAN-STORE-1', '한스푼 강남점', ?, 37.4979, 127.0276, 'sbiz', ?)
+                returning id
+                """,
+                Long.class,
+                categoryId,
+                batchId);
+
+        ScanSession session = scanSessionRepository.save(ScanSession.start(
+                user.getId(),
+                "scans/" + user.getId() + "/store-context.jpg",
+                storeId,
+                "한스푼 강남점",
+                StoreMatchMethod.NAME_SEARCH));
+
+        entityManager.flush();
+        entityManager.clear();
+
+        ScanSession reloaded = scanSessionRepository.findById(session.getId()).orElseThrow();
+        assertThat(reloaded.getStoreId()).isEqualTo(storeId);
+        assertThat(reloaded.getStoreNameSnapshot()).isEqualTo("한스푼 강남점");
+        assertThat(reloaded.getStoreMatchMethod()).isEqualTo(StoreMatchMethod.NAME_SEARCH);
+    }
 
     @Test
     void persistsAndReloadsScanGraphWithJsonbFields() {

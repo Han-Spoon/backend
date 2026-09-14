@@ -11,6 +11,7 @@ import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleProfile;
 import com.hanspoon.backend_api.domain.ai.mapper.AiProfileMapper;
 import com.hanspoon.backend_api.domain.scan.entity.MenuAnalysis;
 import com.hanspoon.backend_api.domain.scan.entity.MenuImage;
+import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
 import com.hanspoon.backend_api.domain.upload.dto.VerifiedUpload;
 import com.hanspoon.backend_api.domain.upload.service.S3StorageService;
@@ -76,20 +77,23 @@ public class ScanProcessor {
     public void process(UUID scanId, UUID userId, VerifiedUpload upload, String source) {
         long processingStartedAt = System.nanoTime();
         try {
-            if (!scanSessionRepository.existsById(scanId)) {
+            ScanSession session = scanSessionRepository.findById(scanId).orElse(null);
+            if (session == null) {
                 log.warn("Scan session not found, skip processing: {}", scanId);
                 return;
             }
+            Long storeId = session.getStoreId();
 
             String storageKey = upload.storageKey();
             String fallbackImageUrl =
                     presignedFallbackEnabled ? s3StorageService.createReadUrl(storageKey, upload.versionId()) : null;
             long ocrStartedAt = System.nanoTime();
             OcrResponse ocr = aiClient.requestOcr(
-                    OcrRequest.forS3(source, storageKey, fallbackImageUrl, upload.versionId(), upload.eTag()));
+                    OcrRequest.forS3(storeId, source, storageKey, fallbackImageUrl, upload.versionId(), upload.eTag()));
             if (ocr == null) {
                 throw new BusinessException(ErrorCode.OCR_SERVICE_ERROR, "OCR service returned an empty response.");
             }
+            validateStoreContext(storeId, ocr.scanSession(), "ocr");
             logOcrCompleted(scanId, elapsedMillis(ocrStartedAt), ocr);
 
             scanStateWriter.applyOcrResult(
@@ -107,14 +111,20 @@ public class ScanProcessor {
 
             RuleProfile ruleProfile = loadRuleProfile(userId);
             long ruleEngineStartedAt = System.nanoTime();
-            RuleEngineResponse judged = aiClient.judge(new RuleEngineRequest(ruleProfile, ocr));
+            RuleEngineResponse judged = aiClient.judge(new RuleEngineRequest(storeId, ruleProfile, ocr));
             if (judged == null) {
                 throw new BusinessException(ErrorCode.RULE_ENGINE_ERROR, "Rule engine returned an empty response.");
             }
+            validateStoreContext(storeId, judged.scanSession(), "rule_engine");
             logStageCompleted(scanId, "rule_engine", ruleEngineStartedAt);
 
             long resultStartedAt = System.nanoTime();
             FinalResultResponse finalResult = aiClient.result(judged);
+            if (finalResult == null) {
+                throw new BusinessException(
+                        ErrorCode.RESULT_SERVICE_ERROR, "Result service returned an empty response.");
+            }
+            validateStoreContext(storeId, finalResult.scanSession(), "result");
             logStageCompleted(scanId, "result", resultStartedAt);
 
             Integer riskyCount =
@@ -227,6 +237,14 @@ public class ScanProcessor {
         return new BusinessException(
                 ErrorCode.AI_RESULT_MISMATCH,
                 "AI result mismatch: " + field + " (ocr=" + ocrValue + ", final=" + finalValue + ").");
+    }
+
+    private void validateStoreContext(
+            Long expectedStoreId, com.hanspoon.backend_api.domain.ai.dto.ocr.ScanSession aiSession, String stage) {
+        Long actualStoreId = aiSession == null ? null : aiSession.storeId();
+        if (!Objects.equals(expectedStoreId, actualStoreId)) {
+            throw resultMismatch(stage + " store_id", expectedStoreId, actualStoreId);
+        }
     }
 
     private String normalizeName(String value) {

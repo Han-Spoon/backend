@@ -143,6 +143,7 @@ class AiDtoSerializationTest {
                 """
                 {
                   "scan_session": {
+                    "store_id": 42,
                     "title": "menu_001.jpg",
                     "menu_count": 2,
                     "risky_menu_count": null,
@@ -211,6 +212,7 @@ class AiDtoSerializationTest {
 
         OcrResponse result = objectMapper.readValue(json, OcrResponse.class);
 
+        assertThat(result.scanSession().storeId()).isEqualTo(42L);
         assertThat(result.scanSession().menuCount()).isEqualTo(2);
         assertThat(result.scanSession().riskyMenuCount()).isNull();
         assertThat(result.menuImage().storageKey()).isEqualTo("scans/menu_001.jpg");
@@ -250,11 +252,12 @@ class AiDtoSerializationTest {
 
     @Test
     void serializesOcrRequestInSnakeCase() throws Exception {
-        OcrRequest request = OcrRequest.forS3("camera", "scans/menu_003.jpg", null, "version-1", "\"etag-1\"");
+        OcrRequest request = OcrRequest.forS3(42L, "camera", "scans/menu_003.jpg", null, "version-1", "\"etag-1\"");
 
         String json = objectMapper.writeValueAsString(request);
 
         assertThat(json)
+                .contains("\"store_id\":42")
                 .contains("\"storage_key\":\"scans/menu_003.jpg\"")
                 .contains("\"image_url\":null")
                 .contains("\"version_id\":\"version-1\"")
