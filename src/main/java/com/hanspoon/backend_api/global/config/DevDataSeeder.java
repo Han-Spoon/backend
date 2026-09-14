@@ -174,7 +174,7 @@ public class DevDataSeeder implements ApplicationRunner {
         // 3) NEEDS_RETAKE · 재촬영 사유
         ScanSession s3 =
                 ScanSession.create(userId, null, 0, null, ScanStatus.PROCESSING, now.minus(Duration.ofDays(2)));
-        s3.applyNeedsRetake(List.of("too blurry", "low light"));
+        s3.applyNeedsRetake(List.of("too blurry", "low light"), List.of("카메라를 메뉴판과 평행하게 두고 다시 촬영해 주세요."));
         scanSessionRepository.save(s3);
 
         // 4) PROCESSING · 진행 중

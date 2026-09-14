@@ -94,13 +94,13 @@ public class ScanProcessor {
 
             scanStateWriter.applyOcrResult(
                     scanId,
-                    toMenuImage(scanId, source, storageKey, ocr),
+                    toMenuImage(scanId, source, upload, ocr),
                     ocr.scanSession() != null ? ocr.scanSession().menuCount() : null,
                     parseScannedAt(ocr.scanSession() != null ? ocr.scanSession().scannedAt() : null));
 
             if (isNeedsRetake(ocr)) {
                 scanStateWriter.applyNeedsRetake(
-                        scanId, ocr.scanQuality() != null ? ocr.scanQuality().reasons() : null);
+                        scanId, ocr.scanQuality().reasons(), ocr.scanQuality().retakeSuggestions());
                 log.info("Scan needs retake: {}", scanId);
                 return;
             }
@@ -149,19 +149,20 @@ public class ScanProcessor {
         }
     }
 
-    private MenuImage toMenuImage(UUID scanId, String source, String storageKey, OcrResponse ocr) {
+    private MenuImage toMenuImage(UUID scanId, String source, VerifiedUpload upload, OcrResponse ocr) {
         String resolvedSource = source;
-        String mimeType = null;
-        Long fileSize = null;
-        if (ocr.menuImage() != null) {
-            if (resolvedSource == null) {
-                resolvedSource = ocr.menuImage().source();
-            }
-            mimeType = ocr.menuImage().mimeType();
-            fileSize = ocr.menuImage().fileSize();
+        if (resolvedSource == null && ocr.menuImage() != null) {
+            resolvedSource = ocr.menuImage().source();
         }
         return MenuImage.create(
-                scanId, resolvedSource, storageKey, s3StorageService.objectUri(storageKey), mimeType, fileSize);
+                scanId,
+                resolvedSource,
+                upload.storageKey(),
+                s3StorageService.objectUri(upload.storageKey()),
+                upload.contentType(),
+                upload.contentLength(),
+                upload.versionId(),
+                upload.eTag());
     }
 
     private boolean isNeedsRetake(OcrResponse ocr) {
@@ -212,7 +213,8 @@ public class ScanProcessor {
                     o.descriptionEn(),
                     o.priceText(),
                     o.isSpicy(),
-                    o.imageUrl(),
+                    // AI 제공 URL은 출처·만료를 보장할 수 없다. 백엔드 소유의 크롭·서명 체계 도입 전에는 저장하지 않는다.
+                    null,
                     f.riskLevel(),
                     f.hits(),
                     f.message(),
@@ -240,12 +242,36 @@ public class ScanProcessor {
 
     private void logOcrCompleted(UUID scanId, long backendDurationMs, OcrResponse ocr) {
         var quality = ocr.scanQuality();
+        if (quality != null
+                && quality.imageQuality() != null
+                && Boolean.FALSE.equals(quality.imageQuality().available())
+                && quality.imageQuality().error() != null) {
+            log.warn(
+                    "Image quality analysis unavailable: {} (reason={})",
+                    scanId,
+                    quality.imageQuality().error());
+        }
         log.info(
-                "OCR completed: {} (backendMs={}, aiMs={}, attempts={}, preprocessingApplied={}, selectedAttempt={}, "
-                        + "retrySkippedReason={}, fetchSource={}, aiQueueMs={})",
+                "OCR completed: {} (backendMs={}, aiMs={}, qualityStatus={}, score={}, rawLines={}, priceMatches={}, "
+                        + "priceAnchors={}, pairCoverage={}, meanOcrConfidence={}, meanPairConfidence={}, "
+                        + "imageWidth={}, imageHeight={}, imageQualityScore={}, attempts={}, preprocessingApplied={}, "
+                        + "selectedAttempt={}, retrySkippedReason={}, fetchSource={}, aiQueueMs={})",
                 scanId,
                 backendDurationMs,
                 quality != null ? quality.ocrProcessingTimeMs() : null,
+                quality != null ? quality.status() : null,
+                quality != null ? quality.score() : null,
+                quality != null ? quality.rawLineCount() : null,
+                quality != null ? quality.priceMatchCount() : null,
+                quality != null ? quality.priceAnchorCount() : null,
+                quality != null ? quality.pairCoverage() : null,
+                quality != null ? quality.meanOcrConfidence() : null,
+                quality != null ? quality.meanPairConfidence() : null,
+                quality != null ? quality.imageWidth() : null,
+                quality != null ? quality.imageHeight() : null,
+                quality != null && quality.imageQuality() != null
+                        ? quality.imageQuality().score()
+                        : null,
                 quality != null ? quality.ocrAttemptCount() : null,
                 quality != null ? quality.preprocessingApplied() : null,
                 quality != null ? quality.selectedOcrAttempt() : null,

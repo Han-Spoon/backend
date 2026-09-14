@@ -8,10 +8,13 @@ import java.util.List;
 
 /**
  * 스캔 결과의 메뉴 1건 (OCR + ai_result 최종). 사용자 표시용.
+ * AI가 반환한 메뉴별 이미지 URL은 신뢰하지 않으며, 백엔드 소유의 크롭·서명 체계가 생기기 전까지 응답하지 않는다.
  *
  * @param displayOrder 표시 순서
  * @param menuNameKo 한국어 메뉴명
  * @param menuNameEn 영어 메뉴명
+ * @param descriptionKo 한국어 메뉴 설명
+ * @param descriptionEn 영어 메뉴 설명
  * @param priceText 가격 문자열
  * @param isSpicy 매움 여부
  * @param riskLevel 위험도 (danger | caution | safe)
@@ -24,6 +27,8 @@ public record MenuResult(
         Integer displayOrder,
         String menuNameKo,
         String menuNameEn,
+        String descriptionKo,
+        String descriptionEn,
         String priceText,
         Boolean isSpicy,
         RiskLevel riskLevel,

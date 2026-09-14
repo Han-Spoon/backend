@@ -13,6 +13,7 @@ import com.hanspoon.backend_api.domain.scan.dto.ScanCreatedResponse;
 import com.hanspoon.backend_api.domain.scan.dto.ScanHistoryItem;
 import com.hanspoon.backend_api.domain.scan.dto.StartScanRequest;
 import com.hanspoon.backend_api.domain.scan.dto.UpdateScanTitleRequest;
+import com.hanspoon.backend_api.domain.scan.entity.MenuAnalysis;
 import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
@@ -160,6 +161,37 @@ class ScanServiceTest {
     }
 
     @Test
+    void getScanReturnsPersistedMenuDescriptions() {
+        UUID userId = UUID.randomUUID();
+        ScanSession session = ScanSession.create(userId, null, 1, 0, ScanStatus.COMPLETED, Instant.now());
+        UUID scanId = session.getId();
+        MenuAnalysis menu = MenuAnalysis.create(
+                scanId,
+                1,
+                "파돈불고기",
+                "Green Onion Bulgogi",
+                "파돈불고기 200g과 된장찌개",
+                "200g green onion bulgogi with soybean paste stew",
+                "14,000",
+                false,
+                null,
+                null,
+                List.of(),
+                null,
+                null);
+        when(scanSessionRepository.findByIdAndUserId(scanId, userId)).thenReturn(Optional.of(session));
+        when(menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(scanId))
+                .thenReturn(List.of(menu));
+
+        var response = scanService.getScan(userId, scanId);
+
+        assertThat(response.menus()).singleElement().satisfies(result -> {
+            assertThat(result.descriptionKo()).isEqualTo("파돈불고기 200g과 된장찌개");
+            assertThat(result.descriptionEn()).isEqualTo("200g green onion bulgogi with soybean paste stew");
+        });
+    }
+
+    @Test
     void getScanReturnsFailureCodeWithoutInternalExceptionDetails() {
         UUID userId = UUID.randomUUID();
         ScanSession session = ScanSession.start(userId, "scans/" + userId + "/failed.jpg");
@@ -172,6 +204,22 @@ class ScanServiceTest {
 
         assertThat(response.status()).isEqualTo(ScanStatus.FAILED);
         assertThat(response.failureCode()).isEqualTo("AI_SERVICE_OVERLOADED");
+    }
+
+    @Test
+    void getScanReturnsRetakeReasonsAndSuggestions() {
+        UUID userId = UUID.randomUUID();
+        ScanSession session = ScanSession.start(userId, "scans/" + userId + "/blurred.jpg");
+        session.applyNeedsRetake(List.of("이미지가 흐려 메뉴판 판독이 어렵습니다."), List.of("카메라의 초점을 맞춰 다시 촬영해 주세요."));
+        when(scanSessionRepository.findByIdAndUserId(session.getId(), userId)).thenReturn(Optional.of(session));
+        when(menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(session.getId()))
+                .thenReturn(List.of());
+
+        var response = scanService.getScan(userId, session.getId());
+
+        assertThat(response.status()).isEqualTo(ScanStatus.NEEDS_RETAKE);
+        assertThat(response.retakeReasons()).containsExactly("이미지가 흐려 메뉴판 판독이 어렵습니다.");
+        assertThat(response.retakeSuggestions()).containsExactly("카메라의 초점을 맞춰 다시 촬영해 주세요.");
     }
 
     @Test

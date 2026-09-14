@@ -47,8 +47,8 @@ public class ScanStateWriter {
     }
 
     @Transactional
-    public void applyNeedsRetake(UUID scanId, List<String> retakeReasons) {
-        session(scanId).ifPresent(session -> session.applyNeedsRetake(retakeReasons));
+    public void applyNeedsRetake(UUID scanId, List<String> retakeReasons, List<String> retakeSuggestions) {
+        session(scanId).ifPresent(session -> session.applyNeedsRetake(retakeReasons, retakeSuggestions));
     }
 
     @Transactional
