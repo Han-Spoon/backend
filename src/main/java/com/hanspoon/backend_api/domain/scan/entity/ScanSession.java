@@ -128,6 +128,11 @@ public class ScanSession extends BaseEntity {
                 null);
     }
 
+    /** 사용자가 가게 연결을 건너뛴 신규 스캔. 세 가게 컨텍스트 컬럼은 모두 null로 유지한다. */
+    public static ScanSession startWithoutStore(UUID userId, String storageKey) {
+        return new ScanSession(userId, storageKey, null, null, null, null, null, null, ScanStatus.PROCESSING, null);
+    }
+
     /** 가게 도입 전 세션을 재현하는 테스트·마이그레이션 전용 팩토리. 신규 스캔에서 사용하지 않는다. */
     public static ScanSession startLegacy(UUID userId, String storageKey) {
         return new ScanSession(userId, storageKey, null, null, null, null, null, null, ScanStatus.PROCESSING, null);

@@ -67,9 +67,11 @@ public class ScanService {
             return existingResponse(existing.get(), request);
         }
 
-        Store store = storeRepository
-                .findByIdAndStatus(request.storeId(), StoreStatus.ACTIVE)
-                .orElseThrow(() -> new BusinessException(ErrorCode.STORE_NOT_FOUND));
+        Store store = request.storeId() == null
+                ? null
+                : storeRepository
+                        .findByIdAndStatus(request.storeId(), StoreStatus.ACTIVE)
+                        .orElseThrow(() -> new BusinessException(ErrorCode.STORE_NOT_FOUND));
 
         // presigned PUT 은 서버가 내용을 모르므로 실제 업로드 여부·크기·타입을 여기서 확인한다.
         // 비동기로 넘긴 뒤 실패하면 사용자는 폴링만 하다 FAILED 를 받게 된다.
@@ -80,7 +82,10 @@ public class ScanService {
         try {
             // DB 고유 인덱스가 동시에 들어온 동일 요청까지 방어한다.
             session = scanSessionRepository.saveAndFlush(
-                    ScanSession.start(userId, storageKey, store.getId(), store.getName(), request.storeMatchMethod()));
+                    store == null
+                            ? ScanSession.startWithoutStore(userId, storageKey)
+                            : ScanSession.start(
+                                    userId, storageKey, store.getId(), store.getName(), request.storeMatchMethod()));
         } catch (DataIntegrityViolationException exception) {
             return scanSessionRepository
                     .findByUserIdAndStorageKey(userId, storageKey)

@@ -93,6 +93,27 @@ class ScanServiceTest {
     }
 
     @Test
+    void startScanAllowsUserToContinueWithoutStore() {
+        UUID userId = UUID.randomUUID();
+        String key = "scans/" + userId + "/without-store.jpg";
+        VerifiedUpload upload = new VerifiedUpload(key, "version-1", "\"etag-1\"", 123L, "image/jpeg");
+        when(s3StorageService.resolveKey(userId, key)).thenReturn(key);
+        when(s3StorageService.verifyUploadObject(key)).thenReturn(upload);
+        when(scanSessionRepository.saveAndFlush(any(ScanSession.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0, ScanSession.class));
+
+        ScanCreatedResponse response = scanService.startScan(userId, new StartScanRequest(key, "upload", null, null));
+
+        assertThat(response.status()).isEqualTo(ScanStatus.PROCESSING);
+        verify(storeRepository, never()).findByIdAndStatus(any(), any());
+        verify(scanSessionRepository)
+                .saveAndFlush(org.mockito.ArgumentMatchers.argThat(session -> session.getStoreId() == null
+                        && session.getStoreNameSnapshot() == null
+                        && session.getStoreMatchMethod() == null));
+        verify(scanProcessor).process(eq(response.scanId()), eq(userId), eq(upload), eq("upload"));
+    }
+
+    @Test
     void startScanReturnsExistingSessionForTheSameStorageKey() {
         UUID userId = UUID.randomUUID();
         String key = "scans/" + userId + "/same.jpg";

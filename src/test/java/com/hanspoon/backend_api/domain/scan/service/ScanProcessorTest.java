@@ -251,6 +251,22 @@ class ScanProcessorTest {
     }
 
     @Test
+    void sendsNullStoreContextToAiWhenUserSkippedStoreSelection() {
+        UUID userId = UUID.randomUUID();
+        ScanSession session = ScanSession.startWithoutStore(userId, STORAGE_KEY);
+        when(scanSessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
+        when(aiClient.requestOcr(any())).thenReturn(null);
+
+        scanProcessor.process(session.getId(), userId, VERIFIED_UPLOAD, "upload");
+
+        ArgumentCaptor<OcrRequest> requestCaptor = ArgumentCaptor.forClass(OcrRequest.class);
+        verify(aiClient).requestOcr(requestCaptor.capture());
+        assertThat(requestCaptor.getValue().storeId()).isNull();
+        assertThat(session.getScanStatus()).isEqualTo(ScanStatus.FAILED);
+        assertThat(session.getFailureCode()).isEqualTo(ErrorCode.OCR_SERVICE_ERROR.getCode());
+    }
+
+    @Test
     void persistsOcrStateBeforeCallingRuleEngine() {
         UUID userId = UUID.randomUUID();
         ScanSession session = processingSession(userId);

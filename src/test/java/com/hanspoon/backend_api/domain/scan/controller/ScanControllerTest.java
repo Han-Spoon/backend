@@ -3,6 +3,7 @@ package com.hanspoon.backend_api.domain.scan.controller;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -89,6 +90,36 @@ class ScanControllerTest {
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.scanId").value(scanId.toString()))
                 .andExpect(jsonPath("$.status").value("processing"));
+    }
+
+    @Test
+    void startScanAllowsMissingStoreContext() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        when(scanService.startScan(eq(USER_ID), any()))
+                .thenReturn(new ScanCreatedResponse(scanId, ScanStatus.PROCESSING));
+
+        mockMvc.perform(
+                        post("/api/v1/scans")
+                                .contentType("application/json")
+                                .content(
+                                        """
+                                {"storageKey":"scans/user/menu.jpg","source":"upload"}
+                                """))
+                .andExpect(status().isAccepted());
+    }
+
+    @Test
+    void startScanRejectsPartialStoreContext() throws Exception {
+        mockMvc.perform(
+                        post("/api/v1/scans")
+                                .contentType("application/json")
+                                .content(
+                                        """
+                                {"storageKey":"scans/user/menu.jpg","source":"upload","storeId":42}
+                                """))
+                .andExpect(status().isBadRequest());
+
+        verify(scanService, never()).startScan(any(), any());
     }
 
     @Test

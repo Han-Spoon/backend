@@ -83,10 +83,6 @@ public class ScanProcessor {
                 return;
             }
             Long storeId = session.getStoreId();
-            if (storeId == null) {
-                throw new BusinessException(
-                        ErrorCode.SCAN_REQUEST_CONFLICT, "Scan store context is missing: " + scanId + ".");
-            }
 
             String storageKey = upload.storageKey();
             String fallbackImageUrl =
