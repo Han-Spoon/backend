@@ -62,7 +62,7 @@ panel(40,   TOP_Y, 490, TOP_H, '참조 마스터 · BIGINT PK',  'ref')
 panel(560,  TOP_Y, 490, TOP_H, '가게 마스터 · V5 예정 (미적용)',        'core')
 panel(1080, TOP_Y, 490, TOP_H, '별칭 · 외부참조',            'sat')
 panel(40,   BOT_Y, 1530, BOT_H, '기존 백엔드 스키마 · UUID PK (V1 배포됨)', 'exist')
-panel(1600, TOP_Y, 490, 1264, 'AI 파이프라인 스키마 (catoin) · 설계만 존재, 미구현', 'ai', dashed=True)
+panel(1600, TOP_Y, 490, 1264, 'AI 연계 스키마 (catoin) · 백엔드 소유, 미구현', 'ai', dashed=True)
 
 y = TOP_Y + 50
 y += table(60, y, 'store_categories', [
@@ -245,14 +245,13 @@ link(f'M 805 {rt(ST)} V 96 H 1585 V {ry(IRS,0)} H {rl(IRS)}')
 link(f'M 1585 {ry(SM,0)} H {rl(SM)}')
 out.append('<text class="buslbl" x="821" y="90">store_id — 모든 store-scoped 테이블에 NOT NULL 강제 (agent-1 §0-1)</text>')
 
-for i, t in enumerate(['⚠ 이 패널 5개 테이블은 아직 어디에도 없다.',
-                       'AI 서비스는 완전 무상태(FastAPI + menus.csv 77행)로',
-                       'DB 연결 코드 자체가 없다. 실선 FK 는 설계 의도이지',
-                       '현재 물리 관계가 아니다.',
+for i, t in enumerate(['⚠ 이 패널 5개 테이블은 아직 구현되지 않았다.',
+                       '물리 스키마와 마이그레이션은 백엔드가 단일 소유한다.',
+                       'AI는 구조화된 결과/저장 명령만 반환하고 백엔드가',
+                       '권한·FK·멱등성을 검증한 뒤 트랜잭션으로 반영한다.',
                        '',
-                       '선결 과제: 이 스키마를 백엔드 DB 에 둘지,',
-                       'AI 전용 DB 를 둘지. 후자면 store_id 는 FK 가 아니라',
-                       '소프트 참조가 되고 정합성은 앱이 책임진다.']):
+                       'store_id 계약: PostgreSQL BIGINT · Java Long ·',
+                       'JSON 정수 · Python int. AI의 stores 직접 쓰기 금지.']):
     out.append(f'<text class="pnote" x="1620" y="{1100+i*18}">{esc(t)}</text>')
 
 # ══ 범례 ══
@@ -274,7 +273,7 @@ out.append(f'<line class="ln" x1="{lx}" y1="{LY+10}" x2="{lx+32}" y2="{LY+10}"/>
 out.append(f'<text class="lgd" x="{lx+40}" y="{LY+14}">DB FK 제약</text>')
 lx += 150
 for cx, cls, t in [(lx,'pnl-ref','참조 마스터'),(lx+140,'pnl-core','신규 핵심'),(lx+262,'pnl-sat','부속'),
-                   (lx+352,'pnl-exist','기존 V1'),(lx+462,'pnl-ai','AI 소유')]:
+                   (lx+352,'pnl-exist','기존 V1'),(lx+462,'pnl-ai','AI 연계')]:
     out.append(f'<rect class="pnl {cls}" x="{cx}" y="{LY+2}" width="14" height="14" rx="3"/>')
     out.append(f'<text class="lgd" x="{cx+20}" y="{LY+14}">{esc(t)}</text>')
 out.append(f'<text class="lgdn" x="{lx+600}" y="{LY+14}">PK 이원화: 공개 마스터=BIGINT IDENTITY(좁은 FK·순차 적재) / 사용자 귀속 리소스=UUID(URL 열거 방어)</text>')
