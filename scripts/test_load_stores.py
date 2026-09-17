@@ -77,6 +77,7 @@ class LoadStoresSafetyTest(unittest.TestCase):
         sql = output.getvalue()
         self.assertIn("pg_advisory_xact_lock", sql)
         self.assertIn("store import count mismatch", sql)
+        self.assertIn("finished_at = clock_timestamp()", sql)
         self.assertLess(sql.index("ANALYZE stores;"), sql.index("COMMIT;"))
 
     def test_legacy_sweep_option_maps_to_inactive_sweep(self):
