@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 800" width="1240" height="800" role="img"
+     aria-label="한스푼 AWS 아키텍처 도면. 사용자에서 Vercel, CloudFront를 거쳐 VPC 퍼블릭 서브넷의 EC2 ECS 태스크로 이어지고, 프라이빗 서브넷의 RDS와 VPC 외부 리전 서비스로 연결된다. 6개 핵심 설계 결정 지점에 번호 배지가 표시되어 있다.">
+  <style>
+    .d-region{fill:none;stroke:#C3CEDA;stroke-width:1.25;stroke-dasharray:7 5}
+    .d-vpc{fill:none;stroke:#5C6B7C;stroke-width:1.5}
+    .d-public{fill:#E4EBF3;stroke:#C3CEDA;stroke-width:1}
+    .d-private{fill:#DCE3EC;stroke:#C3CEDA;stroke-width:1}
+    .d-ext{fill:#EDEFF2;stroke:#C3CEDA;stroke-width:1}
+    .d-box{fill:#FFFFFF;stroke:#C3CEDA;stroke-width:1.25}
+    .d-box-2{fill:#F6F8FA;stroke:#C3CEDA;stroke-width:1}
+    .d-dash{fill:none;stroke:#C3CEDA;stroke-width:1.25;stroke-dasharray:5 4}
+    .d-line{fill:none;stroke:#5C6B7C;stroke-width:1.5}
+    .d-line-2{fill:none;stroke:#8494A5;stroke-width:1.25;stroke-dasharray:4 3}
+    .d-head{fill:#5C6B7C}
+    text{font-family:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif}
+    .d-zone{font-size:11px;font-weight:600;fill:#5C6B7C;letter-spacing:.06em;font-family:"IBM Plex Mono","SFMono-Regular",monospace}
+    .d-t{font-size:13px;font-weight:600;fill:#182430}
+    .d-t-sm{font-size:11.5px;font-weight:600;fill:#182430}
+    .d-s{font-size:11px;fill:#5C6B7C}
+    .d-m{font-size:10.5px;fill:#5C6B7C;font-family:"IBM Plex Mono","SFMono-Regular",monospace}
+    .d-b{font-size:11.5px;font-weight:700;fill:#FFFFFF;font-family:"IBM Plex Mono","SFMono-Regular",monospace}
+    .bg-s{fill:#AF3526}.bg-t{fill:#29499A}.bg-o{fill:#0F6B5C}.bg-c{fill:#8A6410}
+  </style>
+  <rect x="0" y="0" width="1240" height="800" fill="#FFFFFF"/>
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path class="d-head" d="M 0 0 L 10 5 L 0 10 z"></path>
+          </marker>
+        </defs>
+
+        <!-- 상단 스트립 -->
+        <rect class="d-box" x="24" y="24" width="132" height="72"></rect>
+        <text class="d-t" x="40" y="54">사용자</text>
+        <text class="d-s" x="40" y="72">모바일 · 웹</text>
+
+        <line class="d-line" x1="158" y1="60" x2="176" y2="60" marker-end="url(#ah)"></line>
+
+        <rect class="d-box" x="180" y="24" width="152" height="72"></rect>
+        <text class="d-t" x="196" y="54">Vercel</text>
+        <text class="d-m" x="196" y="72">han-spoon.site</text>
+
+        <line class="d-line" x1="334" y1="60" x2="352" y2="60" marker-end="url(#ah)"></line>
+
+        <rect class="d-box" x="356" y="24" width="184" height="72"></rect>
+        <text class="d-t" x="372" y="43">CloudFront</text>
+        <text class="d-m" x="372" y="62">api.han-spoon.site</text>
+        <text class="d-s" x="372" y="80">오리진 2개 · PriceClass_200</text>
+
+        <rect class="d-box" x="1004" y="24" width="212" height="72"></rect>
+        <text class="d-t" x="1020" y="54">GitHub Actions</text>
+        <text class="d-s" x="1020" y="72">backend · ai 두 저장소</text>
+
+        <!-- 리전 -->
+        <rect class="d-region" x="24" y="124" width="1192" height="560"></rect>
+        <text class="d-zone" x="40" y="146">AWS · ap-northeast-2</text>
+
+        <!-- VPC -->
+        <rect class="d-vpc" x="56" y="176" width="824" height="484"></rect>
+        <text class="d-zone" x="70" y="198">VPC 10.0.0.0/16</text>
+
+        <!-- 퍼블릭 AZ-a -->
+        <rect class="d-public" x="80" y="212" width="568" height="228"></rect>
+        <text class="d-zone" x="94" y="232">퍼블릭 서브넷 · AZ-a · 10.0.0.0/24</text>
+
+        <rect class="d-box-2" x="96" y="242" width="136" height="32"></rect>
+        <text class="d-t-sm" x="110" y="263">EIP · 고정 IP</text>
+
+        <rect class="d-box" x="96" y="286" width="536" height="138"></rect>
+        <text class="d-s" x="112" y="306">EC2 t4g.small · Graviton ARM64 · ASG(1) — ECS 클러스터에 컨테이너 인스턴스로 등록</text>
+
+        <rect class="d-box-2" x="112" y="314" width="504" height="98"></rect>
+        <text class="d-m" x="126" y="330">ECS Service(1) · Task Def · network_mode: host · mem 1408</text>
+        <circle class="bg-t" cx="598" cy="326" r="11"></circle>
+        <text class="d-b" x="598" y="330" text-anchor="middle">03</text>
+
+        <rect class="d-box" x="124" y="340" width="234" height="30"></rect>
+        <text class="d-t-sm" x="136" y="360">backend :8080 · 640MB</text>
+        <rect class="d-box" x="382" y="340" width="222" height="30"></rect>
+        <text class="d-t-sm" x="394" y="360">ai :8000 · 768MB</text>
+        <line class="d-line" x1="360" y1="355" x2="380" y2="355" marker-end="url(#ah)"></line>
+        <text class="d-m" x="124" y="394">backend → ai : http://localhost:8000 — 호스트 네트워크 공유, ENI·NAT 불필요</text>
+
+        <!-- 퍼블릭 AZ-b -->
+        <rect class="d-dash" x="664" y="212" width="192" height="100"></rect>
+        <text class="d-zone" x="678" y="234">퍼블릭 · AZ-b</text>
+        <text class="d-m" x="678" y="256">10.0.1.0/24</text>
+        <text class="d-s" x="678" y="278">ASG 다중 AZ</text>
+        <text class="d-s" x="678" y="296">확장 예비</text>
+
+        <!-- S3 GW endpoint -->
+        <rect class="d-box" x="664" y="328" width="192" height="88"></rect>
+        <text class="d-t-sm" x="678" y="350">S3 Gateway Endpoint</text>
+        <text class="d-s" x="678" y="370">라우팅 테이블 2개 연결</text>
+        <text class="d-s" x="678" y="388">ai → GetObject (태스크 역할)</text>
+        <text class="d-s" x="678" y="406">S3 트래픽 인터넷 미경유</text>
+
+        <!-- 프라이빗 -->
+        <rect class="d-private" x="80" y="456" width="776" height="96"></rect>
+        <text class="d-zone" x="94" y="476">프라이빗 서브넷 · AZ-a / AZ-b · 10.0.10.0/24 · 10.0.11.0/24</text>
+        <rect class="d-box" x="96" y="486" width="316" height="50"></rect>
+        <text class="d-t-sm" x="110" y="502">RDS PostgreSQL 16 · db.t4g.micro</text>
+        <text class="d-s" x="126" y="522">암호화 · 백업 7일 · 삭제 보호</text>
+        <text class="d-m" x="432" y="502">publicly_accessible = false</text>
+        <text class="d-m" x="432" y="522">인바운드: instance SG 참조 :5432 단일 규칙</text>
+
+        <!-- IGW / SG -->
+        <rect class="d-box" x="80" y="572" width="260" height="56"></rect>
+        <text class="d-t-sm" x="96" y="596">인터넷 게이트웨이</text>
+        <text class="d-s" x="96" y="616">아웃바운드 전용 · NAT 게이트웨이 없음</text>
+
+        <rect class="d-box-2" x="356" y="572" width="500" height="56"></rect>
+        <circle class="bg-s" cx="368" cy="584" r="11"></circle>
+        <text class="d-b" x="368" y="588" text-anchor="middle">02</text>
+        <text class="d-t-sm" x="386" y="590">보안 그룹 2개 — 외부로 열린 인바운드는 1개</text>
+        <text class="d-m" x="372" y="608">instance ← CloudFront 관리형 prefix list · tcp/8080</text>
+        <text class="d-m" x="372" y="622">rds ← instance SG · tcp/5432   ·   SSH 인바운드 0</text>
+
+        <!-- 리전 서비스 -->
+        <rect class="d-dash" x="916" y="176" width="276" height="484"></rect>
+        <text class="d-zone" x="930" y="198">리전 서비스 · VPC 외부</text>
+
+        <rect class="d-box" x="932" y="212" width="244" height="88"></rect>
+        <circle class="bg-s" cx="944" cy="224" r="11"></circle>
+        <text class="d-b" x="944" y="228" text-anchor="middle">06</text>
+        <text class="d-t-sm" x="962" y="228">Amazon S3 · 이미지</text>
+        <text class="d-s" x="946" y="250">퍼블릭 차단 4/4 · 버저닝 · OAC</text>
+        <text class="d-s" x="946" y="268">scans/ 90일 만료 · menus/ 보관</text>
+        <text class="d-s" x="946" y="286">presigned PUT · 경로 테넌시 검증</text>
+
+        <rect class="d-box" x="932" y="312" width="244" height="58"></rect>
+        <text class="d-t-sm" x="946" y="334">Amazon ECR</text>
+        <text class="d-s" x="946" y="354">IMMUTABLE 태그 · 최근 10개</text>
+
+        <rect class="d-box" x="932" y="382" width="244" height="58"></rect>
+        <circle class="bg-s" cx="944" cy="394" r="11"></circle>
+        <text class="d-b" x="944" y="398" text-anchor="middle">05</text>
+        <text class="d-t-sm" x="962" y="398">SSM Parameter Store</text>
+        <text class="d-s" x="946" y="424">SecureString 6개 · 태스크 시작 시 주입</text>
+
+        <rect class="d-box" x="932" y="452" width="244" height="58"></rect>
+        <circle class="bg-o" cx="944" cy="464" r="11"></circle>
+        <text class="d-b" x="944" y="468" text-anchor="middle">04</text>
+        <text class="d-t-sm" x="962" y="468">DynamoDB · 배포 락</text>
+        <text class="d-s" x="946" y="494">조건부 쓰기 · TTL 900초</text>
+
+        <rect class="d-box" x="932" y="522" width="244" height="58"></rect>
+        <text class="d-t-sm" x="946" y="538">CloudWatch Logs</text>
+        <text class="d-s" x="946" y="564">그룹 2개 · 보존 7일 명시</text>
+
+        <rect class="d-box" x="932" y="592" width="244" height="58"></rect>
+        <text class="d-t-sm" x="946" y="608">AWS Budgets</text>
+        <text class="d-s" x="946" y="634">월 $60 · 실적 80% / 예측 100%</text>
+
+        <!-- 외부 API -->
+        <rect class="d-ext" x="80" y="700" width="300" height="68"></rect>
+        <text class="d-t-sm" x="96" y="726">외부 API</text>
+        <text class="d-s" x="96" y="746">CLOVA OCR General V2 · OpenAI gpt-4o-mini</text>
+
+        <!-- 연결선 -->
+        <path class="d-line" d="M 420 98 L 420 284" marker-end="url(#ah)"></path>
+        <circle class="bg-t" cx="420" cy="158" r="11"></circle>
+        <text class="d-b" x="420" y="162" text-anchor="middle">01</text>
+        <text class="d-m" x="440" y="150">api 오리진 · EIP:8080 · http-only</text>
+        <text class="d-m" x="440" y="166">X-Origin-Secret 헤더 주입</text>
+
+        <path class="d-line" d="M 496 98 L 496 110 L 1054 110 L 1054 210" marker-end="url(#ah)"></path>
+        <text class="d-m" x="560" y="104">images 오리진 · /menus/* · OAC · 엣지 캐시</text>
+
+        <path class="d-line-2" d="M 1110 98 L 1110 174" marker-end="url(#ah)"></path>
+        <text class="d-m" x="1122" y="128">OIDC AssumeRole</text>
+        <text class="d-m" x="1122" y="144">이미지 푸시 · 태스크 갱신</text>
+
+        <path class="d-line" d="M 300 426 L 300 484" marker-end="url(#ah)"></path>
+        <text class="d-m" x="312" y="452">JDBC :5432 · sslmode=require</text>
+
+        <path class="d-line" d="M 634 372 L 662 372" marker-end="url(#ah)"></path>
+        <path class="d-line" d="M 858 372 L 898 372 L 898 248 L 930 248" marker-end="url(#ah)"></path>
+
+        <path class="d-line" d="M 96 340 L 68 340 L 68 600 L 78 600" marker-end="url(#ah)"></path>
+        <path class="d-line" d="M 210 630 L 210 698" marker-end="url(#ah)"></path>
+        <text class="d-m" x="222" y="668">아웃바운드</text>
+      </svg>
