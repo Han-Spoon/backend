@@ -2,12 +2,14 @@ package com.hanspoon.backend_api.domain.scan.repository;
 
 import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -18,6 +20,10 @@ public interface ScanSessionRepository extends JpaRepository<ScanSession, UUID> 
     Page<ScanSession> findByUserIdAndScanStatus(UUID userId, ScanStatus scanStatus, Pageable pageable);
 
     Optional<ScanSession> findByIdAndUserId(UUID id, UUID userId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select scan from ScanSession scan where scan.id = :id and scan.userId = :userId")
+    Optional<ScanSession> findByIdAndUserIdForUpdate(@Param("id") UUID id, @Param("userId") UUID userId);
 
     Optional<ScanSession> findByUserIdAndStorageKey(UUID userId, String storageKey);
 

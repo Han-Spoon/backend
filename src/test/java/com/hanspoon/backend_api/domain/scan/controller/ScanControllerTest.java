@@ -10,22 +10,29 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.hanspoon.backend_api.domain.scan.dto.ScanCreatedResponse;
 import com.hanspoon.backend_api.domain.scan.dto.ScanHistoryItem;
+import com.hanspoon.backend_api.domain.scan.dto.ScanRecordResponse;
 import com.hanspoon.backend_api.domain.scan.dto.ScanResultResponse;
 import com.hanspoon.backend_api.domain.scan.dto.ScanStoreSummary;
+import com.hanspoon.backend_api.domain.scan.entity.ScanFeedbackAnswer;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
+import com.hanspoon.backend_api.domain.scan.service.ScanRecordService;
 import com.hanspoon.backend_api.domain.scan.service.ScanService;
+import com.hanspoon.backend_api.domain.store.entity.StoreMatchMethod;
 import com.hanspoon.backend_api.global.common.PageResponse;
 import com.hanspoon.backend_api.global.exception.BusinessException;
 import com.hanspoon.backend_api.global.exception.ErrorCode;
 import com.hanspoon.backend_api.global.exception.GlobalExceptionHandler;
 import com.hanspoon.backend_api.global.security.CurrentUser;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,6 +51,7 @@ class ScanControllerTest {
     private static final UUID USER_ID = UUID.randomUUID();
 
     private final ScanService scanService = mock(ScanService.class);
+    private final ScanRecordService scanRecordService = mock(ScanRecordService.class);
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -63,7 +71,7 @@ class ScanControllerTest {
                 return USER_ID.toString();
             }
         };
-        mockMvc = MockMvcBuilders.standaloneSetup(new ScanController(scanService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new ScanController(scanService, scanRecordService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setCustomArgumentResolvers(currentUserResolver, new PageableHandlerMethodArgumentResolver())
                 .build();
@@ -194,6 +202,7 @@ class ScanControllerTest {
                         ScanStatus.COMPLETED,
                         null,
                         new ScanStoreSummary(42L, "한스푼"),
+                        null,
                         2,
                         1,
                         null,
@@ -209,6 +218,61 @@ class ScanControllerTest {
                 .andExpect(jsonPath("$.store.storeId").value(42))
                 .andExpect(jsonPath("$.store.name").value("한스푼"))
                 .andExpect(jsonPath("$.menuCount").value(2));
+    }
+
+    @Test
+    void saveRecordReturnsEffectiveLockedStore() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        Instant savedAt = Instant.parse("2026-09-18T12:00:00Z");
+        when(scanRecordService.save(eq(USER_ID), eq(scanId), any()))
+                .thenReturn(new ScanRecordResponse(
+                        scanId,
+                        new ScanStoreSummary(42L, "한스푼"),
+                        true,
+                        StoreMatchMethod.GPS_CANDIDATE,
+                        Map.of("allergy:shrimp", ScanFeedbackAnswer.YES),
+                        savedAt));
+
+        mockMvc.perform(
+                        put("/api/v1/scans/{scanId}/record", scanId)
+                                .contentType("application/json")
+                                .content(
+                                        """
+                        {"feedback":{"allergy:shrimp":"yes"}}
+                        """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scanId").value(scanId.toString()))
+                .andExpect(jsonPath("$.store.storeId").value(42))
+                .andExpect(jsonPath("$.storeLocked").value(true))
+                .andExpect(jsonPath("$.storeMatchMethod").value("gps_candidate"))
+                .andExpect(jsonPath("$.feedback['allergy:shrimp']").value("yes"))
+                .andExpect(jsonPath("$.savedAt").value(savedAt.toString()));
+    }
+
+    @Test
+    void saveRecordRejectsPartialStoreContext() throws Exception {
+        mockMvc.perform(put("/api/v1/scans/{scanId}/record", UUID.randomUUID())
+                        .contentType("application/json")
+                        .content("""
+                        {"storeId":42,"feedback":{}}
+                        """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+
+        verify(scanRecordService, never()).save(any(), any(), any());
+    }
+
+    @Test
+    void getRecordReturnsSavedRecord() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        when(scanRecordService.get(USER_ID, scanId))
+                .thenReturn(new ScanRecordResponse(scanId, null, false, null, Map.of(), Instant.now()));
+
+        mockMvc.perform(get("/api/v1/scans/{scanId}/record", scanId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scanId").value(scanId.toString()))
+                .andExpect(jsonPath("$.store").doesNotExist())
+                .andExpect(jsonPath("$.storeLocked").value(false));
     }
 
     @Test

@@ -44,6 +44,16 @@ public enum ErrorCode {
     SCAN_CAPACITY_EXCEEDED(
             HttpStatus.SERVICE_UNAVAILABLE, "SCAN_CAPACITY_EXCEEDED", "Scan capacity is temporarily exhausted."),
     SCAN_PROCESSING_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "SCAN_PROCESSING_TIMEOUT", "Scan processing timed out."),
+    SCAN_NOT_COMPLETED(HttpStatus.CONFLICT, "SCAN_NOT_COMPLETED", "Only a completed scan can be saved."),
+    SCAN_RECORD_NOT_FOUND(HttpStatus.NOT_FOUND, "SCAN_RECORD_NOT_FOUND", "Saved scan record not found."),
+    SCAN_STORE_CONTEXT_LOCKED(
+            HttpStatus.CONFLICT,
+            "SCAN_STORE_CONTEXT_LOCKED",
+            "The store selected when the scan started cannot be changed."),
+    SCAN_FEEDBACK_REQUIRES_STORE(
+            HttpStatus.BAD_REQUEST, "SCAN_FEEDBACK_REQUIRES_STORE", "Restaurant feedback requires a linked store."),
+    INVALID_SCAN_FEEDBACK(
+            HttpStatus.BAD_REQUEST, "INVALID_SCAN_FEEDBACK", "Scan feedback contains an unsupported profile item."),
 
     // ── 가게 ────────────────────────────────────────────────────────────
     STORE_NOT_FOUND(HttpStatus.NOT_FOUND, "STORE_NOT_FOUND", "Active store not found."),

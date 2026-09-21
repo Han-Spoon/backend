@@ -1,10 +1,13 @@
 package com.hanspoon.backend_api.domain.scan.controller;
 
+import com.hanspoon.backend_api.domain.scan.dto.SaveScanRecordRequest;
 import com.hanspoon.backend_api.domain.scan.dto.ScanCreatedResponse;
 import com.hanspoon.backend_api.domain.scan.dto.ScanHistoryItem;
+import com.hanspoon.backend_api.domain.scan.dto.ScanRecordResponse;
 import com.hanspoon.backend_api.domain.scan.dto.ScanResultResponse;
 import com.hanspoon.backend_api.domain.scan.dto.StartScanRequest;
 import com.hanspoon.backend_api.domain.scan.dto.UpdateScanTitleRequest;
+import com.hanspoon.backend_api.domain.scan.service.ScanRecordService;
 import com.hanspoon.backend_api.domain.scan.service.ScanService;
 import com.hanspoon.backend_api.global.common.PageResponse;
 import com.hanspoon.backend_api.global.security.CurrentUser;
@@ -22,6 +25,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -33,9 +37,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class ScanController {
 
     private final ScanService scanService;
+    private final ScanRecordService scanRecordService;
 
-    public ScanController(ScanService scanService) {
+    public ScanController(ScanService scanService, ScanRecordService scanRecordService) {
         this.scanService = scanService;
+        this.scanRecordService = scanRecordService;
     }
 
     @Operation(summary = "스캔 시작(비동기). 202 로 scanId 반환 후 OCR/판정은 백그라운드 처리")
@@ -59,6 +65,19 @@ public class ScanController {
     @GetMapping("/{scanId}")
     public ScanResultResponse getScan(@CurrentUser String userId, @PathVariable UUID scanId) {
         return scanService.getScan(UUID.fromString(userId), scanId);
+    }
+
+    @Operation(summary = "완료된 스캔을 기록으로 저장/갱신. 스캔 시점 가게는 고정, 미지정 스캔만 사후 연결 가능")
+    @PutMapping("/{scanId}/record")
+    public ScanRecordResponse saveRecord(
+            @CurrentUser String userId, @PathVariable UUID scanId, @Valid @RequestBody SaveScanRecordRequest request) {
+        return scanRecordService.save(UUID.fromString(userId), scanId, request);
+    }
+
+    @Operation(summary = "저장된 본인의 스캔 기록 조회.")
+    @GetMapping("/{scanId}/record")
+    public ScanRecordResponse getRecord(@CurrentUser String userId, @PathVariable UUID scanId) {
+        return scanRecordService.get(UUID.fromString(userId), scanId);
     }
 
     @Operation(summary = "스캔 이력 제목 수정. 본인 스캔만. 없거나 타인 소유면 404")
