@@ -12,9 +12,12 @@ import static org.mockito.Mockito.when;
 
 import com.hanspoon.backend_api.domain.scan.dto.ScanCreatedResponse;
 import com.hanspoon.backend_api.domain.scan.dto.ScanHistoryItem;
+import com.hanspoon.backend_api.domain.scan.dto.ScanRecordResponse;
+import com.hanspoon.backend_api.domain.scan.dto.ScanStoreSummary;
 import com.hanspoon.backend_api.domain.scan.dto.StartScanRequest;
 import com.hanspoon.backend_api.domain.scan.dto.UpdateScanTitleRequest;
 import com.hanspoon.backend_api.domain.scan.entity.MenuAnalysis;
+import com.hanspoon.backend_api.domain.scan.entity.ScanFeedbackAnswer;
 import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
@@ -30,6 +33,7 @@ import com.hanspoon.backend_api.global.exception.BusinessException;
 import com.hanspoon.backend_api.global.exception.ErrorCode;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -57,6 +61,9 @@ class ScanServiceTest {
 
     @Mock
     private StoreRepository storeRepository;
+
+    @Mock
+    private ScanRecordService scanRecordService;
 
     @Mock
     private ScanProcessor scanProcessor;
@@ -232,6 +239,14 @@ class ScanServiceTest {
         when(scanSessionRepository.findByIdAndUserId(scanId, userId)).thenReturn(Optional.of(session));
         when(menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(scanId))
                 .thenReturn(List.of());
+        ScanRecordResponse savedRecord = new ScanRecordResponse(
+                scanId,
+                new ScanStoreSummary(42L, "한스푼"),
+                true,
+                StoreMatchMethod.GPS_CANDIDATE,
+                Map.of("allergy:shrimp", ScanFeedbackAnswer.YES),
+                Instant.now());
+        when(scanRecordService.findResponse(session)).thenReturn(savedRecord);
 
         var response = scanService.getScan(userId, scanId);
 
@@ -240,6 +255,7 @@ class ScanServiceTest {
         assertThat(response.title()).isEqualTo("custom title");
         assertThat(response.store().storeId()).isEqualTo(42L);
         assertThat(response.store().name()).isEqualTo("한스푼");
+        assertThat(response.record()).isEqualTo(savedRecord);
         assertThat(response.menuCount()).isEqualTo(2);
         assertThat(response.riskyMenuCount()).isEqualTo(1);
         assertThat(response.menus()).isEmpty();

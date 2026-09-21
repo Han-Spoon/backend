@@ -101,7 +101,7 @@
 
 <div align="center">
 
-<img src="infra/images/architecture.png" alt="한스푼 시스템 아키텍처" width="900" />
+<img src="infra/images/aws_architecture.png" alt="한스푼 시스템 아키텍처" width="900" />
 
 </div>
 

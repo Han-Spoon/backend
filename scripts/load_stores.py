@@ -101,11 +101,11 @@ def record_failed_batch(cmd: list[str], version: str) -> bool:
     sql = f"""
 INSERT INTO store_import_batches
     (source, source_version, row_count, status, started_at, finished_at)
-VALUES ('{SOURCE}', '{version}', 0, 'failed', now(), now())
+VALUES ('{SOURCE}', '{version}', 0, 'failed', clock_timestamp(), clock_timestamp())
 ON CONFLICT (source, source_version) DO UPDATE
 SET row_count = 0,
     status = 'failed',
-    finished_at = now()
+    finished_at = clock_timestamp()
 WHERE store_import_batches.status <> 'completed';
 """
     try:
@@ -368,9 +368,9 @@ SET LOCAL statement_timeout = '30min';
 SELECT pg_advisory_xact_lock(hashtextextended('hanspoon:store-import:sbiz', 0));
 
 INSERT INTO store_import_batches (source, source_version, status, started_at)
-VALUES ('{SOURCE}', '{version}', 'running', now())
+VALUES ('{SOURCE}', '{version}', 'running', clock_timestamp())
 ON CONFLICT (source, source_version)
-DO UPDATE SET status = 'running', started_at = now(), finished_at = NULL
+DO UPDATE SET status = 'running', started_at = clock_timestamp(), finished_at = NULL
 RETURNING id AS batch_id
 \\gset
 
@@ -510,7 +510,7 @@ WHERE origin = 'sbiz'
 
     w.write("""\
 UPDATE store_import_batches
-   SET status = 'completed', finished_at = now(), row_count = (SELECT count(*) FROM stg_store)
+   SET status = 'completed', finished_at = clock_timestamp(), row_count = (SELECT count(*) FROM stg_store)
  WHERE id = :batch_id;
 
 -- ANALYZE까지 성공해야 배치를 완료한다. COMMIT 뒤 실행하면 통계 갱신 실패를
