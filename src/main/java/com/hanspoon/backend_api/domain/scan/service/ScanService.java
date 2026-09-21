@@ -39,6 +39,7 @@ public class ScanService {
     private final ScanSessionRepository scanSessionRepository;
     private final MenuAnalysisRepository menuAnalysisRepository;
     private final StoreRepository storeRepository;
+    private final ScanRecordService scanRecordService;
     private final ScanProcessor scanProcessor;
     private final ScanStateWriter scanStateWriter;
 
@@ -47,12 +48,14 @@ public class ScanService {
             ScanSessionRepository scanSessionRepository,
             MenuAnalysisRepository menuAnalysisRepository,
             StoreRepository storeRepository,
+            ScanRecordService scanRecordService,
             ScanProcessor scanProcessor,
             ScanStateWriter scanStateWriter) {
         this.s3StorageService = s3StorageService;
         this.scanSessionRepository = scanSessionRepository;
         this.menuAnalysisRepository = menuAnalysisRepository;
         this.storeRepository = storeRepository;
+        this.scanRecordService = scanRecordService;
         this.scanProcessor = scanProcessor;
         this.scanStateWriter = scanStateWriter;
     }
@@ -118,6 +121,7 @@ public class ScanService {
                 session.getScanStatus(),
                 session.getTitle(),
                 toStoreSummary(session),
+                scanRecordService.findResponse(session),
                 session.getMenuCount(),
                 session.getRiskyMenuCount(),
                 session.getScannedAt(),
