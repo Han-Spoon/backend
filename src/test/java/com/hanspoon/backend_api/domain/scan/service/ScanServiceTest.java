@@ -43,6 +43,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.task.TaskRejectedException;
 import org.springframework.dao.DataIntegrityViolationException;
+import com.hanspoon.backend_api.domain.consent.service.ConsentService;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -70,6 +71,9 @@ class ScanServiceTest {
 
     @Mock
     private ScanStateWriter scanStateWriter;
+
+    @Mock
+    private ConsentService consentService;
 
     @InjectMocks
     private ScanService scanService;
