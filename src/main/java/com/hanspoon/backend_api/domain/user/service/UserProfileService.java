@@ -1,5 +1,6 @@
 package com.hanspoon.backend_api.domain.user.service;
 
+import com.hanspoon.backend_api.domain.consent.service.ConsentService;
 import com.hanspoon.backend_api.domain.user.dto.ProfileRequest;
 import com.hanspoon.backend_api.domain.user.dto.ProfileResponse;
 import com.hanspoon.backend_api.domain.user.entity.AllergyCode;
@@ -25,18 +26,22 @@ public class UserProfileService {
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
     private final UserAllergyRepository userAllergyRepository;
+    private final ConsentService consentService;
 
     public UserProfileService(
             UserRepository userRepository,
             UserProfileRepository userProfileRepository,
-            UserAllergyRepository userAllergyRepository) {
+            UserAllergyRepository userAllergyRepository,
+            ConsentService consentService) {
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
         this.userAllergyRepository = userAllergyRepository;
+        this.consentService = consentService;
     }
 
     @Transactional
     public ProfileResponse createProfile(UUID userId, ProfileRequest request) {
+        consentService.requireSensitiveConsent(userId);
         User user = userRepository.findById(userId).orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
         if (userProfileRepository.existsByUserId(userId)) {
             throw new BusinessException(ErrorCode.PROFILE_ALREADY_EXISTS);
@@ -71,6 +76,7 @@ public class UserProfileService {
 
     @Transactional
     public ProfileResponse updateProfile(UUID userId, ProfileRequest request) {
+        consentService.requireSensitiveConsent(userId);
         User user = userRepository.findById(userId).orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
         UserProfile profile = userProfileRepository
                 .findByUserId(userId)

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.hanspoon.backend_api.domain.consent.service.ConsentService;
 import com.hanspoon.backend_api.domain.scan.dto.ScanCreatedResponse;
 import com.hanspoon.backend_api.domain.scan.dto.ScanHistoryItem;
 import com.hanspoon.backend_api.domain.scan.dto.ScanRecordResponse;
@@ -70,6 +71,9 @@ class ScanServiceTest {
 
     @Mock
     private ScanStateWriter scanStateWriter;
+
+    @Mock
+    private ConsentService consentService;
 
     @InjectMocks
     private ScanService scanService;

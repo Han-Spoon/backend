@@ -26,6 +26,7 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
                                ll_to_earth(:latitude, :longitude),
                                ll_to_earth(s.lat, s.lng)
                            )) as integer) as "distanceMeters",
+                           (select count(*) from restaurant_reviews rv where rv.store_id = s.id) as "reviewCount",
                            cast(null as double precision) as "nameSimilarity",
                            c.code as "categoryCode",
                            c.name as "categoryName",
@@ -41,12 +42,8 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
                                ll_to_earth(:latitude, :longitude),
                                ll_to_earth(s.lat, s.lng)
                            ) <= :radiusMeters
-                     order by "verified" desc,
-                              case s.origin
-                                  when 'sbiz' then 0
-                                  when 'localdata' then 1
-                                  else 2
-                              end,
+                     order by floor(earth_distance(ll_to_earth(:latitude, :longitude), ll_to_earth(s.lat, s.lng)) / 50),
+                              "reviewCount" desc,
                               "distanceMeters",
                               s.id
                      limit :limit
@@ -72,6 +69,7 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
                                ll_to_earth(:latitude, :longitude),
                                ll_to_earth(s.lat, s.lng)
                            )) as integer) as "distanceMeters",
+                           (select count(*) from restaurant_reviews rv where rv.store_id = s.id) as "reviewCount",
                            similarity(s.name_normalized, normalize_store_name(:query)) as "nameSimilarity",
                            c.code as "categoryCode",
                            c.name as "categoryName",

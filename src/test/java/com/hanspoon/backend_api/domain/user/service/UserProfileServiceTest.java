@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.hanspoon.backend_api.domain.consent.service.ConsentService;
 import com.hanspoon.backend_api.domain.user.dto.ProfileRequest;
 import com.hanspoon.backend_api.domain.user.dto.ProfileResponse;
 import com.hanspoon.backend_api.domain.user.entity.AllergyCode;
@@ -39,6 +40,9 @@ class UserProfileServiceTest {
 
     @Mock
     private UserAllergyRepository userAllergyRepository;
+
+    @Mock
+    private ConsentService consentService;
 
     @InjectMocks
     private UserProfileService userProfileService;
