@@ -47,6 +47,7 @@ public enum ErrorCode {
     SCAN_PROCESSING_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "SCAN_PROCESSING_TIMEOUT", "Scan processing timed out."),
     SCAN_NOT_COMPLETED(HttpStatus.CONFLICT, "SCAN_NOT_COMPLETED", "Only a completed scan can be saved."),
     SCAN_RECORD_NOT_FOUND(HttpStatus.NOT_FOUND, "SCAN_RECORD_NOT_FOUND", "Saved scan record not found."),
+    MENU_NOT_FOUND(HttpStatus.NOT_FOUND, "MENU_NOT_FOUND", "Menu not found in scan."),
     SCAN_STORE_CONTEXT_LOCKED(
             HttpStatus.CONFLICT,
             "SCAN_STORE_CONTEXT_LOCKED",
