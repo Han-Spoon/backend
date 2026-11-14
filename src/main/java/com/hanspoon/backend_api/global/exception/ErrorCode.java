@@ -22,6 +22,8 @@ public enum ErrorCode {
     // ── 인증 · 인가 ─────────────────────────────────────────────────────
     INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "INVALID_TOKEN", "Invalid or expired token."),
     ACCESS_DENIED(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "Access is denied."),
+    GUARDIAN_CONSENT_REQUIRED(
+            HttpStatus.FORBIDDEN, "GUARDIAN_CONSENT_REQUIRED", "Verified legal guardian consent is required."),
 
     // ── 사용자 · 프로필 ─────────────────────────────────────────────────
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "User not found."),
@@ -46,6 +48,7 @@ public enum ErrorCode {
     SCAN_PROCESSING_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "SCAN_PROCESSING_TIMEOUT", "Scan processing timed out."),
     SCAN_NOT_COMPLETED(HttpStatus.CONFLICT, "SCAN_NOT_COMPLETED", "Only a completed scan can be saved."),
     SCAN_RECORD_NOT_FOUND(HttpStatus.NOT_FOUND, "SCAN_RECORD_NOT_FOUND", "Saved scan record not found."),
+    MENU_NOT_FOUND(HttpStatus.NOT_FOUND, "MENU_NOT_FOUND", "Menu not found in scan."),
     SCAN_STORE_CONTEXT_LOCKED(
             HttpStatus.CONFLICT,
             "SCAN_STORE_CONTEXT_LOCKED",
@@ -57,6 +60,11 @@ public enum ErrorCode {
 
     // ── 가게 ────────────────────────────────────────────────────────────
     STORE_NOT_FOUND(HttpStatus.NOT_FOUND, "STORE_NOT_FOUND", "Active store not found."),
+    REVIEW_NOT_FOUND(HttpStatus.NOT_FOUND, "REVIEW_NOT_FOUND", "Review not found."),
+    REVIEW_STORE_MISMATCH(HttpStatus.BAD_REQUEST, "REVIEW_STORE_MISMATCH", "Scan belongs to a different store."),
+    REVIEW_INVALID_CONTENT(
+            HttpStatus.BAD_REQUEST, "REVIEW_INVALID_CONTENT", "Review contains invalid answers or duplicate menus."),
+    REVIEW_SELF_REPORT(HttpStatus.BAD_REQUEST, "REVIEW_SELF_REPORT", "Your own review cannot be reported."),
 
     // ── 소통 카드 ───────────────────────────────────────────────────────
     CARD_NOT_FOUND(HttpStatus.NOT_FOUND, "CARD_NOT_FOUND", "Saved card not found."),

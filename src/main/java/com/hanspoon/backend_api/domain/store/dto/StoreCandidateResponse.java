@@ -13,6 +13,7 @@ public record StoreCandidateResponse(
         @Schema(description = "가게 위도", example = "37.4978") double latitude,
         @Schema(description = "가게 경도", example = "127.0275") double longitude,
         @Schema(description = "사용자 위치와의 거리(m)", example = "42") int distanceMeters,
+        @Schema(description = "작성된 후기 수", example = "12") long reviewCount,
         @Schema(description = "상권업종 소분류 코드", example = "I20101") String categoryCode,
         @Schema(description = "상권업종 소분류명", example = "한식 일반 음식점업") String categoryName,
         @Schema(description = "서비스 검증 완료 여부", example = "true") boolean verified,

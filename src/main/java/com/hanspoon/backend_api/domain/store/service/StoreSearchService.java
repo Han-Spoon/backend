@@ -50,6 +50,7 @@ public class StoreSearchService {
                 candidate.getLatitude(),
                 candidate.getLongitude(),
                 candidate.getDistanceMeters(),
+                candidate.getReviewCount() == null ? 0L : candidate.getReviewCount(),
                 candidate.getCategoryCode(),
                 candidate.getCategoryName(),
                 Boolean.TRUE.equals(candidate.getVerified()),

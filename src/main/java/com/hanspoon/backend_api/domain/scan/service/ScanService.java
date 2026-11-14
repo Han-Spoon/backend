@@ -1,5 +1,6 @@
 package com.hanspoon.backend_api.domain.scan.service;
 
+import com.hanspoon.backend_api.domain.consent.service.ConsentService;
 import com.hanspoon.backend_api.domain.scan.dto.MenuResult;
 import com.hanspoon.backend_api.domain.scan.dto.ScanCreatedResponse;
 import com.hanspoon.backend_api.domain.scan.dto.ScanHistoryItem;
@@ -42,6 +43,7 @@ public class ScanService {
     private final ScanRecordService scanRecordService;
     private final ScanProcessor scanProcessor;
     private final ScanStateWriter scanStateWriter;
+    private final ConsentService consentService;
 
     public ScanService(
             S3StorageService s3StorageService,
@@ -50,7 +52,8 @@ public class ScanService {
             StoreRepository storeRepository,
             ScanRecordService scanRecordService,
             ScanProcessor scanProcessor,
-            ScanStateWriter scanStateWriter) {
+            ScanStateWriter scanStateWriter,
+            ConsentService consentService) {
         this.s3StorageService = s3StorageService;
         this.scanSessionRepository = scanSessionRepository;
         this.menuAnalysisRepository = menuAnalysisRepository;
@@ -58,9 +61,11 @@ public class ScanService {
         this.scanRecordService = scanRecordService;
         this.scanProcessor = scanProcessor;
         this.scanStateWriter = scanStateWriter;
+        this.consentService = consentService;
     }
 
     public ScanCreatedResponse startScan(UUID userId, StartScanRequest request) {
+        consentService.requireSensitiveConsent(userId);
         // 형식, 소유권 검증 (외부 입력)
         String storageKey = s3StorageService.resolveKey(userId, request.storageKey());
 
