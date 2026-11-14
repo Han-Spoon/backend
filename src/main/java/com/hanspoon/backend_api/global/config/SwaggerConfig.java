@@ -28,7 +28,7 @@ public class SwaggerConfig {
                 .title("Han-Spoon Backend API")
                 .description("Foreign tourist service API for Han-Spoon.")
                 .version("v1")
-                .contact(new Contact().name("Han-Spoon Backend Team").email("support@han-sppon.com"))
+                .contact(new Contact().name("Han-Spoon Backend Team").email("support@han-spoon.com"))
                 .license(new License().name("Private").url("https://han-spoon.com"));
     }
 
