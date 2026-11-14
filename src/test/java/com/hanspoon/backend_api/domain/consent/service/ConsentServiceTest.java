@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hanspoon.backend_api.domain.consent.dto.ConsentDecisionRequest;
@@ -51,5 +52,15 @@ class ConsentServiceTest {
                 "service", true, "privacy", true, "sensitive", true, "marketing", false)));
         verify(jdbcTemplate, times(4)).update(eq("INSERT INTO user_consent_decisions (id, user_id, document_id, document_version, accepted) "
                 + "VALUES (?, ?, ?, ?, ?)"), any(), any(), any(), eq("2026-11-14"), any());
+    }
+
+    @Test
+    void childCannotRecordOwnConsent() {
+        UUID userId = UUID.randomUUID();
+        when(jdbcTemplate.queryForObject("SELECT age_group FROM users WHERE id = ?", String.class, userId))
+                .thenReturn("UNDER_14");
+        assertThatThrownBy(() -> service.decide(userId, new ConsentDecisionRequest("2026-11-14", Map.of(
+                "service", true, "privacy", true, "sensitive", true, "marketing", true))))
+                .isInstanceOf(BusinessException.class);
     }
 }

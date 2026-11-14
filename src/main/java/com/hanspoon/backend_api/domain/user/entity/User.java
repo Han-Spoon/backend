@@ -1,8 +1,11 @@
 package com.hanspoon.backend_api.domain.user.entity;
 
+import com.hanspoon.backend_api.domain.auth.dto.AgeGroup;
 import com.hanspoon.backend_api.global.common.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.util.UUID;
@@ -29,16 +32,26 @@ public class User extends BaseEntity {
     @Column(name = "language_code", length = 2, nullable = false)
     private String languageCode;
 
-    private User(String email, String nickname, String languageCode) {
+    @Enumerated(EnumType.STRING)
+    @Column(name = "age_group", length = 16, nullable = false)
+    private AgeGroup ageGroup;
+
+    private User(String email, String nickname, String languageCode, AgeGroup ageGroup) {
         this.id = UUID.randomUUID();
         this.email = email;
         this.nickname = nickname;
         this.languageCode = languageCode;
+        this.ageGroup = ageGroup;
     }
 
     public static User create(String email, String nickname, String languageCode) {
         String resolvedLanguage = (languageCode == null || languageCode.isBlank()) ? "en" : languageCode;
-        return new User(email, nickname, resolvedLanguage);
+        return new User(email, nickname, resolvedLanguage, AgeGroup.OVER_14);
+    }
+
+    public static User create(String email, String nickname, String languageCode, AgeGroup ageGroup) {
+        String resolvedLanguage = (languageCode == null || languageCode.isBlank()) ? "en" : languageCode;
+        return new User(email, nickname, resolvedLanguage, ageGroup);
     }
 
     public void changeLanguage(String languageCode) {

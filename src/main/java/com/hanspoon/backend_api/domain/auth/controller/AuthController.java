@@ -33,7 +33,7 @@ public class AuthController {
     @Operation(summary = "구글 로그인(ID Token 검증 → JWT 발급). 신규 가입 시 201")
     @PostMapping("/google")
     public ResponseEntity<LoginResponse> loginWithGoogle(@Valid @RequestBody GoogleLoginRequest request) {
-        LoginResult result = authService.loginWithGoogle(request.idToken());
+        LoginResult result = authService.loginWithGoogle(request.idToken(), request.ageGroup(), request.guardianCode());
         HttpStatus status = result.newUser() ? HttpStatus.CREATED : HttpStatus.OK;
         return ResponseEntity.status(status).body(LoginResponse.from(result));
     }

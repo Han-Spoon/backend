@@ -22,6 +22,7 @@ public enum ErrorCode {
     // ── 인증 · 인가 ─────────────────────────────────────────────────────
     INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "INVALID_TOKEN", "Invalid or expired token."),
     ACCESS_DENIED(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "Access is denied."),
+    GUARDIAN_CONSENT_REQUIRED(HttpStatus.FORBIDDEN, "GUARDIAN_CONSENT_REQUIRED", "Verified legal guardian consent is required."),
 
     // ── 사용자 · 프로필 ─────────────────────────────────────────────────
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "User not found."),

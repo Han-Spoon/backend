@@ -1,10 +1,12 @@
 package com.hanspoon.backend_api.domain.auth.service;
 
+import com.hanspoon.backend_api.domain.auth.dto.AgeGroup;
 import com.hanspoon.backend_api.domain.auth.entity.AuthProvider;
 import com.hanspoon.backend_api.domain.auth.entity.UserAuthIdentity;
 import com.hanspoon.backend_api.domain.auth.entity.UserSession;
 import com.hanspoon.backend_api.domain.auth.repository.UserAuthIdentityRepository;
 import com.hanspoon.backend_api.domain.auth.repository.UserSessionRepository;
+import com.hanspoon.backend_api.domain.consent.service.ConsentService;
 import com.hanspoon.backend_api.domain.user.entity.User;
 import com.hanspoon.backend_api.domain.user.repository.UserProfileRepository;
 import com.hanspoon.backend_api.domain.user.repository.UserRepository;
@@ -31,6 +33,8 @@ public class AuthService {
     private final UserAuthIdentityRepository userAuthIdentityRepository;
     private final UserSessionRepository userSessionRepository;
     private final UserProfileRepository userProfileRepository;
+    private final GuardianApprovalService guardianApprovalService;
+    private final ConsentService consentService;
     private final Duration refreshTokenExpiration;
     private final Duration refreshRotationGrace;
 
@@ -42,6 +46,8 @@ public class AuthService {
             UserAuthIdentityRepository userAuthIdentityRepository,
             UserSessionRepository userSessionRepository,
             UserProfileRepository userProfileRepository,
+            GuardianApprovalService guardianApprovalService,
+            ConsentService consentService,
             @Value("${app.security.jwt.refresh-token-expiration}") Duration refreshTokenExpiration,
             @Value("${app.security.jwt.refresh-rotation-grace}") Duration refreshRotationGrace) {
 
@@ -52,12 +58,24 @@ public class AuthService {
         this.userAuthIdentityRepository = userAuthIdentityRepository;
         this.userSessionRepository = userSessionRepository;
         this.userProfileRepository = userProfileRepository;
+        this.guardianApprovalService = guardianApprovalService;
+        this.consentService = consentService;
         this.refreshTokenExpiration = refreshTokenExpiration;
         this.refreshRotationGrace = refreshRotationGrace;
     }
 
     @Transactional
-    public LoginResult loginWithGoogle(String idToken) {
+    public LoginResult loginWithGoogle(String idToken, AgeGroup ageGroup, String guardianCode) {
+        // 승인 코드를 먼저 검사하고 행을 잠근다. 미승인 아동의 Google ID Token은 검증하지 않는다.
+        UUID guardianApprovalId = null;
+        if (ageGroup == AgeGroup.UNDER_14) {
+            guardianApprovalId = guardianApprovalService.lockValidApproval(guardianCode, consentService.getDocuments().version());
+            if (guardianApprovalId == null) {
+                throw new BusinessException(ErrorCode.GUARDIAN_CONSENT_REQUIRED);
+            }
+        } else if (ageGroup != AgeGroup.OVER_14 || guardianCode != null) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
         Jwt googleToken = googleIdTokenVerifier.verify(idToken);
         String providerId = googleToken.getSubject();
         String email = googleToken.getClaimAsString("email");
@@ -86,10 +104,18 @@ public class AuthService {
                 user = existing;
                 newUser = false;
             } else {
-                user = userRepository.save(User.create(email, resolveNickname(name, email), "en"));
+                user = userRepository.save(User.create(email, resolveNickname(name, email), "en", ageGroup));
                 newUser = true;
             }
             userAuthIdentityRepository.save(UserAuthIdentity.google(user.getId(), providerId));
+        }
+
+        if (user.getAgeGroup() != ageGroup) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED, "Age group does not match this account.");
+        }
+        if (guardianApprovalId != null) {
+            guardianApprovalService.linkToUser(guardianApprovalId, user.getId());
+            consentService.recordGuardianConsent(user.getId());
         }
 
         String accessToken = jwtTokenProvider.createAccessToken(user.getId());
@@ -109,6 +135,9 @@ public class AuthService {
         Instant now = Instant.now();
         if (!session.isActive(now) && !session.isWithinRotationGrace(now, refreshRotationGrace)) {
             throw new BusinessException(ErrorCode.INVALID_TOKEN, "Expired or revoked refresh token.");
+        }
+        if (!consentService.hasActiveGuardianApprovalIfMinor(session.getUserId())) {
+            throw new BusinessException(ErrorCode.GUARDIAN_CONSENT_REQUIRED);
         }
 
         // 회전: 기존 세션 폐기 후 신규 발급
