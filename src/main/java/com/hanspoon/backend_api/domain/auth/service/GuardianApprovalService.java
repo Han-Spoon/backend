@@ -27,14 +27,17 @@ public class GuardianApprovalService {
                 "SELECT id FROM guardian_approvals WHERE code_hash = ? AND document_version = ? "
                         + "AND revoked_at IS NULL AND expires_at > now() FOR UPDATE",
                 result -> result.next() ? (UUID) result.getObject("id") : null,
-                sha256Hex(code), documentVersion);
+                sha256Hex(code),
+                documentVersion);
     }
 
     public void linkToUser(UUID approvalId, UUID userId) {
         int linked = jdbcTemplate.update(
                 "UPDATE guardian_approvals SET user_id = ?, linked_at = COALESCE(linked_at, now()) "
                         + "WHERE id = ? AND (user_id IS NULL OR user_id = ?)",
-                userId, approvalId, userId);
+                userId,
+                approvalId,
+                userId);
         if (linked != 1) {
             throw new BusinessException(ErrorCode.GUARDIAN_CONSENT_REQUIRED);
         }

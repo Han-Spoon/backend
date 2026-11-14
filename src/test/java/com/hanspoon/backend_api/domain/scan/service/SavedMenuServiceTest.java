@@ -30,18 +30,39 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class SavedMenuServiceTest {
-    @Mock SavedMenuRepository favorites;
-    @Mock ScanSessionRepository scans;
-    @Mock MenuAnalysisRepository analyses;
-    @Mock ScanRecordService records;
-    @InjectMocks SavedMenuService service;
+    @Mock
+    SavedMenuRepository favorites;
+
+    @Mock
+    ScanSessionRepository scans;
+
+    @Mock
+    MenuAnalysisRepository analyses;
+
+    @Mock
+    ScanRecordService records;
+
+    @InjectMocks
+    SavedMenuService service;
 
     @Test
     void savesAnalyzedMenuUnderItsOwnScanAndKeepsRepeatedSavesIdempotent() {
         UUID userId = UUID.randomUUID();
         ScanSession scan = ScanSession.create(userId, null, 1, 0, ScanStatus.COMPLETED, Instant.now());
-        MenuAnalysis menu = MenuAnalysis.create(scan.getId(), 0, "야채김밥", "Vegetable gimbap",
-                null, null, "4000", false, null, RiskLevel.CAUTION, List.of("fish_cake"), null, null);
+        MenuAnalysis menu = MenuAnalysis.create(
+                scan.getId(),
+                0,
+                "야채김밥",
+                "Vegetable gimbap",
+                null,
+                null,
+                "4000",
+                false,
+                null,
+                RiskLevel.CAUTION,
+                List.of("fish_cake"),
+                null,
+                null);
         SavedMenu saved = SavedMenu.create(userId, scan.getId(), 0, "야채김밥", RiskLevel.CAUTION, null, null);
         SaveMenuRequest request = new SaveMenuRequest(scan.getId(), 0);
         when(scans.findByIdAndUserIdForUpdate(scan.getId(), userId)).thenReturn(Optional.of(scan));

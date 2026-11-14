@@ -5,19 +5,19 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import com.hanspoon.backend_api.domain.auth.dto.AgeGroup;
-import com.hanspoon.backend_api.domain.consent.dto.LegalDocumentBundle;
-import com.hanspoon.backend_api.domain.consent.service.ConsentService;
 import com.hanspoon.backend_api.domain.auth.entity.AuthProvider;
 import com.hanspoon.backend_api.domain.auth.entity.UserAuthIdentity;
 import com.hanspoon.backend_api.domain.auth.entity.UserSession;
 import com.hanspoon.backend_api.domain.auth.repository.UserAuthIdentityRepository;
 import com.hanspoon.backend_api.domain.auth.repository.UserSessionRepository;
+import com.hanspoon.backend_api.domain.consent.dto.LegalDocumentBundle;
+import com.hanspoon.backend_api.domain.consent.service.ConsentService;
 import com.hanspoon.backend_api.domain.user.entity.User;
 import com.hanspoon.backend_api.domain.user.repository.UserProfileRepository;
 import com.hanspoon.backend_api.domain.user.repository.UserRepository;
@@ -71,7 +71,9 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-        lenient().when(consentService.hasActiveGuardianApprovalIfMinor(any(UUID.class))).thenReturn(true);
+        lenient()
+                .when(consentService.hasActiveGuardianApprovalIfMinor(any(UUID.class)))
+                .thenReturn(true);
         authService = new AuthService(
                 googleIdTokenVerifier,
                 jwtTokenProvider,

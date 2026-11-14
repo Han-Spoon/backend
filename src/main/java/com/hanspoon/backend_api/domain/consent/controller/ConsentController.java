@@ -33,7 +33,8 @@ public class ConsentController {
     }
 
     @PostMapping("/me")
-    public ConsentStatusResponse decide(@CurrentUser String userId, @Valid @RequestBody ConsentDecisionRequest request) {
+    public ConsentStatusResponse decide(
+            @CurrentUser String userId, @Valid @RequestBody ConsentDecisionRequest request) {
         return consentService.decide(UUID.fromString(userId), request);
     }
 }

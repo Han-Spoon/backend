@@ -1,6 +1,5 @@
 package com.hanspoon.backend_api.domain.consent.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hanspoon.backend_api.domain.consent.dto.ConsentDecisionRequest;
 import com.hanspoon.backend_api.domain.consent.dto.ConsentStatusResponse;
 import com.hanspoon.backend_api.domain.consent.dto.LegalDocumentBundle;
@@ -15,6 +14,7 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
 
 @Service
 public class ConsentService {
@@ -29,7 +29,10 @@ public class ConsentService {
         try (var input = new ClassPathResource("legal/2026-11-14.json").getInputStream()) {
             this.documents = objectMapper.readValue(input, LegalDocumentBundle.class);
         }
-        if (!documents.documents().stream().map(LegalDocumentBundle.LegalDocument::id).collect(java.util.stream.Collectors.toSet()).equals(DOCUMENT_IDS)) {
+        if (!documents.documents().stream()
+                .map(LegalDocumentBundle.LegalDocument::id)
+                .collect(java.util.stream.Collectors.toSet())
+                .equals(DOCUMENT_IDS)) {
             throw new IllegalStateException("Legal document catalog does not match consent IDs.");
         }
     }
@@ -51,11 +54,15 @@ public class ConsentService {
                 userId,
                 documents.version());
         boolean requiredAccepted = REQUIRED.stream().allMatch(id -> Boolean.TRUE.equals(decisions.get(id)));
-        boolean guardianManaged = "UNDER_14".equals(jdbcTemplate.queryForObject(
-                "SELECT age_group FROM users WHERE id = ?", String.class, userId));
+        boolean guardianManaged = "UNDER_14"
+                .equals(jdbcTemplate.queryForObject("SELECT age_group FROM users WHERE id = ?", String.class, userId));
         boolean guardianActive = !guardianManaged || hasActiveGuardianApprovalIfMinor(userId);
-        return new ConsentStatusResponse(documents.version(), decisions,
-                requiredAccepted && guardianActive, guardianManaged, guardianManaged && !guardianActive);
+        return new ConsentStatusResponse(
+                documents.version(),
+                decisions,
+                requiredAccepted && guardianActive,
+                guardianManaged,
+                guardianManaged && !guardianActive);
     }
 
     @Transactional
@@ -68,13 +75,20 @@ public class ConsentService {
                 || request.decisions() == null
                 || !request.decisions().keySet().equals(DOCUMENT_IDS)
                 || request.decisions().values().stream().anyMatch(value -> value == null)
-                || REQUIRED.stream().anyMatch(id -> !Boolean.TRUE.equals(request.decisions().get(id)))) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST, "Current version and all required consents are needed.");
+                || REQUIRED.stream()
+                        .anyMatch(id -> !Boolean.TRUE.equals(request.decisions().get(id)))) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_REQUEST, "Current version and all required consents are needed.");
         }
-        request.decisions().forEach((id, accepted) -> jdbcTemplate.update(
-                "INSERT INTO user_consent_decisions (id, user_id, document_id, document_version, accepted) "
-                        + "VALUES (?, ?, ?, ?, ?)",
-                UUID.randomUUID(), userId, id, documents.version(), accepted));
+        request.decisions()
+                .forEach((id, accepted) -> jdbcTemplate.update(
+                        "INSERT INTO user_consent_decisions (id, user_id, document_id, document_version, accepted) "
+                                + "VALUES (?, ?, ?, ?, ?)",
+                        UUID.randomUUID(),
+                        userId,
+                        id,
+                        documents.version(),
+                        accepted));
         return getStatus(userId);
     }
 
@@ -87,7 +101,11 @@ public class ConsentService {
             jdbcTemplate.update(
                     "INSERT INTO user_consent_decisions (id, user_id, document_id, document_version, accepted, decision_actor) "
                             + "VALUES (?, ?, ?, ?, ?, 'GUARDIAN')",
-                    UUID.randomUUID(), userId, id, documents.version(), !id.equals("marketing"));
+                    UUID.randomUUID(),
+                    userId,
+                    id,
+                    documents.version(),
+                    !id.equals("marketing"));
         }
     }
 
@@ -105,7 +123,9 @@ public class ConsentService {
         Integer count = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM guardian_approvals WHERE user_id = ? AND document_version = ? "
                         + "AND revoked_at IS NULL AND expires_at > now()",
-                Integer.class, userId, documents.version());
+                Integer.class,
+                userId,
+                documents.version());
         return count != null && count > 0;
     }
 }

@@ -42,8 +42,14 @@ public class SavedMenu extends BaseEntity {
     @Column(name = "store_name", length = 200)
     private String storeName;
 
-    private SavedMenu(UUID userId, UUID scanSessionId, Integer displayOrder, String menuName,
-            RiskLevel riskLevel, Long storeId, String storeName) {
+    private SavedMenu(
+            UUID userId,
+            UUID scanSessionId,
+            Integer displayOrder,
+            String menuName,
+            RiskLevel riskLevel,
+            Long storeId,
+            String storeName) {
         this.id = UUID.randomUUID();
         this.userId = userId;
         this.scanSessionId = scanSessionId;
@@ -54,8 +60,14 @@ public class SavedMenu extends BaseEntity {
         this.storeName = storeName;
     }
 
-    public static SavedMenu create(UUID userId, UUID scanSessionId, Integer displayOrder, String menuName,
-            RiskLevel riskLevel, Long storeId, String storeName) {
+    public static SavedMenu create(
+            UUID userId,
+            UUID scanSessionId,
+            Integer displayOrder,
+            String menuName,
+            RiskLevel riskLevel,
+            Long storeId,
+            String storeName) {
         return new SavedMenu(userId, scanSessionId, displayOrder, menuName, riskLevel, storeId, storeName);
     }
 }

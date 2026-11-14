@@ -8,6 +8,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface SavedMenuRepository extends JpaRepository<SavedMenu, UUID> {
     List<SavedMenu> findByUserIdOrderByCreatedAtDesc(UUID userId);
-    Optional<SavedMenu> findByUserIdAndScanSessionIdAndDisplayOrder(UUID userId, UUID scanSessionId, Integer displayOrder);
+
+    Optional<SavedMenu> findByUserIdAndScanSessionIdAndDisplayOrder(
+            UUID userId, UUID scanSessionId, Integer displayOrder);
+
     Optional<SavedMenu> findByIdAndUserId(UUID id, UUID userId);
 }

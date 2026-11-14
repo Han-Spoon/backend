@@ -69,7 +69,8 @@ public class AuthService {
         // 승인 코드를 먼저 검사하고 행을 잠근다. 미승인 아동의 Google ID Token은 검증하지 않는다.
         UUID guardianApprovalId = null;
         if (ageGroup == AgeGroup.UNDER_14) {
-            guardianApprovalId = guardianApprovalService.lockValidApproval(guardianCode, consentService.getDocuments().version());
+            guardianApprovalId = guardianApprovalService.lockValidApproval(
+                    guardianCode, consentService.getDocuments().version());
             if (guardianApprovalId == null) {
                 throw new BusinessException(ErrorCode.GUARDIAN_CONSENT_REQUIRED);
             }
