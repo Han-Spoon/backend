@@ -17,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Flyway V8~V13(스키마 v2 확장 단계)의 핵심 DB 계약을 실제 PostgreSQL 에서 검증한다.
- * 전체 무결성 시나리오(303건)는 설계 단계에서 별도 SQL 로 검증했다(2026-11-15, erd/DECISIONS.md §8).
+ * 전체 무결성 시나리오(303건)는 설계 단계에서 별도 SQL 로 검증했다(2026-11-15, docs/erd/DECISIONS.md §8).
  */
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
