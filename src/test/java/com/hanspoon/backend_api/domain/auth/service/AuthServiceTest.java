@@ -5,19 +5,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.hanspoon.backend_api.domain.auth.dto.AgeGroup;
 import com.hanspoon.backend_api.domain.auth.entity.AuthProvider;
 import com.hanspoon.backend_api.domain.auth.entity.UserAuthIdentity;
 import com.hanspoon.backend_api.domain.auth.entity.UserSession;
 import com.hanspoon.backend_api.domain.auth.repository.UserAuthIdentityRepository;
 import com.hanspoon.backend_api.domain.auth.repository.UserSessionRepository;
-import com.hanspoon.backend_api.domain.consent.dto.LegalDocumentBundle;
-import com.hanspoon.backend_api.domain.consent.service.ConsentService;
 import com.hanspoon.backend_api.domain.user.entity.User;
 import com.hanspoon.backend_api.domain.user.repository.UserProfileRepository;
 import com.hanspoon.backend_api.domain.user.repository.UserRepository;
@@ -59,21 +53,12 @@ class AuthServiceTest {
     @Mock
     private UserProfileRepository userProfileRepository;
 
-    @Mock
-    private GuardianApprovalService guardianApprovalService;
-
-    @Mock
-    private ConsentService consentService;
-
     private final RefreshTokenSupport refreshTokenSupport = new RefreshTokenSupport();
 
     private AuthService authService;
 
     @BeforeEach
     void setUp() {
-        lenient()
-                .when(consentService.hasActiveGuardianApprovalIfMinor(any(UUID.class)))
-                .thenReturn(true);
         authService = new AuthService(
                 googleIdTokenVerifier,
                 jwtTokenProvider,
@@ -82,8 +67,6 @@ class AuthServiceTest {
                 userAuthIdentityRepository,
                 userSessionRepository,
                 userProfileRepository,
-                guardianApprovalService,
-                consentService,
                 Duration.ofDays(14),
                 Duration.ofSeconds(30));
     }
@@ -107,7 +90,7 @@ class AuthServiceTest {
         when(jwtTokenProvider.createAccessToken(any(UUID.class))).thenReturn("access-token");
         when(userProfileRepository.existsByUserId(any(UUID.class))).thenReturn(false);
 
-        LoginResult result = authService.loginWithGoogle("id-token", AgeGroup.OVER_14, null);
+        LoginResult result = authService.loginWithGoogle("id-token");
 
         assertThat(result.newUser()).isTrue();
         assertThat(result.hasProfile()).isFalse();
@@ -127,41 +110,11 @@ class AuthServiceTest {
         when(jwtTokenProvider.createAccessToken(existing.getId())).thenReturn("access-token");
         when(userProfileRepository.existsByUserId(existing.getId())).thenReturn(true);
 
-        LoginResult result = authService.loginWithGoogle("id-token", AgeGroup.OVER_14, null);
+        LoginResult result = authService.loginWithGoogle("id-token");
 
         assertThat(result.newUser()).isFalse();
         assertThat(result.hasProfile()).isTrue();
         assertThat(result.refreshToken()).isNotBlank();
-    }
-
-    @Test
-    void minorWithoutVerifiedGuardianCannotSendGoogleToken() {
-        when(consentService.getDocuments()).thenReturn(new LegalDocumentBundle("2026-11-14", "2026-11-14", List.of()));
-        assertThatThrownBy(() -> authService.loginWithGoogle("id-token", AgeGroup.UNDER_14, null))
-                .isInstanceOf(BusinessException.class)
-                .extracting(ex -> ((BusinessException) ex).getErrorCode())
-                .isEqualTo(ErrorCode.GUARDIAN_CONSENT_REQUIRED);
-        verifyNoInteractions(googleIdTokenVerifier);
-    }
-
-    @Test
-    void minorWithVerifiedGuardianLinksApprovalAndRecordsConsent() {
-        UUID approvalId = UUID.randomUUID();
-        String code = "hs-" + "A".repeat(43);
-        when(consentService.getDocuments()).thenReturn(new LegalDocumentBundle("2026-11-14", "2026-11-14", List.of()));
-        when(guardianApprovalService.lockValidApproval(code, "2026-11-14")).thenReturn(approvalId);
-        when(googleIdTokenVerifier.verify("id-token")).thenReturn(googleJwt("minor-1", "child@example.com", "Child"));
-        when(userAuthIdentityRepository.findByProviderAndProviderId(AuthProvider.GOOGLE, "minor-1"))
-                .thenReturn(Optional.empty());
-        when(userRepository.findByEmail("child@example.com")).thenReturn(Optional.empty());
-        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(jwtTokenProvider.createAccessToken(any(UUID.class))).thenReturn("access-token");
-
-        LoginResult result = authService.loginWithGoogle("id-token", AgeGroup.UNDER_14, code);
-
-        assertThat(result.user().getAgeGroup()).isEqualTo(AgeGroup.UNDER_14);
-        verify(guardianApprovalService).linkToUser(approvalId, result.user().getId());
-        verify(consentService).recordGuardianConsent(result.user().getId());
     }
 
     @Test

@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import com.hanspoon.backend_api.domain.consent.dto.ConsentDecisionRequest;
 import com.hanspoon.backend_api.global.exception.BusinessException;
@@ -63,18 +62,5 @@ class ConsentServiceTest {
                         any(),
                         eq("2026-11-14"),
                         any());
-    }
-
-    @Test
-    void childCannotRecordOwnConsent() {
-        UUID userId = UUID.randomUUID();
-        when(jdbcTemplate.queryForObject("SELECT age_group FROM users WHERE id = ?", String.class, userId))
-                .thenReturn("UNDER_14");
-        assertThatThrownBy(() -> service.decide(
-                        userId,
-                        new ConsentDecisionRequest(
-                                "2026-11-14",
-                                Map.of("service", true, "privacy", true, "sensitive", true, "marketing", true))))
-                .isInstanceOf(BusinessException.class);
     }
 }

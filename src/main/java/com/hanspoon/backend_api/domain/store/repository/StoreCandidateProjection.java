@@ -17,8 +17,6 @@ public interface StoreCandidateProjection {
 
     Integer getDistanceMeters();
 
-    Long getReviewCount();
-
     Double getNameSimilarity();
 
     String getCategoryCode();
