@@ -22,8 +22,8 @@ public record ProfileResponse(
         @Schema(description = "매운 음식 불가", example = "true") @JsonProperty("noSpicy") Boolean noSpicy,
         @Schema(description = "알코올 불가", example = "true") @JsonProperty("noAlcohol") Boolean noAlcohol) {
 
-    public static ProfileResponse of(UserProfile profile, List<AllergyCode> allergies) {
-        List<AllergyCode> codes = allergies == null ? List.of() : allergies;
+    public static ProfileResponse of(UserProfile profile) {
+        List<AllergyCode> codes = profile.getAllergies();
         boolean hasReligion = profile.getReligionType() != null && profile.getReligionType() != ReligionType.NONE;
         return new ProfileResponse(
                 profile.getNationality(),

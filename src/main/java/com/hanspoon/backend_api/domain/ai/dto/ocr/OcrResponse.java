@@ -11,7 +11,7 @@ import tools.jackson.databind.annotation.JsonNaming;
  * 이 단계의 menu_analyses[].risk_level 은 항상 null (룰엔진이 채움).
  *
  * @param scanSession scan_sessions 테이블 매핑 정보
- * @param menuImage menu_images 테이블 매핑 정보
+ * @param menuImage scan_images 테이블 매핑 정보 (V8 에서 menu_images 에서 이름 변경)
  * @param scanQuality 품질/재촬영 판단 메타데이터
  * @param menuAnalyses 추출된 메뉴 분석 목록
  * @param gptQualityJudgment GPT 품질 평가 (옵션, 느슨한 구조라 JsonNode 로 보존)
