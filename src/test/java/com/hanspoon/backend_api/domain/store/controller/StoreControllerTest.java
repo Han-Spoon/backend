@@ -46,7 +46,6 @@ class StoreControllerTest {
                         37.4978,
                         127.0275,
                         42,
-                        0L,
                         "I20101",
                         "한식 일반 음식점업",
                         true,

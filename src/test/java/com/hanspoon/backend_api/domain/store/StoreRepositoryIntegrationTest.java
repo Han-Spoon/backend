@@ -67,7 +67,7 @@ class StoreRepositoryIntegrationTest {
     }
 
     @Test
-    void returnsOnlyActiveStoresInsideRadiusInDistanceOrder() {
+    void returnsOnlyActiveStoresInsideRadiusInStablePriorityOrder() {
         long nearbyId = insertStore("nearby-store", "한스푼 역삼점", 37.5001, 127.0000, StoreStatus.ACTIVE, false);
         long verifiedId = insertStore("verified-store", "한스푼 강남점", 37.5010, 127.0000, StoreStatus.ACTIVE, true);
         insertStore("inactive-store", "한스푼 휴업점", 37.5000, 127.0000, StoreStatus.INACTIVE, true);
@@ -76,12 +76,11 @@ class StoreRepositoryIntegrationTest {
         List<StoreCandidateProjection> candidates =
                 storeRepository.findNearbyCandidates(CENTER_LATITUDE, CENTER_LONGITUDE, 500, 10);
 
-        assertThat(candidates).extracting(StoreCandidateProjection::getStoreId).containsExactly(nearbyId, verifiedId);
-        assertThat(candidates.getFirst().getVerified()).isFalse();
+        assertThat(candidates).extracting(StoreCandidateProjection::getStoreId).containsExactly(verifiedId, nearbyId);
+        assertThat(candidates.getFirst().getVerified()).isTrue();
         assertThat(candidates.getFirst().getCategoryCode()).isEqualTo("I20101");
         assertThat(candidates.getFirst().getCategoryName()).isEqualTo("한식 일반 음식점업");
-        assertThat(candidates.getFirst().getDistanceMeters()).isBetween(10, 12);
-        assertThat(candidates.getFirst().getReviewCount()).isZero();
+        assertThat(candidates.getFirst().getDistanceMeters()).isBetween(100, 120);
         assertThat(candidates.getFirst().getNameSimilarity()).isNull();
     }
 

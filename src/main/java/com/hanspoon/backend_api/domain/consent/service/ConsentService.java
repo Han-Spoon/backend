@@ -54,23 +54,11 @@ public class ConsentService {
                 userId,
                 documents.version());
         boolean requiredAccepted = REQUIRED.stream().allMatch(id -> Boolean.TRUE.equals(decisions.get(id)));
-        boolean guardianManaged = "UNDER_14"
-                .equals(jdbcTemplate.queryForObject("SELECT age_group FROM users WHERE id = ?", String.class, userId));
-        boolean guardianActive = !guardianManaged || hasActiveGuardianApprovalIfMinor(userId);
-        return new ConsentStatusResponse(
-                documents.version(),
-                decisions,
-                requiredAccepted && guardianActive,
-                guardianManaged,
-                guardianManaged && !guardianActive);
+        return new ConsentStatusResponse(documents.version(), decisions, requiredAccepted);
     }
 
     @Transactional
     public ConsentStatusResponse decide(UUID userId, ConsentDecisionRequest request) {
-        String ageGroup = jdbcTemplate.queryForObject("SELECT age_group FROM users WHERE id = ?", String.class, userId);
-        if ("UNDER_14".equals(ageGroup)) {
-            throw new BusinessException(ErrorCode.GUARDIAN_CONSENT_REQUIRED);
-        }
         if (!documents.version().equals(request.version())
                 || request.decisions() == null
                 || !request.decisions().keySet().equals(DOCUMENT_IDS)
@@ -92,40 +80,9 @@ public class ConsentService {
         return getStatus(userId);
     }
 
-    @Transactional
-    public void recordGuardianConsent(UUID userId) {
-        if (getStatus(userId).hasRequiredConsents()) {
-            return;
-        }
-        for (String id : DOCUMENT_IDS) {
-            jdbcTemplate.update(
-                    "INSERT INTO user_consent_decisions (id, user_id, document_id, document_version, accepted, decision_actor) "
-                            + "VALUES (?, ?, ?, ?, ?, 'GUARDIAN')",
-                    UUID.randomUUID(),
-                    userId,
-                    id,
-                    documents.version(),
-                    !id.equals("marketing"));
-        }
-    }
-
     public void requireSensitiveConsent(UUID userId) {
         if (!getStatus(userId).hasRequiredConsents()) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED, "Required consent is needed before saving a profile.");
         }
-    }
-
-    public boolean hasActiveGuardianApprovalIfMinor(UUID userId) {
-        String ageGroup = jdbcTemplate.queryForObject("SELECT age_group FROM users WHERE id = ?", String.class, userId);
-        if (!"UNDER_14".equals(ageGroup)) {
-            return true;
-        }
-        Integer count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM guardian_approvals WHERE user_id = ? AND document_version = ? "
-                        + "AND revoked_at IS NULL AND expires_at > now()",
-                Integer.class,
-                userId,
-                documents.version());
-        return count != null && count > 0;
     }
 }
