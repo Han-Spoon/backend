@@ -154,7 +154,7 @@ public class ScanService {
         return ScanHistoryItem.from(session);
     }
 
-    /** 본인 스캔 이력 삭제. 연관 menu_images/menu_analyses 는 FK CASCADE 로 함께 삭제. */
+    /** 본인 스캔 이력 삭제. 연관 scan_images/menu_analyses 는 FK CASCADE 로 함께 삭제. */
     @Transactional
     public void deleteScan(UUID userId, UUID scanId) {
         ScanSession session = scanSessionRepository

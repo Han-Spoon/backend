@@ -3,7 +3,9 @@ package com.hanspoon.backend_api.domain.scan.entity;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.hanspoon.backend_api.domain.ai.dto.common.RiskLevel;
 import com.hanspoon.backend_api.domain.store.entity.StoreMatchMethod;
+import java.util.Arrays;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -20,6 +22,26 @@ class ScanSessionTest {
 
         assertThat(session.getScanStatus()).isEqualTo(ScanStatus.FAILED);
         assertThat(session.getFailureCode()).isEqualTo("SCAN_PROCESSING_TIMEOUT");
+    }
+
+    @Test
+    void countsRiskLevelsAndSkipsMenusWithoutVerdict() {
+        ScanSession session = ScanSession.startLegacy(UUID.randomUUID(), "scans/user/menu.jpg");
+
+        session.applyRiskCounts(Arrays.asList(RiskLevel.SAFE, RiskLevel.CAUTION, null, RiskLevel.CAUTION));
+
+        assertThat(session.getDangerCount()).isZero();
+        assertThat(session.getCautionCount()).isEqualTo(2);
+        assertThat(session.getSafeCount()).isEqualTo(1);
+    }
+
+    @Test
+    void riskCountsCannotBeWrittenAfterTerminalState() {
+        ScanSession session = ScanSession.startLegacy(UUID.randomUUID(), "scans/user/menu.jpg");
+        session.markFailed("SCAN_PROCESSING_TIMEOUT");
+
+        assertThatThrownBy(() -> session.applyRiskCounts(Arrays.asList(RiskLevel.DANGER)))
+                .isInstanceOf(IllegalStateException.class);
     }
 
     @Test

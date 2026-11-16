@@ -42,7 +42,8 @@ out/
 !.env.example
 
 ### docs ###
-docs/
+docs/*
+!docs/erd/
 
 ### Logs ###
 logs/

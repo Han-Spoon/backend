@@ -1,5 +1,6 @@
 package com.hanspoon.backend_api.domain.scan.entity;
 
+import com.hanspoon.backend_api.domain.ai.dto.common.RiskLevel;
 import com.hanspoon.backend_api.domain.store.entity.StoreMatchMethod;
 import com.hanspoon.backend_api.global.common.BaseEntity;
 import jakarta.persistence.Column;
@@ -19,7 +20,8 @@ import org.hibernate.type.SqlTypes;
 
 /**
  * 스캔 세션. users 와 N:1 (FK ON DELETE CASCADE). OCR 결과의 scan_session 매핑.
- * riskyMenuCount 는 룰엔진 단계에서 채워진다.
+ * riskyMenuCount 는 룰엔진 단계에서 채워진다. danger/caution/safe 카운터는 같은 완료 트랜잭션에서 메뉴별 위험도로 채우며,
+ * V14(Prepare/Judge 연동)에서 riskyMenuCount 를 대체한다.
  */
 @Entity
 @Table(name = "scan_sessions")
@@ -56,6 +58,16 @@ public class ScanSession extends BaseEntity {
 
     @Column(name = "risky_menu_count")
     private Integer riskyMenuCount;
+
+    /** 이력 목록용 비정규화 카운터(C10). 목록 조회가 menu_analyses 를 집계하지 않게 한다. */
+    @Column(name = "danger_count")
+    private Integer dangerCount;
+
+    @Column(name = "caution_count")
+    private Integer cautionCount;
+
+    @Column(name = "safe_count")
+    private Integer safeCount;
 
     @Column(name = "scan_status", length = 20, nullable = false)
     private ScanStatus scanStatus;
@@ -158,6 +170,14 @@ public class ScanSession extends BaseEntity {
         this.failureCode = null;
     }
 
+    /** 완료 직전 메뉴별 위험도로 위험도별 메뉴 수를 기록. 판정이 없는 메뉴(null)는 어느 칸에도 세지 않는다. */
+    public void applyRiskCounts(List<RiskLevel> riskLevels) {
+        ensureProcessing();
+        this.dangerCount = count(riskLevels, RiskLevel.DANGER);
+        this.cautionCount = count(riskLevels, RiskLevel.CAUTION);
+        this.safeCount = count(riskLevels, RiskLevel.SAFE);
+    }
+
     public void markFailed(String failureCode) {
         if (this.scanStatus != ScanStatus.PROCESSING) {
             return;
@@ -178,6 +198,10 @@ public class ScanSession extends BaseEntity {
         this.retakeReasons = retakeReasons;
         this.retakeSuggestions = retakeSuggestions;
         this.failureCode = null;
+    }
+
+    private static int count(List<RiskLevel> riskLevels, RiskLevel level) {
+        return (int) riskLevels.stream().filter(level::equals).count();
     }
 
     private void ensureProcessing() {

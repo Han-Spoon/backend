@@ -5,7 +5,7 @@ import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.annotation.JsonNaming;
 
 /**
- * menu_images 테이블 매핑.
+ * scan_images 테이블 매핑 (V8 에서 menu_images 에서 이름 변경).
  *
  * @param source 이미지 소스 ("camera" | "upload")
  * @param storageKey 스토리지 키

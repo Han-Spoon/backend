@@ -10,14 +10,12 @@ import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleEngineResponse;
 import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleProfile;
 import com.hanspoon.backend_api.domain.ai.mapper.AiProfileMapper;
 import com.hanspoon.backend_api.domain.scan.entity.MenuAnalysis;
-import com.hanspoon.backend_api.domain.scan.entity.MenuImage;
+import com.hanspoon.backend_api.domain.scan.entity.ScanImage;
 import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
 import com.hanspoon.backend_api.domain.upload.dto.VerifiedUpload;
 import com.hanspoon.backend_api.domain.upload.service.S3StorageService;
-import com.hanspoon.backend_api.domain.user.entity.UserAllergy;
 import com.hanspoon.backend_api.domain.user.entity.UserProfile;
-import com.hanspoon.backend_api.domain.user.repository.UserAllergyRepository;
 import com.hanspoon.backend_api.domain.user.repository.UserProfileRepository;
 import com.hanspoon.backend_api.global.exception.BusinessException;
 import com.hanspoon.backend_api.global.exception.ErrorCode;
@@ -51,7 +49,6 @@ public class ScanProcessor {
     private final AiClient aiClient;
     private final S3StorageService s3StorageService;
     private final UserProfileRepository userProfileRepository;
-    private final UserAllergyRepository userAllergyRepository;
     private final ScanSessionRepository scanSessionRepository;
     private final ScanStateWriter scanStateWriter;
     private final boolean presignedFallbackEnabled;
@@ -60,14 +57,12 @@ public class ScanProcessor {
             AiClient aiClient,
             S3StorageService s3StorageService,
             UserProfileRepository userProfileRepository,
-            UserAllergyRepository userAllergyRepository,
             ScanSessionRepository scanSessionRepository,
             ScanStateWriter scanStateWriter,
             @Value("${app.ai-service.presigned-url-fallback-enabled:true}") boolean presignedFallbackEnabled) {
         this.aiClient = aiClient;
         this.s3StorageService = s3StorageService;
         this.userProfileRepository = userProfileRepository;
-        this.userAllergyRepository = userAllergyRepository;
         this.scanSessionRepository = scanSessionRepository;
         this.scanStateWriter = scanStateWriter;
         this.presignedFallbackEnabled = presignedFallbackEnabled;
@@ -98,7 +93,7 @@ public class ScanProcessor {
 
             scanStateWriter.applyOcrResult(
                     scanId,
-                    toMenuImage(scanId, source, upload, ocr),
+                    toScanImage(scanId, source, upload, ocr),
                     ocr.scanSession() != null ? ocr.scanSession().menuCount() : null,
                     parseScannedAt(ocr.scanSession() != null ? ocr.scanSession().scannedAt() : null));
 
@@ -147,8 +142,7 @@ public class ScanProcessor {
         UserProfile profile = userProfileRepository
                 .findByUserId(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PROFILE_NOT_FOUND));
-        List<UserAllergy> allergies = userAllergyRepository.findByUserProfileId(profile.getId());
-        return AiProfileMapper.toRuleProfile(profile, allergies);
+        return AiProfileMapper.toRuleProfile(profile);
     }
 
     private void markFailedQuietly(UUID scanId, Exception cause) {
@@ -159,12 +153,12 @@ public class ScanProcessor {
         }
     }
 
-    private MenuImage toMenuImage(UUID scanId, String source, VerifiedUpload upload, OcrResponse ocr) {
+    private ScanImage toScanImage(UUID scanId, String source, VerifiedUpload upload, OcrResponse ocr) {
         String resolvedSource = source;
         if (resolvedSource == null && ocr.menuImage() != null) {
             resolvedSource = ocr.menuImage().source();
         }
-        return MenuImage.create(
+        return ScanImage.create(
                 scanId,
                 resolvedSource,
                 upload.storageKey(),

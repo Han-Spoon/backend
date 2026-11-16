@@ -26,7 +26,8 @@ public class User extends BaseEntity {
     @Column(name = "nickname", nullable = false)
     private String nickname;
 
-    @Column(name = "language_code", length = 2, nullable = false)
+    // DB 는 7개 언어(ko/en/ar/zh-CN/zh-TW/ja/es)까지 받는다(V8). API 허용 범위는 UpdateUserRequest 가 정한다.
+    @Column(name = "language_code", length = 5, nullable = false)
     private String languageCode;
 
     private User(String email, String nickname, String languageCode) {

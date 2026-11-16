@@ -8,11 +8,11 @@ import com.hanspoon.backend_api.domain.ai.dto.result.FinalMessage;
 import com.hanspoon.backend_api.domain.ai.dto.result.OwnerCard;
 import com.hanspoon.backend_api.domain.ai.dto.result.OwnerQuestion;
 import com.hanspoon.backend_api.domain.scan.entity.MenuAnalysis;
-import com.hanspoon.backend_api.domain.scan.entity.MenuImage;
+import com.hanspoon.backend_api.domain.scan.entity.ScanImage;
 import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
-import com.hanspoon.backend_api.domain.scan.repository.MenuImageRepository;
+import com.hanspoon.backend_api.domain.scan.repository.ScanImageRepository;
 import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
 import com.hanspoon.backend_api.domain.store.entity.StoreMatchMethod;
 import com.hanspoon.backend_api.domain.user.entity.User;
@@ -45,7 +45,7 @@ class ScanPersistenceIntegrationTest {
     private ScanSessionRepository scanSessionRepository;
 
     @Autowired
-    private MenuImageRepository menuImageRepository;
+    private ScanImageRepository scanImageRepository;
 
     @Autowired
     private MenuAnalysisRepository menuAnalysisRepository;
@@ -109,7 +109,7 @@ class ScanPersistenceIntegrationTest {
                 ScanSession.create(userId, "menu_001.jpg", 2, null, ScanStatus.PROCESSING, Instant.now()));
         UUID sessionId = session.getId();
 
-        menuImageRepository.save(MenuImage.create(
+        scanImageRepository.save(ScanImage.create(
                 sessionId,
                 "upload",
                 "scans/menu_001.jpg",
@@ -143,8 +143,8 @@ class ScanPersistenceIntegrationTest {
         assertThat(reloadedSession.getScanStatus()).isEqualTo(ScanStatus.PROCESSING);
         assertThat(reloadedSession.getRiskyMenuCount()).isNull();
 
-        MenuImage reloadedImage =
-                menuImageRepository.findByScanSessionId(sessionId).orElseThrow();
+        ScanImage reloadedImage =
+                scanImageRepository.findByScanSessionId(sessionId).orElseThrow();
         assertThat(reloadedImage.getStorageKey()).isEqualTo("scans/menu_001.jpg");
         assertThat(reloadedImage.getSource()).isEqualTo("upload");
         assertThat(reloadedImage.getObjectVersionId()).isEqualTo("version-1");
@@ -200,8 +200,8 @@ class ScanPersistenceIntegrationTest {
         ScanSession session = scanSessionRepository.save(
                 ScanSession.create(userId, "del.jpg", 1, 0, ScanStatus.COMPLETED, Instant.now()));
         UUID sessionId = session.getId();
-        menuImageRepository.save(
-                MenuImage.create(sessionId, "upload", "scans/del.jpg", "u", "image/jpeg", 1L, null, null));
+        scanImageRepository.save(
+                ScanImage.create(sessionId, "upload", "scans/del.jpg", "u", "image/jpeg", 1L, null, null));
         menuAnalysisRepository.save(MenuAnalysis.create(
                 sessionId,
                 1,
@@ -224,7 +224,7 @@ class ScanPersistenceIntegrationTest {
         entityManager.clear();
 
         assertThat(scanSessionRepository.findById(sessionId)).isEmpty();
-        assertThat(menuImageRepository.findByScanSessionId(sessionId)).isEmpty();
+        assertThat(scanImageRepository.findByScanSessionId(sessionId)).isEmpty();
         assertThat(menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(sessionId))
                 .isEmpty();
     }

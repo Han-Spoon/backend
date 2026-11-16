@@ -6,10 +6,8 @@ import com.hanspoon.backend_api.domain.user.dto.ProfileResponse;
 import com.hanspoon.backend_api.domain.user.entity.AllergyCode;
 import com.hanspoon.backend_api.domain.user.entity.ReligionType;
 import com.hanspoon.backend_api.domain.user.entity.User;
-import com.hanspoon.backend_api.domain.user.entity.UserAllergy;
 import com.hanspoon.backend_api.domain.user.entity.UserProfile;
 import com.hanspoon.backend_api.domain.user.entity.VegetarianType;
-import com.hanspoon.backend_api.domain.user.repository.UserAllergyRepository;
 import com.hanspoon.backend_api.domain.user.repository.UserProfileRepository;
 import com.hanspoon.backend_api.domain.user.repository.UserRepository;
 import com.hanspoon.backend_api.global.exception.BusinessException;
@@ -25,17 +23,12 @@ public class UserProfileService {
 
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
-    private final UserAllergyRepository userAllergyRepository;
     private final ConsentService consentService;
 
     public UserProfileService(
-            UserRepository userRepository,
-            UserProfileRepository userProfileRepository,
-            UserAllergyRepository userAllergyRepository,
-            ConsentService consentService) {
+            UserRepository userRepository, UserProfileRepository userProfileRepository, ConsentService consentService) {
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
-        this.userAllergyRepository = userAllergyRepository;
         this.consentService = consentService;
     }
 
@@ -57,10 +50,9 @@ public class UserProfileService {
                 resolveVeganType(request),
                 resolveReligionType(request),
                 request.noSpicy(),
-                request.noAlcohol()));
-
-        List<AllergyCode> allergies = replaceAllergies(profile.getId(), request);
-        return ProfileResponse.of(profile, allergies);
+                request.noAlcohol(),
+                resolveAllergies(request)));
+        return ProfileResponse.of(profile);
     }
 
     @Transactional(readOnly = true)
@@ -68,10 +60,7 @@ public class UserProfileService {
         UserProfile profile = userProfileRepository
                 .findByUserId(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PROFILE_NOT_FOUND));
-        List<AllergyCode> allergies = userAllergyRepository.findByUserProfileId(profile.getId()).stream()
-                .map(UserAllergy::getAllergyCode)
-                .toList();
-        return ProfileResponse.of(profile, allergies);
+        return ProfileResponse.of(profile);
     }
 
     @Transactional
@@ -91,10 +80,9 @@ public class UserProfileService {
                 resolveVeganType(request),
                 resolveReligionType(request),
                 request.noSpicy(),
-                request.noAlcohol());
-
-        List<AllergyCode> allergies = replaceAllergies(profile.getId(), request);
-        return ProfileResponse.of(profile, allergies);
+                request.noAlcohol(),
+                resolveAllergies(request));
+        return ProfileResponse.of(profile);
     }
 
     /** 교차검증: 플래그가 true 인데 상세값이 없으면 INVALID_REQUEST. */
@@ -126,17 +114,8 @@ public class UserProfileService {
         return Boolean.TRUE.equals(request.hasReligion()) ? request.religionType() : null;
     }
 
-    /** 기존 알레르기를 전부 지우고 요청값으로 재삽입(중복 제거). 저장된 목록을 반환. */
-    private List<AllergyCode> replaceAllergies(UUID profileId, ProfileRequest request) {
-        userAllergyRepository.deleteByUserProfileId(profileId);
-        // Hibernate 는 커밋 시 INSERT 를 DELETE 보다 먼저 실행하므로, 재삽입 전에 삭제를 DB 로 강제 반영해
-        // uq_user_allergies 유니크 제약 위반(중복 키)을 방지한다.
-        userAllergyRepository.flush();
-        if (!Boolean.TRUE.equals(request.hasAllergies()) || request.allergies() == null) {
-            return List.of();
-        }
-        List<AllergyCode> codes = request.allergies().stream().distinct().toList();
-        codes.forEach(code -> userAllergyRepository.save(UserAllergy.of(profileId, code)));
-        return codes;
+    /** hasAllergies=false 면 "없음"(빈 목록). 정렬·중복 제거는 엔티티가 한다. */
+    private List<AllergyCode> resolveAllergies(ProfileRequest request) {
+        return Boolean.TRUE.equals(request.hasAllergies()) ? request.allergies() : List.of();
     }
 }

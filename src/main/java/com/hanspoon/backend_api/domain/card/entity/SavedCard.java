@@ -41,8 +41,9 @@ public class SavedCard extends BaseEntity {
     @Column(name = "menu_name_ko", length = 255, nullable = false)
     private String menuNameKo;
 
+    // V8 에서 컬럼명 text → card_text (SQL 타입 이름과 겹쳐 도구 호환성 문제). API 필드명은 그대로 text.
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "text", columnDefinition = "jsonb", nullable = false)
+    @Column(name = "card_text", columnDefinition = "jsonb", nullable = false)
     private CardText text;
 
     @Column(name = "scan_session_id", columnDefinition = "uuid")

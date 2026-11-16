@@ -11,16 +11,17 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 스캔 이미지 레코드. scan_sessions 와 1:1 (FK ON DELETE CASCADE). OCR 결과의 menu_image 매핑.
+ * 스캔 원본 이미지(scan_images, V8 에서 menu_images 에서 이름 변경). scan_sessions 와 1:1 (FK ON DELETE CASCADE).
+ * OCR 결과의 menu_image 매핑. 표준 메뉴 이미지는 새 menu_images 테이블이며 이 엔티티와 다르다.
  *
  * <p>scan_quality(blur/brightness/재촬영 사유 등)는 OCR 가능/불가 판단에만 쓰이는 일회성 값이라 저장하지 않는다.
  * 성공/실패/재촬영 신호는 {@link ScanSession#getScanStatus()} 가 단일 출처다.
  */
 @Entity
-@Table(name = "menu_images")
+@Table(name = "scan_images")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class MenuImage extends BaseEntity {
+public class ScanImage extends BaseEntity {
 
     @Id
     @Column(name = "id", columnDefinition = "uuid", updatable = false, nullable = false)
@@ -52,7 +53,7 @@ public class MenuImage extends BaseEntity {
     @Column(name = "file_size")
     private Long fileSize;
 
-    private MenuImage(
+    private ScanImage(
             UUID scanSessionId,
             String source,
             String storageKey,
@@ -72,7 +73,7 @@ public class MenuImage extends BaseEntity {
         this.fileSize = fileSize;
     }
 
-    public static MenuImage create(
+    public static ScanImage create(
             UUID scanSessionId,
             String source,
             String storageKey,
@@ -81,6 +82,6 @@ public class MenuImage extends BaseEntity {
             Long fileSize,
             String objectVersionId,
             String eTag) {
-        return new MenuImage(scanSessionId, source, storageKey, imageUrl, mimeType, fileSize, objectVersionId, eTag);
+        return new ScanImage(scanSessionId, source, storageKey, imageUrl, mimeType, fileSize, objectVersionId, eTag);
     }
 }
