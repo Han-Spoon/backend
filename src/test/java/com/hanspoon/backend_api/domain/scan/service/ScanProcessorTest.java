@@ -25,14 +25,13 @@ import com.hanspoon.backend_api.domain.scan.entity.MenuAnalysis;
 import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
-import com.hanspoon.backend_api.domain.scan.repository.MenuImageRepository;
+import com.hanspoon.backend_api.domain.scan.repository.ScanImageRepository;
 import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
 import com.hanspoon.backend_api.domain.store.entity.StoreMatchMethod;
 import com.hanspoon.backend_api.domain.upload.dto.VerifiedUpload;
 import com.hanspoon.backend_api.domain.upload.service.S3StorageService;
 import com.hanspoon.backend_api.domain.user.entity.ReligionType;
 import com.hanspoon.backend_api.domain.user.entity.UserProfile;
-import com.hanspoon.backend_api.domain.user.repository.UserAllergyRepository;
 import com.hanspoon.backend_api.domain.user.repository.UserProfileRepository;
 import com.hanspoon.backend_api.global.exception.BusinessException;
 import com.hanspoon.backend_api.global.exception.ErrorCode;
@@ -67,13 +66,10 @@ class ScanProcessorTest {
     private UserProfileRepository userProfileRepository;
 
     @Mock
-    private UserAllergyRepository userAllergyRepository;
-
-    @Mock
     private ScanSessionRepository scanSessionRepository;
 
     @Mock
-    private MenuImageRepository menuImageRepository;
+    private ScanImageRepository scanImageRepository;
 
     @Mock
     private MenuAnalysisRepository menuAnalysisRepository;
@@ -84,15 +80,9 @@ class ScanProcessorTest {
     @BeforeEach
     void setUp() {
         ScanStateWriter scanStateWriter =
-                new ScanStateWriter(scanSessionRepository, menuImageRepository, menuAnalysisRepository);
+                new ScanStateWriter(scanSessionRepository, scanImageRepository, menuAnalysisRepository);
         scanProcessor = new ScanProcessor(
-                aiClient,
-                s3StorageService,
-                userProfileRepository,
-                userAllergyRepository,
-                scanSessionRepository,
-                scanStateWriter,
-                false);
+                aiClient, s3StorageService, userProfileRepository, scanSessionRepository, scanStateWriter, false);
     }
 
     private static com.hanspoon.backend_api.domain.ai.dto.ocr.MenuAnalysis ocrMenu(
@@ -151,9 +141,9 @@ class ScanProcessorTest {
         when(scanSessionRepository.findById(scanId)).thenReturn(Optional.of(session));
         when(s3StorageService.objectUri(STORAGE_KEY)).thenReturn("s3://test-bucket/" + STORAGE_KEY);
         when(aiClient.requestOcr(any())).thenReturn(ocr);
-        UserProfile profile = UserProfile.create(userId, "KR", false, false, null, ReligionType.HALAL, true, true);
+        UserProfile profile =
+                UserProfile.create(userId, "KR", false, false, null, ReligionType.HALAL, true, true, List.of());
         when(userProfileRepository.findByUserId(userId)).thenReturn(Optional.of(profile));
-        when(userAllergyRepository.findByUserProfileId(profile.getId())).thenReturn(List.of());
         RuleEngineResponse judged = new RuleEngineResponse(
                 new com.hanspoon.backend_api.domain.ai.dto.ocr.ScanSession(
                         STORE_ID, "menu.jpg", 2, 1, "completed", null),
@@ -221,9 +211,9 @@ class ScanProcessorTest {
         assertThat(session.getScanStatus()).isEqualTo(ScanStatus.COMPLETED);
         assertThat(session.getMenuCount()).isEqualTo(2);
         assertThat(session.getRiskyMenuCount()).isEqualTo(1);
-        ArgumentCaptor<com.hanspoon.backend_api.domain.scan.entity.MenuImage> imageCaptor =
-                ArgumentCaptor.forClass(com.hanspoon.backend_api.domain.scan.entity.MenuImage.class);
-        verify(menuImageRepository).save(imageCaptor.capture());
+        ArgumentCaptor<com.hanspoon.backend_api.domain.scan.entity.ScanImage> imageCaptor =
+                ArgumentCaptor.forClass(com.hanspoon.backend_api.domain.scan.entity.ScanImage.class);
+        verify(scanImageRepository).save(imageCaptor.capture());
         var savedImage = imageCaptor.getValue();
         assertThat(savedImage.getStorageKey()).isEqualTo(STORAGE_KEY);
         assertThat(savedImage.getImageUrl()).isEqualTo("s3://test-bucket/" + STORAGE_KEY);
@@ -276,17 +266,17 @@ class ScanProcessorTest {
         when(scanSessionRepository.findById(scanId)).thenReturn(Optional.of(session));
         when(s3StorageService.objectUri(STORAGE_KEY)).thenReturn("s3://test-bucket/" + STORAGE_KEY);
         when(aiClient.requestOcr(any())).thenReturn(ocr);
-        UserProfile profile = UserProfile.create(userId, "KR", false, false, null, ReligionType.HALAL, true, true);
+        UserProfile profile =
+                UserProfile.create(userId, "KR", false, false, null, ReligionType.HALAL, true, true, List.of());
         when(userProfileRepository.findByUserId(userId)).thenReturn(Optional.of(profile));
-        when(userAllergyRepository.findByUserProfileId(profile.getId())).thenReturn(List.of());
         when(aiClient.judge(any())).thenThrow(new BusinessException(ErrorCode.RULE_ENGINE_ERROR, "boom"));
 
         scanProcessor.process(scanId, userId, VERIFIED_UPLOAD, "upload");
 
         // OCR 결과는 룰엔진 호출 전 커밋. 뒤 단계 실패해도 menu_image · menu_count 잔존.
-        InOrder order = inOrder(aiClient, menuImageRepository);
+        InOrder order = inOrder(aiClient, scanImageRepository);
         order.verify(aiClient).requestOcr(any());
-        order.verify(menuImageRepository).save(any());
+        order.verify(scanImageRepository).save(any());
         order.verify(aiClient).judge(any());
 
         assertThat(session.getMenuCount()).isEqualTo(2);
@@ -377,7 +367,7 @@ class ScanProcessorTest {
 
         assertThat(session.getScanStatus()).isEqualTo(ScanStatus.FAILED);
         assertThat(session.getFailureCode()).isEqualTo(ErrorCode.AI_RESULT_MISMATCH.getCode());
-        verify(menuImageRepository, never()).save(any());
+        verify(scanImageRepository, never()).save(any());
         verify(aiClient, never()).judge(any());
     }
 
@@ -390,9 +380,9 @@ class ScanProcessorTest {
         when(scanSessionRepository.findById(scanId)).thenReturn(Optional.of(session));
         when(s3StorageService.objectUri(STORAGE_KEY)).thenReturn("s3://test-bucket/" + STORAGE_KEY);
         when(aiClient.requestOcr(any())).thenReturn(usableOcr());
-        UserProfile profile = UserProfile.create(userId, "KR", false, false, null, ReligionType.HALAL, true, true);
+        UserProfile profile =
+                UserProfile.create(userId, "KR", false, false, null, ReligionType.HALAL, true, true, List.of());
         when(userProfileRepository.findByUserId(userId)).thenReturn(Optional.of(profile));
-        when(userAllergyRepository.findByUserProfileId(profile.getId())).thenReturn(List.of());
         var aiSession = new com.hanspoon.backend_api.domain.ai.dto.ocr.ScanSession(
                 STORE_ID, "menu.jpg", 2, 1, "completed", null);
         when(aiClient.judge(any())).thenReturn(new RuleEngineResponse(aiSession, null, null, List.of()));

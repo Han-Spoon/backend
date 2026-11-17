@@ -1,11 +1,11 @@
 package com.hanspoon.backend_api.domain.scan.service;
 
 import com.hanspoon.backend_api.domain.scan.entity.MenuAnalysis;
-import com.hanspoon.backend_api.domain.scan.entity.MenuImage;
+import com.hanspoon.backend_api.domain.scan.entity.ScanImage;
 import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
-import com.hanspoon.backend_api.domain.scan.repository.MenuImageRepository;
+import com.hanspoon.backend_api.domain.scan.repository.ScanImageRepository;
 import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
 import java.time.Instant;
 import java.util.List;
@@ -28,21 +28,21 @@ public class ScanStateWriter {
     private static final Logger log = LoggerFactory.getLogger(ScanStateWriter.class);
 
     private final ScanSessionRepository scanSessionRepository;
-    private final MenuImageRepository menuImageRepository;
+    private final ScanImageRepository scanImageRepository;
     private final MenuAnalysisRepository menuAnalysisRepository;
 
     public ScanStateWriter(
             ScanSessionRepository scanSessionRepository,
-            MenuImageRepository menuImageRepository,
+            ScanImageRepository scanImageRepository,
             MenuAnalysisRepository menuAnalysisRepository) {
         this.scanSessionRepository = scanSessionRepository;
-        this.menuImageRepository = menuImageRepository;
+        this.scanImageRepository = scanImageRepository;
         this.menuAnalysisRepository = menuAnalysisRepository;
     }
 
     @Transactional
-    public void applyOcrResult(UUID scanId, MenuImage menuImage, Integer menuCount, Instant scannedAt) {
-        menuImageRepository.save(menuImage);
+    public void applyOcrResult(UUID scanId, ScanImage scanImage, Integer menuCount, Instant scannedAt) {
+        scanImageRepository.save(scanImage);
         session(scanId).ifPresent(session -> session.applyOcrResult(menuCount, scannedAt));
     }
 
@@ -54,7 +54,11 @@ public class ScanStateWriter {
     @Transactional
     public void complete(UUID scanId, Integer riskyMenuCount, List<MenuAnalysis> analyses) {
         menuAnalysisRepository.saveAll(analyses);
-        session(scanId).ifPresent(session -> session.applyRuleEngineResult(riskyMenuCount, ScanStatus.COMPLETED));
+        session(scanId).ifPresent(session -> {
+            session.applyRiskCounts(
+                    analyses.stream().map(MenuAnalysis::getRiskLevel).toList());
+            session.applyRuleEngineResult(riskyMenuCount, ScanStatus.COMPLETED);
+        });
     }
 
     @Transactional

@@ -16,9 +16,7 @@ import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
 import com.hanspoon.backend_api.domain.user.entity.AllergyCode;
 import com.hanspoon.backend_api.domain.user.entity.ReligionType;
 import com.hanspoon.backend_api.domain.user.entity.User;
-import com.hanspoon.backend_api.domain.user.entity.UserAllergy;
 import com.hanspoon.backend_api.domain.user.entity.UserProfile;
-import com.hanspoon.backend_api.domain.user.repository.UserAllergyRepository;
 import com.hanspoon.backend_api.domain.user.repository.UserProfileRepository;
 import com.hanspoon.backend_api.domain.user.repository.UserRepository;
 import com.hanspoon.backend_api.global.security.JwtTokenProvider;
@@ -52,7 +50,6 @@ public class DevDataSeeder implements ApplicationRunner {
 
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
-    private final UserAllergyRepository userAllergyRepository;
     private final ScanSessionRepository scanSessionRepository;
     private final MenuAnalysisRepository menuAnalysisRepository;
     private final SavedCardRepository savedCardRepository;
@@ -61,14 +58,12 @@ public class DevDataSeeder implements ApplicationRunner {
     public DevDataSeeder(
             UserRepository userRepository,
             UserProfileRepository userProfileRepository,
-            UserAllergyRepository userAllergyRepository,
             ScanSessionRepository scanSessionRepository,
             MenuAnalysisRepository menuAnalysisRepository,
             SavedCardRepository savedCardRepository,
             JwtTokenProvider jwtTokenProvider) {
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
-        this.userAllergyRepository = userAllergyRepository;
         this.scanSessionRepository = scanSessionRepository;
         this.menuAnalysisRepository = menuAnalysisRepository;
         this.savedCardRepository = savedCardRepository;
@@ -81,12 +76,16 @@ public class DevDataSeeder implements ApplicationRunner {
         User user = userRepository.findByEmail(DEMO_EMAIL).orElse(null);
         if (user == null) {
             user = userRepository.save(User.create(DEMO_EMAIL, "데모유저", "ko"));
-            UserProfile profile = userProfileRepository.save(
-                    UserProfile.create(user.getId(), "SA", false, false, null, ReligionType.HALAL, false, true));
-            userAllergyRepository.saveAll(List.of(
-                    UserAllergy.of(profile.getId(), AllergyCode.PEANUT),
-                    UserAllergy.of(profile.getId(), AllergyCode.SHRIMP),
-                    UserAllergy.of(profile.getId(), AllergyCode.EGG)));
+            userProfileRepository.save(UserProfile.create(
+                    user.getId(),
+                    "SA",
+                    false,
+                    false,
+                    null,
+                    ReligionType.HALAL,
+                    false,
+                    true,
+                    List.of(AllergyCode.PEANUT, AllergyCode.SHRIMP, AllergyCode.EGG)));
             seedScans(user.getId());
             seedCards(user.getId());
             log.info("[seed] demo user + profile(allergies) + scan history + saved cards created");

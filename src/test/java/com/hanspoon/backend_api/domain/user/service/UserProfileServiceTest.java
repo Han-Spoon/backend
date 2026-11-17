@@ -3,7 +3,6 @@ package com.hanspoon.backend_api.domain.user.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.hanspoon.backend_api.domain.consent.service.ConsentService;
@@ -12,10 +11,8 @@ import com.hanspoon.backend_api.domain.user.dto.ProfileResponse;
 import com.hanspoon.backend_api.domain.user.entity.AllergyCode;
 import com.hanspoon.backend_api.domain.user.entity.ReligionType;
 import com.hanspoon.backend_api.domain.user.entity.User;
-import com.hanspoon.backend_api.domain.user.entity.UserAllergy;
 import com.hanspoon.backend_api.domain.user.entity.UserProfile;
 import com.hanspoon.backend_api.domain.user.entity.VegetarianType;
-import com.hanspoon.backend_api.domain.user.repository.UserAllergyRepository;
 import com.hanspoon.backend_api.domain.user.repository.UserProfileRepository;
 import com.hanspoon.backend_api.domain.user.repository.UserRepository;
 import com.hanspoon.backend_api.global.exception.BusinessException;
@@ -37,9 +34,6 @@ class UserProfileServiceTest {
 
     @Mock
     private UserProfileRepository userProfileRepository;
-
-    @Mock
-    private UserAllergyRepository userAllergyRepository;
 
     @Mock
     private ConsentService consentService;
@@ -77,8 +71,46 @@ class UserProfileServiceTest {
         assertThat(response.religionType()).isEqualTo(ReligionType.HALAL);
         assertThat(response.hasAllergies()).isTrue();
         assertThat(response.allergies()).containsExactly(AllergyCode.EGG, AllergyCode.MILK);
-        verify(userAllergyRepository).deleteByUserProfileId(any(UUID.class));
-        verify(userAllergyRepository, org.mockito.Mockito.times(2)).save(any(UserAllergy.class));
+    }
+
+    @Test
+    void createProfile_storesAllergiesSortedAndDistinct() {
+        User user = User.create("me@example.com", "Me", "en");
+        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
+        when(userProfileRepository.existsByUserId(user.getId())).thenReturn(false);
+        when(userProfileRepository.save(any(UserProfile.class))).thenAnswer(inv -> inv.getArgument(0));
+        ProfileRequest request = new ProfileRequest(
+                "KR",
+                "ko",
+                true,
+                false,
+                null,
+                false,
+                null,
+                true,
+                List.of(AllergyCode.SHRIMP, AllergyCode.EGG, AllergyCode.SHRIMP, AllergyCode.PINE_NUT),
+                false,
+                false);
+
+        ProfileResponse response = userProfileService.createProfile(user.getId(), request);
+
+        // ck_user_profiles_allergy_codes: code 오름차순(egg < pinenut < shrimp) + 중복 없음
+        assertThat(response.allergies()).containsExactly(AllergyCode.EGG, AllergyCode.PINE_NUT, AllergyCode.SHRIMP);
+    }
+
+    @Test
+    void createProfile_withoutAllergies_storesEmptyEvenIfListSent() {
+        User user = User.create("me@example.com", "Me", "en");
+        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
+        when(userProfileRepository.existsByUserId(user.getId())).thenReturn(false);
+        when(userProfileRepository.save(any(UserProfile.class))).thenAnswer(inv -> inv.getArgument(0));
+        ProfileRequest request = new ProfileRequest(
+                "KR", "ko", true, false, null, false, null, false, List.of(AllergyCode.EGG), false, false);
+
+        ProfileResponse response = userProfileService.createProfile(user.getId(), request);
+
+        assertThat(response.hasAllergies()).isFalse();
+        assertThat(response.allergies()).isEmpty();
     }
 
     @Test
@@ -122,10 +154,9 @@ class UserProfileServiceTest {
     @Test
     void getProfile_returnsProfileWithAllergies() {
         UUID userId = UUID.randomUUID();
-        UserProfile profile = UserProfile.create(userId, "KR", true, true, VegetarianType.VEGAN, null, true, false);
+        UserProfile profile = UserProfile.create(
+                userId, "KR", true, true, VegetarianType.VEGAN, null, true, false, List.of(AllergyCode.CRAB));
         when(userProfileRepository.findByUserId(userId)).thenReturn(Optional.of(profile));
-        when(userAllergyRepository.findByUserProfileId(profile.getId()))
-                .thenReturn(List.of(UserAllergy.of(profile.getId(), AllergyCode.CRAB)));
 
         ProfileResponse response = userProfileService.getProfile(userId);
 
@@ -139,7 +170,8 @@ class UserProfileServiceTest {
     void updateProfile_replacesAllergiesAndSyncsLanguage() {
         UUID userId = UUID.randomUUID();
         User user = User.create("me@example.com", "Me", "en");
-        UserProfile profile = UserProfile.create(userId, "US", false, false, null, null, false, false);
+        UserProfile profile =
+                UserProfile.create(userId, "US", false, false, null, null, false, false, List.of(AllergyCode.CRAB));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(userProfileRepository.findByUserId(userId)).thenReturn(Optional.of(profile));
 
@@ -148,7 +180,6 @@ class UserProfileServiceTest {
         assertThat(user.getLanguageCode()).isEqualTo("ko");
         assertThat(profile.getNationality()).isEqualTo("KR");
         assertThat(response.allergies()).containsExactly(AllergyCode.EGG, AllergyCode.MILK);
-        verify(userAllergyRepository).deleteByUserProfileId(profile.getId());
-        verify(userAllergyRepository, org.mockito.Mockito.times(2)).save(any(UserAllergy.class));
+        assertThat(profile.getAllergies()).containsExactly(AllergyCode.EGG, AllergyCode.MILK);
     }
 }
