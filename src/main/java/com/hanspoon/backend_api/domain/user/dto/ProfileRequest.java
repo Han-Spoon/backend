@@ -5,6 +5,7 @@ import com.hanspoon.backend_api.domain.user.entity.AllergyCode;
 import com.hanspoon.backend_api.domain.user.entity.ReligionType;
 import com.hanspoon.backend_api.domain.user.entity.VegetarianType;
 import com.hanspoon.backend_api.global.validation.CountryCode;
+import com.hanspoon.backend_api.global.validation.SupportedLanguages;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -17,8 +18,8 @@ import java.util.List;
 @Schema(description = "온보딩/프로필 수정 요청")
 public record ProfileRequest(
         @Schema(description = "국적(ISO 3166-1 alpha-2)", example = "SA") @NotBlank @CountryCode String nationality,
-        @Schema(description = "표시 언어(ko/en/ar)", example = "en")
-                @NotBlank @Pattern(regexp = "ko|en|ar", message = "languageCode must be one of ko, en, ar.") String languageCode,
+        @Schema(description = "표시 언어(7종: ko, en, ar, zh-CN, zh-TW, ja, es)", example = "en")
+                @NotBlank @Pattern(regexp = SupportedLanguages.PATTERN, message = SupportedLanguages.MESSAGE) String languageCode,
         @Schema(description = "한식이 처음인지 여부", example = "true") @JsonProperty("isFirstTime") @NotNull Boolean isFirstTime,
         @Schema(description = "채식 여부", example = "false") @JsonProperty("isVegan") @NotNull Boolean isVegan,
         @Schema(description = "채식 유형(isVegan=true일 때 필수)", example = "lacto_ovo") VegetarianType veganType,

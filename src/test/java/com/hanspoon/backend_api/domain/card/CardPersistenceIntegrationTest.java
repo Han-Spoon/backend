@@ -51,7 +51,14 @@ class CardPersistenceIntegrationTest {
                         user.getId(),
                         CardType.INGREDIENT_CHECK,
                         "된장찌개",
-                        new CardText("이 메뉴에 멸치육수가 들어가나요?", "Does this dish contain fish broth?", null),
+                        new CardText(
+                                "이 메뉴에 멸치육수가 들어가나요?",
+                                "Does this dish contain fish broth?",
+                                null,
+                                null,
+                                null,
+                                null,
+                                null),
                         null))
                 .getId();
 
@@ -67,11 +74,26 @@ class CardPersistenceIntegrationTest {
     }
 
     @Test
+    void persistsLessSpicyCardWithExtendedLanguage() {
+        User user = userRepository.save(User.create("card-less-spicy@example.com", "carduser", "zh-TW"));
+        CardText text = new CardText("김치찌개 덜 맵게 해 주실 수 있나요?", null, null, null, "泡菜鍋可以少辣嗎？", null, null);
+        UUID cardId = savedCardRepository
+                .save(SavedCard.create(user.getId(), CardType.LESS_SPICY, "김치찌개", text, null))
+                .getId();
+
+        entityManager.flush();
+        entityManager.clear();
+
+        SavedCard reloaded = savedCardRepository.findById(cardId).orElseThrow();
+        assertThat(reloaded.getCardType()).isEqualTo(CardType.LESS_SPICY);
+        assertThat(reloaded.getText()).isEqualTo(text);
+    }
+
+    @Test
     void deletingUserCascadesToCards() {
         User user = userRepository.save(User.create("card-cascade@example.com", "carduser2", "ko"));
         UUID cardId = savedCardRepository
-                .save(SavedCard.create(
-                        user.getId(), CardType.ORDER, "삼겹살", new CardText("삼겹살 하나 주세요.", null, null), null))
+                .save(SavedCard.create(user.getId(), CardType.ORDER, "삼겹살", CardText.ko("삼겹살 하나 주세요."), null))
                 .getId();
         entityManager.flush();
 
@@ -88,8 +110,7 @@ class CardPersistenceIntegrationTest {
         ScanSession scan = scanSessionRepository.save(
                 ScanSession.create(user.getId(), "m.jpg", 1, 0, ScanStatus.COMPLETED, Instant.now()));
         UUID cardId = savedCardRepository
-                .save(SavedCard.create(
-                        user.getId(), CardType.EXCLUDE, "비빔밥", new CardText("계란 빼주세요.", null, null), scan.getId()))
+                .save(SavedCard.create(user.getId(), CardType.EXCLUDE, "비빔밥", CardText.ko("계란 빼주세요."), scan.getId()))
                 .getId();
         entityManager.flush();
         entityManager.clear();

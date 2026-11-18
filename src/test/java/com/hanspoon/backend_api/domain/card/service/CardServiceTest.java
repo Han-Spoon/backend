@@ -49,7 +49,7 @@ class CardServiceTest {
     }
 
     private static CardText orderText() {
-        return new CardText("삼겹살 하나 주세요.", "One pork belly, please.", null);
+        return new CardText("삼겹살 하나 주세요.", "One pork belly, please.", null, null, null, null, null);
     }
 
     @Test
@@ -83,8 +83,7 @@ class CardServiceTest {
     @Test
     void saveCreatesNewWhenTextDiffers() {
         UUID userId = UUID.randomUUID();
-        SavedCard existing =
-                SavedCard.create(userId, CardType.ORDER, "삼겹살", new CardText("삼겹살 2인분 주세요.", null, null), null);
+        SavedCard existing = SavedCard.create(userId, CardType.ORDER, "삼겹살", CardText.ko("삼겹살 2인분 주세요."), null);
         when(savedCardRepository.findByUserIdAndCardTypeAndMenuNameKo(userId, CardType.ORDER, "삼겹살"))
                 .thenReturn(List.of(existing));
         when(savedCardRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -127,8 +126,8 @@ class CardServiceTest {
     void getCardsReturnsMappedPage() {
         UUID userId = UUID.randomUUID();
         Pageable pageable = PageRequest.of(0, 20);
-        SavedCard card = SavedCard.create(
-                userId, CardType.INGREDIENT_CHECK, "된장찌개", new CardText("이 메뉴에 멸치육수가 들어가나요?", null, null), null);
+        SavedCard card =
+                SavedCard.create(userId, CardType.INGREDIENT_CHECK, "된장찌개", CardText.ko("이 메뉴에 멸치육수가 들어가나요?"), null);
         when(savedCardRepository.findByUserIdOrderByLastSavedAtDesc(userId, pageable))
                 .thenReturn(new PageImpl<>(List.of(card), pageable, 1));
 

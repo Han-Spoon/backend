@@ -187,15 +187,26 @@ public class DevDataSeeder implements ApplicationRunner {
                         userId,
                         CardType.ORDER,
                         "삼겹살",
-                        new CardText("삼겹살 하나 주세요.", "One pork belly, please.", null),
+                        new CardText("삼겹살 하나 주세요.", "One pork belly, please.", null, null, null, null, null),
                         null),
                 SavedCard.create(
                         userId,
                         CardType.INGREDIENT_CHECK,
                         "된장찌개",
-                        new CardText("이 메뉴에 멸치육수가 들어가나요?", "Does this dish contain fish broth?", null),
+                        new CardText(
+                                "이 메뉴에 멸치육수가 들어가나요?",
+                                "Does this dish contain fish broth?",
+                                null,
+                                null,
+                                null,
+                                null,
+                                null),
                         null),
                 SavedCard.create(
-                        userId, CardType.EXCLUDE, "비빔밥", new CardText("계란 빼주세요.", "No egg, please.", null), null)));
+                        userId,
+                        CardType.EXCLUDE,
+                        "비빔밥",
+                        new CardText("계란 빼주세요.", "No egg, please.", null, null, null, null, null),
+                        null)));
     }
 }

@@ -263,6 +263,21 @@ class ScanControllerTest {
     }
 
     @Test
+    void saveRecordRejectsStoreDetailMatchMethod() throws Exception {
+        mockMvc.perform(
+                        put("/api/v1/scans/{scanId}/record", UUID.randomUUID())
+                                .contentType("application/json")
+                                .content(
+                                        """
+                        {"storeId":42,"storeMatchMethod":"store_detail"}
+                        """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+
+        verify(scanRecordService, never()).save(any(), any(), any());
+    }
+
+    @Test
     void getRecordReturnsSavedRecord() throws Exception {
         UUID scanId = UUID.randomUUID();
         when(scanRecordService.get(USER_ID, scanId))

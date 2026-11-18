@@ -30,4 +30,10 @@ public record SaveScanRecordRequest(
     public boolean isStoreContextComplete() {
         return (storeId == null) == (storeMatchMethod == null);
     }
+
+    /** store_detail 은 스캔 시작 경로라 사후 연결에는 쓰지 않는다(ck_scan_records_match_method 3종). */
+    @AssertTrue(message = "storeMatchMethod store_detail cannot be used to attach a store to a record") @JsonIgnore
+    public boolean isAttachMethodAllowed() {
+        return storeMatchMethod != StoreMatchMethod.STORE_DETAIL;
+    }
 }
