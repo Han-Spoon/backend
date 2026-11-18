@@ -1,6 +1,7 @@
 package com.hanspoon.backend_api.domain.user.service;
 
 import com.hanspoon.backend_api.domain.consent.service.ConsentService;
+import com.hanspoon.backend_api.domain.user.dto.ProfilePatchRequest;
 import com.hanspoon.backend_api.domain.user.dto.ProfileRequest;
 import com.hanspoon.backend_api.domain.user.dto.ProfileResponse;
 import com.hanspoon.backend_api.domain.user.entity.AllergyCode;
@@ -63,25 +64,47 @@ public class UserProfileService {
         return ProfileResponse.of(profile);
     }
 
+    /** 부분 수정. 보낸 필드만 저장값과 합친 뒤 조건 규칙 검사. */
     @Transactional
-    public ProfileResponse updateProfile(UUID userId, ProfileRequest request) {
+    public ProfileResponse updateProfile(UUID userId, ProfilePatchRequest request) {
         consentService.requireSensitiveConsent(userId);
         User user = userRepository.findById(userId).orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
         UserProfile profile = userProfileRepository
                 .findByUserId(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PROFILE_NOT_FOUND));
-        validate(request);
+
+        boolean vegan = orElse(request.isVegan(), profile.getVegetarian());
+        VegetarianType veganType = vegan ? orElse(request.veganType(), profile.getVegetarianType()) : null;
+        if (vegan && veganType == null) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "veganType is required when isVegan is true.");
+        }
+
+        ReligionType currentReligion = profile.getReligionType();
+        boolean religion =
+                orElse(request.hasReligion(), currentReligion != null && currentReligion != ReligionType.NONE);
+        ReligionType religionType = religion ? orElse(request.religionType(), currentReligion) : null;
+        if (religion && (religionType == null || religionType == ReligionType.NONE)) {
+            throw new BusinessException(
+                    ErrorCode.INVALID_REQUEST, "religionType is required when hasReligion is true.");
+        }
+
+        List<AllergyCode> currentAllergies = profile.getAllergies();
+        boolean allergic = orElse(request.hasAllergies(), !currentAllergies.isEmpty());
+        List<AllergyCode> allergies = allergic ? orElse(request.allergies(), currentAllergies) : List.of();
+        if (allergic && allergies.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "allergies are required when hasAllergies is true.");
+        }
 
         user.changeLanguage(request.languageCode());
         profile.update(
-                normalizeNationality(request.nationality()),
-                request.isFirstTime(),
-                request.isVegan(),
-                resolveVeganType(request),
-                resolveReligionType(request),
-                request.noSpicy(),
-                request.noAlcohol(),
-                resolveAllergies(request));
+                request.nationality() == null ? profile.getNationality() : normalizeNationality(request.nationality()),
+                orElse(request.isFirstTime(), profile.getFirstTime()),
+                vegan,
+                veganType,
+                religionType,
+                orElse(request.noSpicy(), profile.getNoSpicy()),
+                orElse(request.noAlcohol(), profile.getNoAlcohol()),
+                allergies);
         return ProfileResponse.of(profile);
     }
 
@@ -104,6 +127,10 @@ public class UserProfileService {
     /** 국가 코드 대문자 정규화(ISO 3166-1 alpha-2 는 대문자). 검증은 @CountryCode 가 담당. */
     private String normalizeNationality(String nationality) {
         return nationality == null ? null : nationality.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private static <T> T orElse(T value, T current) {
+        return value != null ? value : current;
     }
 
     private VegetarianType resolveVeganType(ProfileRequest request) {

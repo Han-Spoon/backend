@@ -20,7 +20,6 @@ import com.hanspoon.backend_api.domain.scan.dto.ScanHistoryItem;
 import com.hanspoon.backend_api.domain.scan.dto.ScanRecordResponse;
 import com.hanspoon.backend_api.domain.scan.dto.ScanResultResponse;
 import com.hanspoon.backend_api.domain.scan.dto.ScanStoreSummary;
-import com.hanspoon.backend_api.domain.scan.entity.ScanFeedbackAnswer;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.service.ScanRecordService;
 import com.hanspoon.backend_api.domain.scan.service.ScanService;
@@ -32,7 +31,6 @@ import com.hanspoon.backend_api.global.exception.GlobalExceptionHandler;
 import com.hanspoon.backend_api.global.security.CurrentUser;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -226,26 +224,19 @@ class ScanControllerTest {
         Instant savedAt = Instant.parse("2026-09-18T12:00:00Z");
         when(scanRecordService.save(eq(USER_ID), eq(scanId), any()))
                 .thenReturn(new ScanRecordResponse(
-                        scanId,
-                        new ScanStoreSummary(42L, "한스푼"),
-                        true,
-                        StoreMatchMethod.GPS_CANDIDATE,
-                        Map.of("allergy:shrimp", ScanFeedbackAnswer.YES),
-                        savedAt));
+                        scanId, new ScanStoreSummary(42L, "한스푼"), true, StoreMatchMethod.GPS_CANDIDATE, savedAt));
 
-        mockMvc.perform(
-                        put("/api/v1/scans/{scanId}/record", scanId)
-                                .contentType("application/json")
-                                .content(
-                                        """
-                        {"feedback":{"allergy:shrimp":"yes"}}
+        mockMvc.perform(put("/api/v1/scans/{scanId}/record", scanId)
+                        .contentType("application/json")
+                        .content("""
+                        {}
                         """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.scanId").value(scanId.toString()))
                 .andExpect(jsonPath("$.store.storeId").value(42))
                 .andExpect(jsonPath("$.storeLocked").value(true))
                 .andExpect(jsonPath("$.storeMatchMethod").value("gps_candidate"))
-                .andExpect(jsonPath("$.feedback['allergy:shrimp']").value("yes"))
+                .andExpect(jsonPath("$.feedback").doesNotExist())
                 .andExpect(jsonPath("$.savedAt").value(savedAt.toString()));
     }
 
@@ -254,7 +245,7 @@ class ScanControllerTest {
         mockMvc.perform(put("/api/v1/scans/{scanId}/record", UUID.randomUUID())
                         .contentType("application/json")
                         .content("""
-                        {"storeId":42,"feedback":{}}
+                        {"storeId":42}
                         """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
@@ -263,23 +254,31 @@ class ScanControllerTest {
     }
 
     @Test
-    void getRecordReturnsSavedRecord() throws Exception {
-        UUID scanId = UUID.randomUUID();
-        when(scanRecordService.get(USER_ID, scanId))
-                .thenReturn(new ScanRecordResponse(scanId, null, false, null, Map.of(), Instant.now()));
+    void saveRecordRejectsStoreDetailMatchMethod() throws Exception {
+        mockMvc.perform(
+                        put("/api/v1/scans/{scanId}/record", UUID.randomUUID())
+                                .contentType("application/json")
+                                .content(
+                                        """
+                        {"storeId":42,"storeMatchMethod":"store_detail"}
+                        """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 
-        mockMvc.perform(get("/api/v1/scans/{scanId}/record", scanId))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.scanId").value(scanId.toString()))
-                .andExpect(jsonPath("$.store").doesNotExist())
-                .andExpect(jsonPath("$.storeLocked").value(false));
+        verify(scanRecordService, never()).save(any(), any(), any());
+    }
+
+    @Test
+    void getRecordIsRemoved() throws Exception {
+        mockMvc.perform(get("/api/v1/scans/{scanId}/record", UUID.randomUUID()))
+                .andExpect(status().isMethodNotAllowed());
     }
 
     @Test
     void getScansReturnsPage() throws Exception {
         UUID scanId = UUID.randomUUID();
         ScanHistoryItem item = new ScanHistoryItem(
-                scanId, "강남 삼겹살집", new ScanStoreSummary(42L, "한스푼"), ScanStatus.COMPLETED, 2, 1, null);
+                scanId, "강남 삼겹살집", new ScanStoreSummary(42L, "한스푼"), ScanStatus.COMPLETED, 3, 1, 1, 2, null);
         when(scanService.getScans(eq(USER_ID), any())).thenReturn(new PageResponse<>(List.of(item), 0, 20, 1, 1));
 
         mockMvc.perform(get("/api/v1/scans?page=0&size=20"))
@@ -288,14 +287,17 @@ class ScanControllerTest {
                 .andExpect(jsonPath("$.page").value(0))
                 .andExpect(jsonPath("$.items[0].scanId").value(scanId.toString()))
                 .andExpect(jsonPath("$.items[0].title").value("강남 삼겹살집"))
-                .andExpect(jsonPath("$.items[0].store.name").value("한스푼"));
+                .andExpect(jsonPath("$.items[0].store.name").value("한스푼"))
+                .andExpect(jsonPath("$.items[0].dangerCount").value(1))
+                .andExpect(jsonPath("$.items[0].cautionCount").value(1))
+                .andExpect(jsonPath("$.items[0].riskyMenuCount").value(2));
     }
 
     @Test
     void updateTitleReturns200() throws Exception {
         UUID scanId = UUID.randomUUID();
         when(scanService.updateTitle(eq(USER_ID), eq(scanId), any()))
-                .thenReturn(new ScanHistoryItem(scanId, "새 제목", null, ScanStatus.COMPLETED, 2, 1, null));
+                .thenReturn(new ScanHistoryItem(scanId, "새 제목", null, ScanStatus.COMPLETED, 2, 1, 0, 1, null));
 
         mockMvc.perform(patch("/api/v1/scans/{scanId}", scanId)
                         .contentType("application/json")
@@ -311,6 +313,17 @@ class ScanControllerTest {
                         .contentType("application/json")
                         .content("{\"title\":\"\"}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void updateTitleRejectsOver30Chars() throws Exception {
+        mockMvc.perform(patch("/api/v1/scans/{scanId}", UUID.randomUUID())
+                        .contentType("application/json")
+                        .content("{\"title\":\"" + "가".repeat(31) + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+
+        verify(scanService, never()).updateTitle(any(), any(), any());
     }
 
     @Test

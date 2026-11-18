@@ -8,9 +8,12 @@ import com.hanspoon.backend_api.domain.store.entity.StoreOrigin;
 import com.hanspoon.backend_api.domain.store.entity.StoreStatus;
 import com.hanspoon.backend_api.domain.store.repository.StoreCandidateProjection;
 import com.hanspoon.backend_api.domain.store.repository.StoreRepository;
+import com.hanspoon.backend_api.domain.user.entity.User;
+import com.hanspoon.backend_api.domain.user.repository.UserRepository;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +36,9 @@ class StoreRepositoryIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private UserRepository userRepository;
 
     private long categoryId;
     private long batchId;
@@ -96,6 +102,55 @@ class StoreRepositoryIntegrationTest {
         assertThat(candidates.getFirst().getStoreId()).isEqualTo(expectedId);
         assertThat(candidates.getFirst().getName()).isEqualTo("ＣＵ 마트 Ｂ１");
         assertThat(candidates.getFirst().getNameSimilarity()).isEqualTo(1.0);
+    }
+
+    @Test
+    void searchesByNameWithoutCoordinatesAcrossRegions() {
+        long seoulId = insertStore("seoul-store", "좌표없는검색식당 강남점", 37.5001, 127.0000, StoreStatus.ACTIVE, false);
+        long busanId = insertStore("busan-store", "좌표없는검색식당 해운대점", 35.1631, 129.1635, StoreStatus.ACTIVE, false);
+        insertStore("closed-store", "좌표없는검색식당 휴업점", 35.1632, 129.1635, StoreStatus.INACTIVE, false);
+
+        List<StoreCandidateProjection> candidates = storeRepository.findCandidatesByName("좌표없는검색식당", 10);
+
+        assertThat(candidates)
+                .extracting(StoreCandidateProjection::getStoreId)
+                .containsExactlyInAnyOrder(seoulId, busanId);
+        assertThat(candidates).allSatisfy(candidate -> assertThat(candidate.getDistanceMeters())
+                .isNull());
+    }
+
+    @Test
+    void countsOnlyVisibleReviews() {
+        long storeId = insertStore("review-store", "후기 식당", 37.5001, 127.0000, StoreStatus.ACTIVE, false);
+        UUID userId = userRepository
+                .save(User.create("review-" + UUID.randomUUID() + "@example.com", "reviewer", "ko"))
+                .getId();
+        userRepository.flush();
+        insertReview(userId, storeId, false);
+        insertReview(userId, storeId, false);
+        insertReview(userId, storeId, true);
+
+        List<StoreCandidateProjection> nearby =
+                storeRepository.findNearbyCandidates(CENTER_LATITUDE, CENTER_LONGITUDE, 500, 10);
+        List<StoreCandidateProjection> byName = storeRepository.findCandidatesByName("후기 식당", 10);
+
+        assertThat(nearby)
+                .filteredOn(c -> c.getStoreId() == storeId)
+                .singleElement()
+                .satisfies(c -> assertThat(c.getReviewCount()).isEqualTo(2));
+        assertThat(byName)
+                .filteredOn(c -> c.getStoreId() == storeId)
+                .singleElement()
+                .satisfies(c -> assertThat(c.getReviewCount()).isEqualTo(2));
+    }
+
+    private void insertReview(UUID userId, long storeId, boolean hidden) {
+        jdbcTemplate.update(
+                "insert into meal_reviews (id, user_id, store_id, hidden_at) values (?, ?, ?, ?)",
+                UUID.randomUUID(),
+                userId,
+                storeId,
+                hidden ? Timestamp.from(Instant.now().plusSeconds(1)) : null);
     }
 
     private long insertStore(

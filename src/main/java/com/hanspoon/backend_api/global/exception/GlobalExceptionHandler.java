@@ -1,13 +1,9 @@
 package com.hanspoon.backend_api.global.exception;
 
 import java.net.URI;
-import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -39,12 +35,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ProblemDetail> handleUnexpectedException(Exception exception, WebRequest request) {
-        log.error("Unhandled exception", exception);
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
                 HttpStatus.INTERNAL_SERVER_ERROR, ErrorCode.INTERNAL_SERVER_ERROR.getMessage());
         problemDetail.setTitle("Internal Server Error");
-        problemDetail.setType(problemType(ErrorCode.INTERNAL_SERVER_ERROR.getCode()));
-        enrich(problemDetail, ErrorCode.INTERNAL_SERVER_ERROR.getCode(), request);
+        problemDetail.setType(ProblemDetails.type(ErrorCode.INTERNAL_SERVER_ERROR.getCode()));
+        String traceId = enrich(problemDetail, ErrorCode.INTERNAL_SERVER_ERROR.getCode(), request);
+        log.error("Unhandled exception: traceId={}", traceId, exception);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(problemDetail);
     }
 
@@ -54,7 +50,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(status, "Request validation failed.");
         problemDetail.setTitle("Invalid Request");
-        problemDetail.setType(problemType(ErrorCode.INVALID_REQUEST.getCode()));
+        problemDetail.setType(ProblemDetails.type(ErrorCode.INVALID_REQUEST.getCode()));
         problemDetail.setProperty("errors", fieldViolations(exception));
         enrich(problemDetail, ErrorCode.INVALID_REQUEST.getCode(), request);
 
@@ -69,13 +65,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 ? detail
                 : ProblemDetail.forStatusAndDetail(statusCode, resolveDetail(exception, statusCode));
 
-        if (problemDetail.getTitle() == null) {
+        String code = resolveCode(statusCode);
+        if (ErrorCode.INVALID_REQUEST.getCode().equals(code)) {
+            problemDetail.setTitle("Invalid Request");
+        } else if (problemDetail.getTitle() == null) {
             problemDetail.setTitle(resolveTitle(statusCode));
         }
         if (problemDetail.getType() == null || URI.create("about:blank").equals(problemDetail.getType())) {
-            problemDetail.setType(problemType(resolveCode(statusCode)));
+            problemDetail.setType(ProblemDetails.type(code));
         }
-        enrich(problemDetail, resolveCode(statusCode), request);
+        enrich(problemDetail, code, request);
 
         return super.handleExceptionInternal(exception, problemDetail, headers, statusCode, request);
     }
@@ -90,32 +89,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return new FieldViolation(fieldError.getField(), fieldError.getRejectedValue(), fieldError.getDefaultMessage());
     }
 
-    private void enrich(ProblemDetail problemDetail, String code, WebRequest request) {
-        // 이미 설정된 code(예: 검증 실패의 INVALID_REQUEST)는 보존한다.
-        // handleExceptionInternal 이 마지막에 다시 enrich 하면서 HTTP_xxx 로 덮어쓰는 것을 방지.
-        Map<String, Object> properties = problemDetail.getProperties();
-        if (properties == null || properties.get("code") == null) {
-            problemDetail.setProperty("code", code);
-        }
-        problemDetail.setProperty("timestamp", OffsetDateTime.now());
-        problemDetail.setProperty("traceId", resolveTraceId());
-        problemDetail.setInstance(URI.create(requestPath(request)));
-    }
-
-    private String resolveTraceId() {
-        String traceId = MDC.get("traceId");
-        return (traceId != null && !traceId.isBlank())
-                ? traceId
-                : UUID.randomUUID().toString();
-    }
-
-    private URI problemType(String code) {
-        return URI.create("https://api.han-spoon.com/problems/" + code);
+    private String enrich(ProblemDetail problemDetail, String code, WebRequest request) {
+        return ProblemDetails.enrich(problemDetail, code, requestPath(request));
     }
 
     private String resolveCode(HttpStatusCode statusCode) {
         if (statusCode.is5xxServerError()) {
             return ErrorCode.INTERNAL_SERVER_ERROR.getCode();
+        }
+        if (statusCode.value() == HttpStatus.BAD_REQUEST.value()) {
+            return ErrorCode.INVALID_REQUEST.getCode();
         }
         return "HTTP_" + statusCode.value();
     }

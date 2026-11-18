@@ -1,5 +1,6 @@
 package com.hanspoon.backend_api.domain.scan.dto;
 
+import com.hanspoon.backend_api.domain.scan.entity.ScanRecord;
 import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -11,10 +12,12 @@ import java.util.UUID;
  *
  * @param scanId 스캔 세션 id
  * @param title 유저 편집 제목(미편집이면 null → FE 가 scannedAt 로케일 포맷)
- * @param store 스캔 시점 가게 정보. 가게 도입 전 레거시 스캔은 null
+ * @param store 스캔 시점 가게, 없으면 기록에 연결한 가게. 둘 다 없으면 null
  * @param status 스캔 상태
  * @param menuCount 추출 메뉴 수
- * @param riskyMenuCount 위험/주의 메뉴 수
+ * @param dangerCount 위험 메뉴 수
+ * @param cautionCount 주의 메뉴 수
+ * @param riskyMenuCount dangerCount + cautionCount. 기존 화면 호환용
  * @param scannedAt 스캔 시각
  */
 @Schema(description = "스캔 이력 항목")
@@ -24,23 +27,37 @@ public record ScanHistoryItem(
         ScanStoreSummary store,
         ScanStatus status,
         Integer menuCount,
+        Integer dangerCount,
+        Integer cautionCount,
         Integer riskyMenuCount,
         Instant scannedAt) {
 
-    public static ScanHistoryItem from(ScanSession session) {
+    public static ScanHistoryItem of(ScanSession session, ScanRecord record) {
+        Integer danger = session.getDangerCount();
+        Integer caution = session.getCautionCount();
         return new ScanHistoryItem(
                 session.getId(),
                 session.getTitle(),
-                toStoreSummary(session),
+                toStoreSummary(session, record),
                 session.getScanStatus(),
                 session.getMenuCount(),
-                session.getRiskyMenuCount(),
+                danger,
+                caution,
+                danger == null && caution == null ? null : zeroIfNull(danger) + zeroIfNull(caution),
                 session.getScannedAt());
     }
 
-    private static ScanStoreSummary toStoreSummary(ScanSession session) {
-        return session.getStoreId() == null
-                ? null
-                : new ScanStoreSummary(session.getStoreId(), session.getStoreNameSnapshot());
+    private static ScanStoreSummary toStoreSummary(ScanSession session, ScanRecord record) {
+        if (session.getStoreId() != null) {
+            return new ScanStoreSummary(session.getStoreId(), session.getStoreNameSnapshot());
+        }
+        if (record != null && record.getAttachedStoreId() != null) {
+            return new ScanStoreSummary(record.getAttachedStoreId(), record.getAttachedStoreNameSnapshot());
+        }
+        return null;
+    }
+
+    private static int zeroIfNull(Integer value) {
+        return value == null ? 0 : value;
     }
 }

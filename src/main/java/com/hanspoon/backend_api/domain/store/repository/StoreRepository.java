@@ -29,7 +29,11 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
                            cast(null as double precision) as "nameSimilarity",
                            c.code as "categoryCode",
                            c.name as "categoryName",
-                           (s.verified_at is not null) as "verified"
+                           (s.verified_at is not null) as "verified",
+                           (select cast(count(*) as integer)
+                              from meal_reviews r
+                             where r.store_id = s.id
+                               and r.hidden_at is null) as "reviewCount"
                       from stores s
                       left join store_categories c on c.id = s.category_id
                      where s.status = 'active'
@@ -75,7 +79,11 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
                            similarity(s.name_normalized, normalize_store_name(:query)) as "nameSimilarity",
                            c.code as "categoryCode",
                            c.name as "categoryName",
-                           (s.verified_at is not null) as "verified"
+                           (s.verified_at is not null) as "verified",
+                           (select cast(count(*) as integer)
+                              from meal_reviews r
+                             where r.store_id = s.id
+                               and r.hidden_at is null) as "reviewCount"
                       from stores s
                       left join store_categories c on c.id = s.category_id
                      where s.status = 'active'
@@ -106,4 +114,40 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
             @Param("longitude") double longitude,
             @Param("radiusMeters") int radiusMeters,
             @Param("limit") int limit);
+
+    /** 좌표 없는 이름 검색. 전체 영업 중 가게 대상, 거리는 null. */
+    @Query(
+            value =
+                    """
+                    select s.id as "storeId",
+                           s.name as "name",
+                           s.branch_name as "branchName",
+                           s.road_address as "roadAddress",
+                           s.lat as "latitude",
+                           s.lng as "longitude",
+                           cast(null as integer) as "distanceMeters",
+                           similarity(s.name_normalized, normalize_store_name(:query)) as "nameSimilarity",
+                           c.code as "categoryCode",
+                           c.name as "categoryName",
+                           (s.verified_at is not null) as "verified",
+                           (select cast(count(*) as integer)
+                              from meal_reviews r
+                             where r.store_id = s.id
+                               and r.hidden_at is null) as "reviewCount"
+                      from stores s
+                      left join store_categories c on c.id = s.category_id
+                     where s.status = 'active'
+                       and s.name_normalized % normalize_store_name(:query)
+                     order by "verified" desc,
+                              case s.origin
+                                  when 'sbiz' then 0
+                                  when 'localdata' then 1
+                                  else 2
+                              end,
+                              "nameSimilarity" desc,
+                              s.id
+                     limit :limit
+                    """,
+            nativeQuery = true)
+    List<StoreCandidateProjection> findCandidatesByName(@Param("query") String query, @Param("limit") int limit);
 }

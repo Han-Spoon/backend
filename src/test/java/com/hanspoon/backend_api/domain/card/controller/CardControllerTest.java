@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -13,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.hanspoon.backend_api.domain.card.dto.CardText;
+import com.hanspoon.backend_api.domain.card.dto.SaveCardRequest;
 import com.hanspoon.backend_api.domain.card.dto.SavedCardResponse;
 import com.hanspoon.backend_api.domain.card.entity.CardType;
 import com.hanspoon.backend_api.domain.card.service.CardService;
@@ -69,11 +71,7 @@ class CardControllerTest {
         UUID cardId = UUID.randomUUID();
         when(cardService.save(eq(USER_ID), any()))
                 .thenReturn(new SavedCardResponse(
-                        cardId,
-                        CardType.INGREDIENT_CHECK,
-                        "된장찌개",
-                        new CardText("이 메뉴에 멸치육수가 들어가나요?", null, null),
-                        Instant.now()));
+                        cardId, CardType.INGREDIENT_CHECK, "된장찌개", CardText.ko("이 메뉴에 멸치육수가 들어가나요?"), Instant.now()));
 
         mockMvc.perform(
                         post("/api/v1/cards/saved")
@@ -84,6 +82,41 @@ class CardControllerTest {
                 .andExpect(jsonPath("$.cardId").value(cardId.toString()))
                 .andExpect(jsonPath("$.type").value("ingredient_check"))
                 .andExpect(jsonPath("$.text.ko").value("이 메뉴에 멸치육수가 들어가나요?"));
+    }
+
+    @Test
+    void saveAcceptsLessSpicyWithChineseText() throws Exception {
+        UUID cardId = UUID.randomUUID();
+        CardText text = new CardText("김치찌개 덜 맵게 해 주실 수 있나요?", null, null, "泡菜汤可以少辣吗？", null, null, null);
+        when(cardService.save(eq(USER_ID), any()))
+                .thenReturn(new SavedCardResponse(cardId, CardType.LESS_SPICY, "김치찌개", text, Instant.now()));
+
+        mockMvc.perform(
+                        post("/api/v1/cards/saved")
+                                .contentType("application/json")
+                                .content(
+                                        "{\"type\":\"less_spicy\",\"menuNameKo\":\"김치찌개\",\"text\":{\"ko\":\"김치찌개 덜 맵게 해 주실 수 있나요?\",\"zh-CN\":\"泡菜汤可以少辣吗？\"}}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.type").value("less_spicy"))
+                .andExpect(jsonPath("$.text['zh-CN']").value("泡菜汤可以少辣吗？"))
+                .andExpect(jsonPath("$.text.en").doesNotExist());
+
+        ArgumentCaptor<SaveCardRequest> captor = ArgumentCaptor.forClass(SaveCardRequest.class);
+        verify(cardService).save(eq(USER_ID), captor.capture());
+        assertThat(captor.getValue().type()).isEqualTo(CardType.LESS_SPICY);
+        assertThat(captor.getValue().text()).isEqualTo(text);
+    }
+
+    @Test
+    void saveRejectsUnsupportedLanguageKey() throws Exception {
+        mockMvc.perform(
+                        post("/api/v1/cards/saved")
+                                .contentType("application/json")
+                                .content(
+                                        "{\"type\":\"order\",\"menuNameKo\":\"삼겹살\",\"text\":{\"ko\":\"삼겹살 하나 주세요.\",\"fr\":\"Poitrine de porc\"}}"))
+                .andExpect(status().isBadRequest());
+
+        verify(cardService, never()).save(any(), any());
     }
 
     @Test
@@ -113,8 +146,8 @@ class CardControllerTest {
     @Test
     void getCardsReturnsPage() throws Exception {
         UUID cardId = UUID.randomUUID();
-        SavedCardResponse item = new SavedCardResponse(
-                cardId, CardType.ORDER, "삼겹살", new CardText("삼겹살 하나 주세요.", null, null), Instant.now());
+        SavedCardResponse item =
+                new SavedCardResponse(cardId, CardType.ORDER, "삼겹살", CardText.ko("삼겹살 하나 주세요."), Instant.now());
         when(cardService.getCards(eq(USER_ID), any())).thenReturn(new PageResponse<>(List.of(item), 0, 20, 1, 1));
 
         mockMvc.perform(get("/api/v1/cards/saved?page=0&size=20"))

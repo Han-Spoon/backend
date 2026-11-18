@@ -25,8 +25,9 @@ public class UploadController {
         this.s3StorageService = s3StorageService;
     }
 
+    /** 정본 /uploads. /uploads/sas 는 레거시 별칭(프론트 전환 후 제거). */
     @Operation(summary = "업로드용 presigned PUT URL 발급. FE 는 uploadUrl 로 PUT 후 스캔 요청에 storageKey 전달")
-    @PostMapping("/sas")
+    @PostMapping({"", "/sas"})
     public UploadTicketResponse issueUploadTicket(
             @CurrentUser String userId, @Valid @RequestBody UploadTicketRequest request) {
         return s3StorageService.createUploadUrl(UUID.fromString(userId), request.contentType());

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.hanspoon.backend_api.domain.ai.dto.common.RiskLevel;
 import com.hanspoon.backend_api.domain.consent.service.ConsentService;
 import com.hanspoon.backend_api.domain.scan.dto.ScanCreatedResponse;
 import com.hanspoon.backend_api.domain.scan.dto.ScanHistoryItem;
@@ -18,7 +19,7 @@ import com.hanspoon.backend_api.domain.scan.dto.ScanStoreSummary;
 import com.hanspoon.backend_api.domain.scan.dto.StartScanRequest;
 import com.hanspoon.backend_api.domain.scan.dto.UpdateScanTitleRequest;
 import com.hanspoon.backend_api.domain.scan.entity.MenuAnalysis;
-import com.hanspoon.backend_api.domain.scan.entity.ScanFeedbackAnswer;
+import com.hanspoon.backend_api.domain.scan.entity.ScanRecord;
 import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
@@ -244,12 +245,7 @@ class ScanServiceTest {
         when(menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(scanId))
                 .thenReturn(List.of());
         ScanRecordResponse savedRecord = new ScanRecordResponse(
-                scanId,
-                new ScanStoreSummary(42L, "한스푼"),
-                true,
-                StoreMatchMethod.GPS_CANDIDATE,
-                Map.of("allergy:shrimp", ScanFeedbackAnswer.YES),
-                Instant.now());
+                scanId, new ScanStoreSummary(42L, "한스푼"), true, StoreMatchMethod.GPS_CANDIDATE, Instant.now());
         when(scanRecordService.findResponse(session)).thenReturn(savedRecord);
 
         var response = scanService.getScan(userId, scanId);
@@ -345,23 +341,50 @@ class ScanServiceTest {
     }
 
     @Test
-    void getScansReturnsMappedPage() {
+    void getScansReturnsRiskCountsAndAttachedStore() {
         UUID userId = UUID.randomUUID();
         Pageable pageable = PageRequest.of(0, 20);
-        ScanSession session = ScanSession.create(userId, "menu.jpg", 3, 1, ScanStatus.COMPLETED, Instant.now());
+        ScanSession session = ScanSession.startWithoutStore(userId, "scans/" + userId + "/list.jpg");
+        session.applyOcrResult(3, Instant.now());
+        session.applyRiskCounts(List.of(RiskLevel.DANGER, RiskLevel.CAUTION, RiskLevel.SAFE));
+        session.applyRuleEngineResult(2, ScanStatus.COMPLETED);
+        ScanRecord record =
+                ScanRecord.create(session.getId(), 77L, "연결한 식당", StoreMatchMethod.NAME_SEARCH, Instant.now());
         when(scanSessionRepository.findByUserIdAndScanStatus(userId, ScanStatus.COMPLETED, pageable))
                 .thenReturn(new PageImpl<>(List.of(session), pageable, 1));
+        when(scanRecordService.findRecords(List.of(session.getId()))).thenReturn(Map.of(session.getId(), record));
 
         PageResponse<ScanHistoryItem> response = scanService.getScans(userId, pageable);
 
         assertThat(response.items()).hasSize(1);
-        assertThat(response.page()).isZero();
-        assertThat(response.size()).isEqualTo(20);
         assertThat(response.totalElements()).isEqualTo(1);
-        assertThat(response.totalPages()).isEqualTo(1);
-        assertThat(response.items().get(0).scanId()).isEqualTo(session.getId());
-        assertThat(response.items().get(0).status()).isEqualTo(ScanStatus.COMPLETED);
-        assertThat(response.items().get(0).riskyMenuCount()).isEqualTo(1);
+        ScanHistoryItem item = response.items().get(0);
+        assertThat(item.scanId()).isEqualTo(session.getId());
+        assertThat(item.status()).isEqualTo(ScanStatus.COMPLETED);
+        assertThat(item.store().storeId()).isEqualTo(77L);
+        assertThat(item.store().name()).isEqualTo("연결한 식당");
+        assertThat(item.dangerCount()).isEqualTo(1);
+        assertThat(item.cautionCount()).isEqualTo(1);
+        assertThat(item.riskyMenuCount()).isEqualTo(2);
+    }
+
+    @Test
+    void getScansKeepsLockedStoreAndNullCountersForLegacyScan() {
+        UUID userId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 20);
+        ScanSession session = ScanSession.start(
+                userId, "scans/" + userId + "/locked.jpg", 42L, "한스푼", StoreMatchMethod.GPS_CANDIDATE);
+        session.applyOcrResult(2, Instant.now());
+        session.applyRuleEngineResult(1, ScanStatus.COMPLETED);
+        when(scanSessionRepository.findByUserIdAndScanStatus(userId, ScanStatus.COMPLETED, pageable))
+                .thenReturn(new PageImpl<>(List.of(session), pageable, 1));
+
+        ScanHistoryItem item = scanService.getScans(userId, pageable).items().get(0);
+
+        assertThat(item.store().storeId()).isEqualTo(42L);
+        assertThat(item.dangerCount()).isNull();
+        assertThat(item.cautionCount()).isNull();
+        assertThat(item.riskyMenuCount()).isNull();
     }
 
     @Test

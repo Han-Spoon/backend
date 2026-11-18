@@ -9,7 +9,7 @@ public record UserMeResponse(
         @Schema(description = "사용자 ID") UUID id,
         @Schema(description = "이메일", example = "user@example.com") String email,
         @Schema(description = "닉네임", example = "Lee") String nickname,
-        @Schema(description = "표시 언어(ko/en/ar)", example = "ko") String languageCode,
+        @Schema(description = "표시 언어(7종: ko, en, ar, zh-CN, zh-TW, ja, es)", example = "ko") String languageCode,
         @Schema(description = "프로필 존재 여부", example = "true") boolean hasProfile) {
 
     public static UserMeResponse of(User user, boolean hasProfile) {

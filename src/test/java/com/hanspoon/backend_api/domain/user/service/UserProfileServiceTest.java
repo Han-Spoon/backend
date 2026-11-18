@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.hanspoon.backend_api.domain.consent.service.ConsentService;
+import com.hanspoon.backend_api.domain.user.dto.ProfilePatchRequest;
 import com.hanspoon.backend_api.domain.user.dto.ProfileRequest;
 import com.hanspoon.backend_api.domain.user.dto.ProfileResponse;
 import com.hanspoon.backend_api.domain.user.entity.AllergyCode;
@@ -166,20 +167,175 @@ class UserProfileServiceTest {
         assertThat(response.allergies()).containsExactly(AllergyCode.CRAB);
     }
 
-    @Test
-    void updateProfile_replacesAllergiesAndSyncsLanguage() {
-        UUID userId = UUID.randomUUID();
-        User user = User.create("me@example.com", "Me", "en");
-        UserProfile profile =
-                UserProfile.create(userId, "US", false, false, null, null, false, false, List.of(AllergyCode.CRAB));
+    private ProfilePatchRequest patch(
+            String languageCode,
+            Boolean isVegan,
+            VegetarianType veganType,
+            Boolean hasReligion,
+            ReligionType religionType,
+            Boolean hasAllergies,
+            List<AllergyCode> allergies) {
+        return new ProfilePatchRequest(
+                null,
+                languageCode,
+                null,
+                isVegan,
+                veganType,
+                hasReligion,
+                religionType,
+                hasAllergies,
+                allergies,
+                null,
+                null);
+    }
+
+    /** 국적 US, 채식 vegan, 종교 halal, 알레르기 CRAB, noSpicy=true. */
+    private UserProfile givenProfile(UUID userId, User user) {
+        UserProfile profile = UserProfile.create(
+                userId,
+                "US",
+                false,
+                true,
+                VegetarianType.VEGAN,
+                ReligionType.HALAL,
+                true,
+                false,
+                List.of(AllergyCode.CRAB));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(userProfileRepository.findByUserId(userId)).thenReturn(Optional.of(profile));
+        return profile;
+    }
 
-        ProfileResponse response = userProfileService.updateProfile(userId, sampleRequest());
+    @Test
+    void updateProfile_languageOnly_keepsProfile() {
+        UUID userId = UUID.randomUUID();
+        User user = User.create("me@example.com", "Me", "en");
+        UserProfile profile = givenProfile(userId, user);
 
-        assertThat(user.getLanguageCode()).isEqualTo("ko");
+        ProfileResponse response =
+                userProfileService.updateProfile(userId, patch("ja", null, null, null, null, null, null));
+
+        assertThat(user.getLanguageCode()).isEqualTo("ja");
+        assertThat(profile.getNationality()).isEqualTo("US");
+        assertThat(response.isVegan()).isTrue();
+        assertThat(response.veganType()).isEqualTo(VegetarianType.VEGAN);
+        assertThat(response.religionType()).isEqualTo(ReligionType.HALAL);
+        assertThat(response.allergies()).containsExactly(AllergyCode.CRAB);
+        assertThat(response.noSpicy()).isTrue();
+    }
+
+    @Test
+    void updateProfile_emptyBody_changesNothing() {
+        UUID userId = UUID.randomUUID();
+        User user = User.create("me@example.com", "Me", "en");
+        givenProfile(userId, user);
+
+        ProfileResponse response =
+                userProfileService.updateProfile(userId, patch(null, null, null, null, null, null, null));
+
+        assertThat(user.getLanguageCode()).isEqualTo("en");
+        assertThat(response.nationality()).isEqualTo("US");
+        assertThat(response.isFirstTime()).isFalse();
+        assertThat(response.veganType()).isEqualTo(VegetarianType.VEGAN);
+        assertThat(response.religionType()).isEqualTo(ReligionType.HALAL);
+        assertThat(response.allergies()).containsExactly(AllergyCode.CRAB);
+    }
+
+    @Test
+    void updateProfile_nationalityOnly_normalizesUppercase() {
+        UUID userId = UUID.randomUUID();
+        UserProfile profile = givenProfile(userId, User.create("me@example.com", "Me", "en"));
+
+        userProfileService.updateProfile(
+                userId, new ProfilePatchRequest("kr", null, null, null, null, null, null, null, null, null, null));
+
         assertThat(profile.getNationality()).isEqualTo("KR");
-        assertThat(response.allergies()).containsExactly(AllergyCode.EGG, AllergyCode.MILK);
+        assertThat(profile.getVegetarianType()).isEqualTo(VegetarianType.VEGAN);
+    }
+
+    @Test
+    void updateProfile_veganTypeOnly_usesStoredFlag() {
+        UUID userId = UUID.randomUUID();
+        UserProfile profile = givenProfile(userId, User.create("me@example.com", "Me", "en"));
+
+        userProfileService.updateProfile(userId, patch(null, null, VegetarianType.PESCO, null, null, null, null));
+
+        assertThat(profile.getVegetarian()).isTrue();
+        assertThat(profile.getVegetarianType()).isEqualTo(VegetarianType.PESCO);
+    }
+
+    @Test
+    void updateProfile_flagsFalse_clearDetails() {
+        UUID userId = UUID.randomUUID();
+        UserProfile profile = givenProfile(userId, User.create("me@example.com", "Me", "en"));
+
+        ProfileResponse response =
+                userProfileService.updateProfile(userId, patch(null, false, null, false, null, false, null));
+
+        assertThat(profile.getVegetarianType()).isNull();
+        assertThat(profile.getReligionType()).isNull();
+        assertThat(profile.getAllergies()).isEmpty();
+        assertThat(response.hasAllergies()).isFalse();
+    }
+
+    @Test
+    void updateProfile_allergiesOnly_replacesList() {
+        UUID userId = UUID.randomUUID();
+        UserProfile profile = givenProfile(userId, User.create("me@example.com", "Me", "en"));
+
+        userProfileService.updateProfile(
+                userId, patch(null, null, null, null, null, null, List.of(AllergyCode.MILK, AllergyCode.EGG)));
+
         assertThat(profile.getAllergies()).containsExactly(AllergyCode.EGG, AllergyCode.MILK);
+    }
+
+    @Test
+    void updateProfile_veganTrueWithoutStoredType_throwsInvalidRequest() {
+        UUID userId = UUID.randomUUID();
+        UserProfile profile = UserProfile.create(userId, "US", false, false, null, null, false, false, List.of());
+        when(userRepository.findById(userId)).thenReturn(Optional.of(User.create("me@example.com", "Me", "en")));
+        when(userProfileRepository.findByUserId(userId)).thenReturn(Optional.of(profile));
+
+        assertInvalidRequest(userId, patch(null, true, null, null, null, null, null));
+        assertInvalidRequest(userId, patch(null, null, null, true, null, null, null));
+        assertInvalidRequest(userId, patch(null, null, null, null, null, true, null));
+        assertThat(profile.getVegetarian()).isFalse();
+    }
+
+    @Test
+    void updateProfile_religionNone_throwsInvalidRequest() {
+        UUID userId = UUID.randomUUID();
+        givenProfile(userId, User.create("me@example.com", "Me", "en"));
+
+        assertInvalidRequest(userId, patch(null, null, null, null, ReligionType.NONE, null, null));
+    }
+
+    @Test
+    void updateProfile_emptyAllergiesWhileAllergic_throwsInvalidRequest() {
+        UUID userId = UUID.randomUUID();
+        UserProfile profile = givenProfile(userId, User.create("me@example.com", "Me", "en"));
+
+        assertInvalidRequest(userId, patch(null, null, null, null, null, null, List.of()));
+        assertThat(profile.getAllergies()).containsExactly(AllergyCode.CRAB);
+    }
+
+    @Test
+    void updateProfile_whenMissing_throwsProfileNotFound() {
+        UUID userId = UUID.randomUUID();
+        when(userRepository.findById(userId)).thenReturn(Optional.of(User.create("me@example.com", "Me", "en")));
+        when(userProfileRepository.findByUserId(userId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(
+                        () -> userProfileService.updateProfile(userId, patch("ja", null, null, null, null, null, null)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(ex -> ((BusinessException) ex).getErrorCode())
+                .isEqualTo(ErrorCode.PROFILE_NOT_FOUND);
+    }
+
+    private void assertInvalidRequest(UUID userId, ProfilePatchRequest request) {
+        assertThatThrownBy(() -> userProfileService.updateProfile(userId, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting(ex -> ((BusinessException) ex).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_REQUEST);
     }
 }

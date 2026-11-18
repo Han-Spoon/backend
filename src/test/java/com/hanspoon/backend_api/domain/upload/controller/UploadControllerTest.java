@@ -15,7 +15,8 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.core.MethodParameter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -53,8 +54,9 @@ class UploadControllerTest {
                 .build();
     }
 
-    @Test
-    void issuesUploadTicket() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"/api/v1/uploads", "/api/v1/uploads/sas"})
+    void issuesUploadTicket(String path) throws Exception {
         String key = "scans/" + USER_ID + "/abc.jpg";
         when(s3StorageService.createUploadUrl(eq(USER_ID), eq("image/jpeg")))
                 .thenReturn(new UploadTicketResponse(
@@ -63,9 +65,7 @@ class UploadControllerTest {
                         Instant.parse("2026-06-06T00:10:00Z"),
                         Map.of("Content-Type", "image/jpeg", "If-None-Match", "*")));
 
-        mockMvc.perform(post("/api/v1/uploads/sas")
-                        .contentType("application/json")
-                        .content("{\"contentType\":\"image/jpeg\"}"))
+        mockMvc.perform(post(path).contentType("application/json").content("{\"contentType\":\"image/jpeg\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.storageKey").value(key))
                 .andExpect(jsonPath("$.uploadUrl").value(containsString("X-Amz-Signature=")))
@@ -74,11 +74,10 @@ class UploadControllerTest {
                 .andExpect(jsonPath("$.uploadHeaders['If-None-Match']").value("*"));
     }
 
-    @Test
-    void rejectsBlankContentType() throws Exception {
-        mockMvc.perform(post("/api/v1/uploads/sas")
-                        .contentType("application/json")
-                        .content("{\"contentType\":\"\"}"))
+    @ParameterizedTest
+    @ValueSource(strings = {"/api/v1/uploads", "/api/v1/uploads/sas"})
+    void rejectsBlankContentType(String path) throws Exception {
+        mockMvc.perform(post(path).contentType("application/json").content("{\"contentType\":\"\"}"))
                 .andExpect(status().isBadRequest());
     }
 }
