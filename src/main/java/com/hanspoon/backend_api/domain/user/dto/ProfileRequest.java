@@ -13,9 +13,9 @@ import jakarta.validation.constraints.Pattern;
 import java.util.List;
 
 /**
- * 온보딩(POST) / 프로필 수정(PATCH) 공용 요청. 프론트 UserProfile 1:1.
+ * 온보딩(POST) 요청. 프론트 UserProfile 1:1.
  */
-@Schema(description = "온보딩/프로필 수정 요청")
+@Schema(description = "온보딩 요청")
 public record ProfileRequest(
         @Schema(description = "국적(ISO 3166-1 alpha-2)", example = "SA") @NotBlank @CountryCode String nationality,
         @Schema(description = "표시 언어(7종: ko, en, ar, zh-CN, zh-TW, ja, es)", example = "en")

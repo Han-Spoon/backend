@@ -6,6 +6,7 @@ import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -32,6 +33,7 @@ class UserRequestLanguageValidationTest {
         assertThat(validator.validate(new UpdateUserRequest(languageCode, null)))
                 .isEmpty();
         assertThat(validator.validate(profileRequest(languageCode))).isEmpty();
+        assertThat(validator.validate(patchRequest(languageCode, null))).isEmpty();
     }
 
     @ParameterizedTest
@@ -40,6 +42,22 @@ class UserRequestLanguageValidationTest {
         assertThat(validator.validate(new UpdateUserRequest(languageCode, null)))
                 .isNotEmpty();
         assertThat(validator.validate(profileRequest(languageCode))).isNotEmpty();
+        assertThat(validator.validate(patchRequest(languageCode, null))).isNotEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", " ", "XX", "KOR"})
+    void patchRejectsInvalidNationality(String nationality) {
+        assertThat(validator.validate(patchRequest(null, nationality))).isNotEmpty();
+    }
+
+    @Test
+    void patchAcceptsEmptyBody() {
+        assertThat(validator.validate(patchRequest(null, null))).isEmpty();
+    }
+
+    private static ProfilePatchRequest patchRequest(String languageCode, String nationality) {
+        return new ProfilePatchRequest(nationality, languageCode, null, null, null, null, null, null, null, null, null);
     }
 
     private static ProfileRequest profileRequest(String languageCode) {
