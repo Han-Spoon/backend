@@ -22,18 +22,20 @@ public class StoreSearchService {
     @Transactional(readOnly = true)
     public StoreCandidateListResponse findCandidates(StoreCandidateSearchRequest request) {
         String query = request.trimmedQuery();
-        List<StoreCandidateProjection> candidates = query == null
-                ? storeRepository.findNearbyCandidates(
-                        request.latitude(),
-                        request.longitude(),
-                        request.resolvedRadiusMeters(),
-                        request.resolvedLimit())
-                : storeRepository.findNearbyCandidatesByName(
-                        query,
-                        request.latitude(),
-                        request.longitude(),
-                        request.resolvedRadiusMeters(),
-                        request.resolvedLimit());
+        List<StoreCandidateProjection> candidates = !request.hasCoordinates()
+                ? storeRepository.findCandidatesByName(query, request.resolvedLimit())
+                : query == null
+                        ? storeRepository.findNearbyCandidates(
+                                request.latitude(),
+                                request.longitude(),
+                                request.resolvedRadiusMeters(),
+                                request.resolvedLimit())
+                        : storeRepository.findNearbyCandidatesByName(
+                                query,
+                                request.latitude(),
+                                request.longitude(),
+                                request.resolvedRadiusMeters(),
+                                request.resolvedLimit());
 
         StoreMatchMethod matchMethod = query == null ? StoreMatchMethod.GPS_CANDIDATE : StoreMatchMethod.NAME_SEARCH;
         return new StoreCandidateListResponse(candidates.stream()
@@ -52,6 +54,7 @@ public class StoreSearchService {
                 candidate.getDistanceMeters(),
                 candidate.getCategoryCode(),
                 candidate.getCategoryName(),
+                candidate.getReviewCount() == null ? 0 : candidate.getReviewCount(),
                 Boolean.TRUE.equals(candidate.getVerified()),
                 matchMethod);
     }
