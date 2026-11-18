@@ -24,4 +24,6 @@ public interface StoreCandidateProjection {
     String getCategoryName();
 
     Boolean getVerified();
+
+    Integer getReviewCount();
 }

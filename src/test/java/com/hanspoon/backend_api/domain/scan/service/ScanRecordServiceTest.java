@@ -9,7 +9,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.hanspoon.backend_api.domain.scan.dto.SaveScanRecordRequest;
-import com.hanspoon.backend_api.domain.scan.entity.ScanFeedbackAnswer;
 import com.hanspoon.backend_api.domain.scan.entity.ScanRecord;
 import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
@@ -22,7 +21,6 @@ import com.hanspoon.backend_api.domain.store.repository.StoreRepository;
 import com.hanspoon.backend_api.global.exception.BusinessException;
 import com.hanspoon.backend_api.global.exception.ErrorCode;
 import java.time.Instant;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -56,14 +54,10 @@ class ScanRecordServiceTest {
         when(scanRecordRepository.findById(session.getId())).thenReturn(Optional.empty());
         when(scanRecordRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        var response = scanRecordService.save(
-                userId,
-                session.getId(),
-                new SaveScanRecordRequest(null, null, Map.of("allergy:shrimp", ScanFeedbackAnswer.YES)));
+        var response = scanRecordService.save(userId, session.getId(), new SaveScanRecordRequest(null, null));
 
         assertThat(response.storeLocked()).isTrue();
         assertThat(response.store().storeId()).isEqualTo(42L);
-        assertThat(response.feedback()).containsEntry("allergy:shrimp", ScanFeedbackAnswer.YES);
         ArgumentCaptor<ScanRecord> captor = ArgumentCaptor.forClass(ScanRecord.class);
         verify(scanRecordRepository).save(captor.capture());
         assertThat(captor.getValue().getAttachedStoreId()).isNull();
@@ -81,7 +75,7 @@ class ScanRecordServiceTest {
         when(scanRecordRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         var response = scanRecordService.save(
-                userId, session.getId(), new SaveScanRecordRequest(77L, StoreMatchMethod.NAME_SEARCH, Map.of()));
+                userId, session.getId(), new SaveScanRecordRequest(77L, StoreMatchMethod.NAME_SEARCH));
 
         assertThat(response.storeLocked()).isFalse();
         assertThat(response.store().storeId()).isEqualTo(77L);
@@ -98,9 +92,7 @@ class ScanRecordServiceTest {
                 .thenReturn(Optional.of(session));
 
         assertThatThrownBy(() -> scanRecordService.save(
-                        userId,
-                        session.getId(),
-                        new SaveScanRecordRequest(77L, StoreMatchMethod.NAME_SEARCH, Map.of())))
+                        userId, session.getId(), new SaveScanRecordRequest(77L, StoreMatchMethod.NAME_SEARCH)))
                 .isInstanceOf(BusinessException.class)
                 .extracting(error -> ((BusinessException) error).getErrorCode())
                 .isEqualTo(ErrorCode.SCAN_STORE_CONTEXT_LOCKED);
@@ -110,37 +102,20 @@ class ScanRecordServiceTest {
     }
 
     @Test
-    void rejectsFeedbackWhenNoStoreIsLinked() {
+    void emptyBodyDetachesPreviouslyAttachedStore() {
         UUID userId = UUID.randomUUID();
         ScanSession session = completedSessionWithoutStore(userId);
+        ScanRecord existing = ScanRecord.create(
+                session.getId(), 77L, "연결했던 식당", StoreMatchMethod.NAME_SEARCH, Instant.parse("2026-09-18T00:00:00Z"));
         when(scanSessionRepository.findByIdAndUserIdForUpdate(session.getId(), userId))
                 .thenReturn(Optional.of(session));
+        when(scanRecordRepository.findById(session.getId())).thenReturn(Optional.of(existing));
 
-        assertThatThrownBy(() -> scanRecordService.save(
-                        userId,
-                        session.getId(),
-                        new SaveScanRecordRequest(null, null, Map.of("preference:no-spicy", ScanFeedbackAnswer.NO))))
-                .isInstanceOf(BusinessException.class)
-                .extracting(error -> ((BusinessException) error).getErrorCode())
-                .isEqualTo(ErrorCode.SCAN_FEEDBACK_REQUIRES_STORE);
-    }
+        var response = scanRecordService.save(userId, session.getId(), new SaveScanRecordRequest(null, null));
 
-    @Test
-    void rejectsUnsupportedFeedbackItem() {
-        UUID userId = UUID.randomUUID();
-        ScanSession session = completedSessionWithStore(userId, 42L, "원래 식당");
-        when(scanSessionRepository.findByIdAndUserIdForUpdate(session.getId(), userId))
-                .thenReturn(Optional.of(session));
-
-        assertThatThrownBy(() -> scanRecordService.save(
-                        userId,
-                        session.getId(),
-                        new SaveScanRecordRequest(null, null, Map.of("allergy:not-supported", ScanFeedbackAnswer.YES))))
-                .isInstanceOf(BusinessException.class)
-                .extracting(error -> ((BusinessException) error).getErrorCode())
-                .isEqualTo(ErrorCode.INVALID_SCAN_FEEDBACK);
-
-        verify(scanRecordRepository, never()).save(any());
+        assertThat(response.store()).isNull();
+        assertThat(response.storeMatchMethod()).isNull();
+        assertThat(existing.getAttachedStoreId()).isNull();
     }
 
     @Test
@@ -150,8 +125,7 @@ class ScanRecordServiceTest {
         when(scanSessionRepository.findByIdAndUserIdForUpdate(session.getId(), userId))
                 .thenReturn(Optional.of(session));
 
-        assertThatThrownBy(() -> scanRecordService.save(
-                        userId, session.getId(), new SaveScanRecordRequest(null, null, Map.of())))
+        assertThatThrownBy(() -> scanRecordService.save(userId, session.getId(), new SaveScanRecordRequest(null, null)))
                 .isInstanceOf(BusinessException.class)
                 .extracting(error -> ((BusinessException) error).getErrorCode())
                 .isEqualTo(ErrorCode.SCAN_NOT_COMPLETED);
@@ -162,12 +136,12 @@ class ScanRecordServiceTest {
         UUID userId = UUID.randomUUID();
         ScanSession session = completedSessionWithoutStore(userId);
         ScanRecord existing =
-                ScanRecord.create(session.getId(), null, null, null, Map.of(), Instant.parse("2026-09-18T00:00:00Z"));
+                ScanRecord.create(session.getId(), null, null, null, Instant.parse("2026-09-18T00:00:00Z"));
         when(scanSessionRepository.findByIdAndUserIdForUpdate(session.getId(), userId))
                 .thenReturn(Optional.of(session));
         when(scanRecordRepository.findById(session.getId())).thenReturn(Optional.of(existing));
 
-        var response = scanRecordService.save(userId, session.getId(), new SaveScanRecordRequest(null, null, Map.of()));
+        var response = scanRecordService.save(userId, session.getId(), new SaveScanRecordRequest(null, null));
 
         assertThat(response.scanId()).isEqualTo(session.getId());
         verify(scanRecordRepository).save(existing);
@@ -182,20 +156,15 @@ class ScanRecordServiceTest {
                 77L,
                 "지금은 비활성 식당",
                 StoreMatchMethod.NAME_SEARCH,
-                Map.of(),
                 Instant.parse("2026-09-18T00:00:00Z"));
         when(scanSessionRepository.findByIdAndUserIdForUpdate(session.getId(), userId))
                 .thenReturn(Optional.of(session));
         when(scanRecordRepository.findById(session.getId())).thenReturn(Optional.of(existing));
 
         var response = scanRecordService.save(
-                userId,
-                session.getId(),
-                new SaveScanRecordRequest(
-                        77L, StoreMatchMethod.NAME_SEARCH, Map.of("allergy:shrimp", ScanFeedbackAnswer.UNKNOWN)));
+                userId, session.getId(), new SaveScanRecordRequest(77L, StoreMatchMethod.NAME_SEARCH));
 
         assertThat(response.store().name()).isEqualTo("지금은 비활성 식당");
-        assertThat(response.feedback()).containsEntry("allergy:shrimp", ScanFeedbackAnswer.UNKNOWN);
         verify(storeRepository, never()).findByIdAndStatus(any(), any());
     }
 

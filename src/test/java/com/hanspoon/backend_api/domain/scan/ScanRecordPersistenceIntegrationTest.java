@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.hanspoon.backend_api.TestcontainersConfiguration;
-import com.hanspoon.backend_api.domain.scan.entity.ScanFeedbackAnswer;
 import com.hanspoon.backend_api.domain.scan.entity.ScanRecord;
 import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
@@ -16,7 +15,6 @@ import com.hanspoon.backend_api.domain.user.repository.UserRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.time.Instant;
-import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,19 +45,14 @@ class ScanRecordPersistenceIntegrationTest {
     private EntityManager entityManager;
 
     @Test
-    void persistsAttachedStoreSnapshotAndFeedbackAsOneToOneRecord() {
+    void persistsAttachedStoreSnapshotAsOneToOneRecord() {
         User user = userRepository.save(User.create(uniqueEmail("record"), "record-user", "ko"));
         ScanSession scan = scanSessionRepository.save(
                 ScanSession.create(user.getId(), null, 1, 0, ScanStatus.COMPLETED, Instant.now()));
         long storeId = insertStore("RECORD-STORE-1", "기록 식당");
 
         scanRecordRepository.save(ScanRecord.create(
-                scan.getId(),
-                storeId,
-                "기록 식당",
-                StoreMatchMethod.NAME_SEARCH,
-                Map.of("allergy:shrimp", ScanFeedbackAnswer.YES),
-                Instant.parse("2026-09-18T12:00:00Z")));
+                scan.getId(), storeId, "기록 식당", StoreMatchMethod.NAME_SEARCH, Instant.parse("2026-09-18T12:00:00Z")));
         entityManager.flush();
         entityManager.clear();
 
@@ -67,7 +60,11 @@ class ScanRecordPersistenceIntegrationTest {
         assertThat(reloaded.getAttachedStoreId()).isEqualTo(storeId);
         assertThat(reloaded.getAttachedStoreNameSnapshot()).isEqualTo("기록 식당");
         assertThat(reloaded.getAttachedStoreMatchMethod()).isEqualTo(StoreMatchMethod.NAME_SEARCH);
-        assertThat(reloaded.getFeedback()).containsEntry("allergy:shrimp", ScanFeedbackAnswer.YES);
+        assertThat(jdbcTemplate.queryForObject(
+                        "select feedback::text from scan_records where scan_session_id = ?",
+                        String.class,
+                        scan.getId()))
+                .isEqualTo("{}");
     }
 
     @Test
@@ -75,7 +72,7 @@ class ScanRecordPersistenceIntegrationTest {
         User user = userRepository.save(User.create(uniqueEmail("cascade"), "record-user", "ko"));
         ScanSession scan = scanSessionRepository.save(
                 ScanSession.create(user.getId(), null, 1, 0, ScanStatus.COMPLETED, Instant.now()));
-        scanRecordRepository.save(ScanRecord.create(scan.getId(), null, null, null, Map.of(), Instant.now()));
+        scanRecordRepository.save(ScanRecord.create(scan.getId(), null, null, null, Instant.now()));
         entityManager.flush();
         entityManager.clear();
 

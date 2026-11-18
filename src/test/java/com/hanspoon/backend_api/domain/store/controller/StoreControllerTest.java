@@ -48,6 +48,7 @@ class StoreControllerTest {
                         42,
                         "I20101",
                         "한식 일반 음식점업",
+                        3,
                         true,
                         StoreMatchMethod.NAME_SEARCH))));
 
@@ -66,6 +67,7 @@ class StoreControllerTest {
                 .andExpect(jsonPath("$.items[0].storeId").value(42))
                 .andExpect(jsonPath("$.items[0].name").value("한스푼"))
                 .andExpect(jsonPath("$.items[0].distanceMeters").value(42))
+                .andExpect(jsonPath("$.items[0].reviewCount").value(3))
                 .andExpect(jsonPath("$.items[0].verified").value(true))
                 .andExpect(jsonPath("$.items[0].matchMethod").value("name_search"));
 
@@ -82,6 +84,40 @@ class StoreControllerTest {
         mockMvc.perform(post("/api/v1/stores/candidates")
                         .contentType("application/json")
                         .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+
+        verify(storeSearchService, never()).findCandidates(any());
+    }
+
+    @Test
+    void acceptsQueryWithoutCoordinates() throws Exception {
+        when(storeSearchService.findCandidates(any())).thenReturn(new StoreCandidateListResponse(List.of()));
+
+        mockMvc.perform(post("/api/v1/stores/candidates")
+                        .contentType("application/json")
+                        .content("{\"query\":\"김치찌개\"}"))
+                .andExpect(status().isOk());
+
+        verify(storeSearchService).findCandidates(any());
+    }
+
+    @Test
+    void rejectsBlankQueryWithoutCoordinates() throws Exception {
+        mockMvc.perform(post("/api/v1/stores/candidates")
+                        .contentType("application/json")
+                        .content("{\"query\":\"   \"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+
+        verify(storeSearchService, never()).findCandidates(any());
+    }
+
+    @Test
+    void rejectsSingleCoordinate() throws Exception {
+        mockMvc.perform(post("/api/v1/stores/candidates")
+                        .contentType("application/json")
+                        .content("{\"latitude\":37.4979,\"query\":\"한스푼\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 

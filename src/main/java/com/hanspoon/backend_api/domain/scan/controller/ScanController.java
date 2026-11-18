@@ -74,12 +74,6 @@ public class ScanController {
         return scanRecordService.save(UUID.fromString(userId), scanId, request);
     }
 
-    @Operation(summary = "저장된 본인의 스캔 기록 조회.")
-    @GetMapping("/{scanId}/record")
-    public ScanRecordResponse getRecord(@CurrentUser String userId, @PathVariable UUID scanId) {
-        return scanRecordService.get(UUID.fromString(userId), scanId);
-    }
-
     @Operation(summary = "스캔 이력 제목 수정. 본인 스캔만. 없거나 타인 소유면 404")
     @PatchMapping("/{scanId}")
     public ScanHistoryItem updateTitle(

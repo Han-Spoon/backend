@@ -9,6 +9,7 @@ import com.hanspoon.backend_api.domain.scan.dto.ScanStoreSummary;
 import com.hanspoon.backend_api.domain.scan.dto.StartScanRequest;
 import com.hanspoon.backend_api.domain.scan.dto.UpdateScanTitleRequest;
 import com.hanspoon.backend_api.domain.scan.entity.MenuAnalysis;
+import com.hanspoon.backend_api.domain.scan.entity.ScanRecord;
 import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
@@ -22,11 +23,13 @@ import com.hanspoon.backend_api.global.common.PageResponse;
 import com.hanspoon.backend_api.global.exception.BusinessException;
 import com.hanspoon.backend_api.global.exception.ErrorCode;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.task.TaskRejectedException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -139,9 +142,11 @@ public class ScanService {
     /** 본인 스캔 이력 목록(최신순). 분석이 끝난 completed 만 노출, menus 는 미포함. */
     @Transactional(readOnly = true)
     public PageResponse<ScanHistoryItem> getScans(UUID userId, Pageable pageable) {
-        return PageResponse.of(
-                scanSessionRepository.findByUserIdAndScanStatus(userId, ScanStatus.COMPLETED, pageable),
-                ScanHistoryItem::from);
+        Page<ScanSession> page =
+                scanSessionRepository.findByUserIdAndScanStatus(userId, ScanStatus.COMPLETED, pageable);
+        Map<UUID, ScanRecord> records =
+                scanRecordService.findRecords(page.map(ScanSession::getId).getContent());
+        return PageResponse.of(page, session -> ScanHistoryItem.of(session, records.get(session.getId())));
     }
 
     /** 본인 스캔 이력 제목 수정. 없거나 타인 소유면 SCAN_NOT_FOUND. */
@@ -151,7 +156,8 @@ public class ScanService {
                 .findByIdAndUserId(scanId, userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SCAN_NOT_FOUND));
         session.changeTitle(request.title());
-        return ScanHistoryItem.from(session);
+        return ScanHistoryItem.of(
+                session, scanRecordService.findRecords(List.of(scanId)).get(scanId));
     }
 
     /** 본인 스캔 이력 삭제. 연관 scan_images/menu_analyses 는 FK CASCADE 로 함께 삭제. */

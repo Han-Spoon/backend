@@ -1,5 +1,6 @@
 package com.hanspoon.backend_api.domain.user.controller;
 
+import com.hanspoon.backend_api.domain.user.dto.ProfilePatchRequest;
 import com.hanspoon.backend_api.domain.user.dto.ProfileRequest;
 import com.hanspoon.backend_api.domain.user.dto.ProfileResponse;
 import com.hanspoon.backend_api.domain.user.dto.UpdateUserRequest;
@@ -66,9 +67,9 @@ public class UserController {
         return userProfileService.getProfile(UUID.fromString(userId));
     }
 
-    @Operation(summary = "프로필 전체 수정. 없으면 404")
+    @Operation(summary = "프로필 부분 수정(보낸 필드만). 없으면 404")
     @PatchMapping("/me/profile")
-    public ProfileResponse updateProfile(@CurrentUser String userId, @Valid @RequestBody ProfileRequest request) {
+    public ProfileResponse updateProfile(@CurrentUser String userId, @Valid @RequestBody ProfilePatchRequest request) {
         return userProfileService.updateProfile(UUID.fromString(userId), request);
     }
 }

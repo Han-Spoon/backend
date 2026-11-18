@@ -1,11 +1,16 @@
 package com.hanspoon.backend_api.global.config;
 
+import static org.hamcrest.Matchers.endsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.hanspoon.backend_api.TestcontainersConfiguration;
+import com.hanspoon.backend_api.global.security.JwtTokenProvider;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,9 +21,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
-/**
- * 인증 실패 응답 계약. 토큰 부재와 토큰 무효는 서로 다른 entry point 를 타므로 둘 다 확인한다.
- */
+/** 에러 응답 계약(ProblemDetail). 보안 필터·MVC 예외 처리가 같은 모양인지 확인. */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
@@ -29,14 +32,23 @@ class SecurityErrorResponseIntegrationTest {
     @Autowired
     private MockMvc mockMvc;
 
+    @Autowired
+    private JwtTokenProvider jwtTokenProvider;
+
     @Test
     @DisplayName("Authorization 헤더 없음 → ProblemDetail 본문")
     void missingTokenReturnsProblemDetail() throws Exception {
         mockMvc.perform(get(PROTECTED_ENDPOINT))
                 .andExpect(status().isUnauthorized())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.type").value("https://api.han-spoon.site/problems/INVALID_TOKEN"))
+                .andExpect(jsonPath("$.title").value("Invalid or expired token."))
+                .andExpect(jsonPath("$.status").value(401))
                 .andExpect(jsonPath("$.code").value("INVALID_TOKEN"))
-                .andExpect(jsonPath("$.errorId").isNotEmpty());
+                .andExpect(jsonPath("$.instance").value(PROTECTED_ENDPOINT))
+                .andExpect(jsonPath("$.timestamp").value(endsWith("Z")))
+                .andExpect(jsonPath("$.traceId").isNotEmpty())
+                .andExpect(jsonPath("$.errorId").doesNotExist());
     }
 
     @Test
@@ -47,6 +59,57 @@ class SecurityErrorResponseIntegrationTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.code").value("INVALID_TOKEN"))
-                .andExpect(jsonPath("$.errorId").isNotEmpty());
+                .andExpect(jsonPath("$.traceId").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("비즈니스 예외 → 같은 ProblemDetail 모양")
+    void businessErrorUsesSameShape() throws Exception {
+        String path = "/api/v1/scans/" + UUID.randomUUID();
+        mockMvc.perform(get(path).header(HttpHeaders.AUTHORIZATION, bearer()))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.type").value("https://api.han-spoon.site/problems/SCAN_NOT_FOUND"))
+                .andExpect(jsonPath("$.code").value("SCAN_NOT_FOUND"))
+                .andExpect(jsonPath("$.instance").value(path))
+                .andExpect(jsonPath("$.timestamp").value(endsWith("Z")))
+                .andExpect(jsonPath("$.traceId").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("깨진 JSON → 400 INVALID_REQUEST")
+    void malformedJsonReturnsInvalidRequest() throws Exception {
+        mockMvc.perform(post("/api/v1/stores/candidates")
+                        .header(HttpHeaders.AUTHORIZATION, bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"query\":"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.type").value("https://api.han-spoon.site/problems/INVALID_REQUEST"))
+                .andExpect(jsonPath("$.title").value("Invalid Request"))
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.traceId").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("모르는 enum 값 → 400 INVALID_REQUEST")
+    void unknownEnumReturnsInvalidRequest() throws Exception {
+        mockMvc.perform(put("/api/v1/scans/{scanId}/record", UUID.randomUUID())
+                        .header(HttpHeaders.AUTHORIZATION, bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"storeId\":1,\"storeMatchMethod\":\"unknown_method\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    @DisplayName("잘못된 경로 변수 타입 → 400 INVALID_REQUEST")
+    void pathTypeMismatchReturnsInvalidRequest() throws Exception {
+        mockMvc.perform(get("/api/v1/scans/not-a-uuid").header(HttpHeaders.AUTHORIZATION, bearer()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    private String bearer() {
+        return "Bearer " + jwtTokenProvider.createAccessToken(UUID.randomUUID());
     }
 }

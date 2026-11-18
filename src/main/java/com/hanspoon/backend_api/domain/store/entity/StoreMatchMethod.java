@@ -8,7 +8,9 @@ import java.util.Arrays;
 public enum StoreMatchMethod {
     GPS_CANDIDATE("gps_candidate"),
     NAME_SEARCH("name_search"),
-    KAKAO_FALLBACK("kakao_fallback");
+    KAKAO_FALLBACK("kakao_fallback"),
+    /** 가게 상세의 "이 식당 메뉴 스캔". */
+    STORE_DETAIL("store_detail");
 
     private final String code;
 

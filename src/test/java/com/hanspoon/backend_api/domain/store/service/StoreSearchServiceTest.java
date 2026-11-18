@@ -39,6 +39,7 @@ class StoreSearchServiceTest {
         assertThat(response.items().getFirst().storeId()).isEqualTo(42L);
         assertThat(response.items().getFirst().name()).isEqualTo("한스푼");
         assertThat(response.items().getFirst().verified()).isTrue();
+        assertThat(response.items().getFirst().reviewCount()).isEqualTo(3);
         assertThat(response.items().getFirst().matchMethod()).isEqualTo(StoreMatchMethod.GPS_CANDIDATE);
         verify(storeRepository).findNearbyCandidates(37.4979, 127.0276, 100, 20);
         verifyNoMoreInteractions(storeRepository);
@@ -57,6 +58,21 @@ class StoreSearchServiceTest {
         verifyNoMoreInteractions(storeRepository);
     }
 
+    @Test
+    void searchesByNameOnlyWhenCoordinatesAreMissing() {
+        StoreCandidateSearchRequest request = new StoreCandidateSearchRequest(null, null, " 김치찌개 ", 1000, 10);
+        StoreCandidateProjection candidate = candidate();
+        when(candidate.getDistanceMeters()).thenReturn(null);
+        when(storeRepository.findCandidatesByName("김치찌개", 10)).thenReturn(List.of(candidate));
+
+        StoreCandidateListResponse response = storeSearchService.findCandidates(request);
+
+        assertThat(response.items().getFirst().distanceMeters()).isNull();
+        assertThat(response.items().getFirst().matchMethod()).isEqualTo(StoreMatchMethod.NAME_SEARCH);
+        verify(storeRepository).findCandidatesByName("김치찌개", 10);
+        verifyNoMoreInteractions(storeRepository);
+    }
+
     private StoreCandidateProjection candidate() {
         StoreCandidateProjection candidate = mock(StoreCandidateProjection.class);
         when(candidate.getStoreId()).thenReturn(42L);
@@ -69,6 +85,7 @@ class StoreSearchServiceTest {
         when(candidate.getCategoryCode()).thenReturn("I20101");
         when(candidate.getCategoryName()).thenReturn("한식 일반 음식점업");
         when(candidate.getVerified()).thenReturn(true);
+        when(candidate.getReviewCount()).thenReturn(3);
         return candidate;
     }
 }
