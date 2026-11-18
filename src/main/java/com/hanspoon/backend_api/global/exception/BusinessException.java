@@ -1,7 +1,5 @@
 package com.hanspoon.backend_api.global.exception;
 
-import java.net.URI;
-import java.time.OffsetDateTime;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.ErrorResponseException;
 
@@ -32,10 +30,9 @@ public class BusinessException extends ErrorResponseException {
 
     private static ProblemDetail createProblemDetail(ErrorCode errorCode, String detail) {
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(errorCode.getStatus(), detail);
-        problemDetail.setType(URI.create("https://api.han-spoon.com/problems/" + errorCode.getCode()));
+        problemDetail.setType(ProblemDetails.type(errorCode.getCode()));
         problemDetail.setTitle(errorCode.getMessage());
         problemDetail.setProperty("code", errorCode.getCode());
-        problemDetail.setProperty("timestamp", OffsetDateTime.now());
         return problemDetail;
     }
 }

@@ -1,20 +1,17 @@
 package com.hanspoon.backend_api.global.config;
 
 import com.hanspoon.backend_api.global.exception.ErrorCode;
+import com.hanspoon.backend_api.global.exception.ProblemDetails;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import io.jsonwebtoken.security.Keys;
 import java.io.IOException;
-import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.time.OffsetDateTime;
-import java.util.UUID;
 import javax.crypto.SecretKey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.security.config.Customizer;
@@ -111,50 +108,47 @@ public class SecurityConfig {
     @Bean
     public AuthenticationEntryPoint authenticationEntryPoint(ObjectMapper objectMapper) {
         return (request, response, exception) -> {
-            String errorId = UUID.randomUUID().toString();
+            String traceId = writeProblemDetail(objectMapper, request, response, ErrorCode.INVALID_TOKEN);
             log.warn(
-                    "Authentication rejected: errorId={}, method={}, path={}, exception={}, cause={}",
-                    errorId,
+                    "Authentication rejected: traceId={}, method={}, path={}, exception={}, cause={}",
+                    traceId,
                     request.getMethod(),
                     request.getRequestURI(),
                     exception.getClass().getSimpleName(),
                     rootCauseName(exception));
-            writeProblemDetail(objectMapper, response, HttpStatus.UNAUTHORIZED, ErrorCode.INVALID_TOKEN, errorId);
         };
     }
 
     @Bean
     public AccessDeniedHandler accessDeniedHandler(ObjectMapper objectMapper) {
         return (request, response, exception) -> {
-            String errorId = UUID.randomUUID().toString();
+            String traceId = writeProblemDetail(objectMapper, request, response, ErrorCode.ACCESS_DENIED);
             log.warn(
-                    "Access denied: errorId={}, method={}, path={}, exception={}",
-                    errorId,
+                    "Access denied: traceId={}, method={}, path={}, exception={}",
+                    traceId,
                     request.getMethod(),
                     request.getRequestURI(),
                     exception.getClass().getSimpleName());
-            writeProblemDetail(objectMapper, response, HttpStatus.FORBIDDEN, ErrorCode.ACCESS_DENIED, errorId);
         };
     }
 
-    private void writeProblemDetail(
+    /** MVC 예외 처리와 같은 모양으로 기록. 반환값은 traceId. */
+    private String writeProblemDetail(
             ObjectMapper objectMapper,
+            jakarta.servlet.http.HttpServletRequest request,
             jakarta.servlet.http.HttpServletResponse response,
-            HttpStatus status,
-            ErrorCode errorCode,
-            String errorId)
+            ErrorCode errorCode)
             throws IOException {
 
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(status, errorCode.getMessage());
-        problemDetail.setTitle(status.getReasonPhrase());
-        problemDetail.setType(URI.create("https://api.han-spoon.site/problems/" + errorCode.getCode()));
-        problemDetail.setProperty("code", errorCode.getCode());
-        problemDetail.setProperty("timestamp", OffsetDateTime.now());
-        problemDetail.setProperty("errorId", errorId);
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(errorCode.getStatus(), errorCode.getMessage());
+        problemDetail.setTitle(errorCode.getMessage());
+        problemDetail.setType(ProblemDetails.type(errorCode.getCode()));
+        String traceId = ProblemDetails.enrich(problemDetail, errorCode.getCode(), request.getRequestURI());
 
-        response.setStatus(status.value());
+        response.setStatus(errorCode.getStatus().value());
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         objectMapper.writeValue(response.getOutputStream(), problemDetail);
+        return traceId;
     }
 
     private String rootCauseName(Throwable throwable) {
