@@ -33,10 +33,14 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Callable
 
+try:
+    from scripts.load_stores import LOAD_SCOPE, in_scope
+except ImportError:
+    from load_stores import LOAD_SCOPE, in_scope
+
 KAKAO_URL = "https://dapi.kakao.com/v2/local/search/keyword.json"
 FOOD_GROUP = "FD6"          # 카카오 음식점 카테고리
 FOOD_SECTOR = "I2"          # 소상공인 음식 대분류
-LOADED_CATEGORY = "I201"    # stores 적재 범위(한식)
 SIDO = "서울"
 DEFAULT_DISTRICTS = "용산구,중구,마포구"
 ROAD_ADDRESS = re.compile(r"(\S+구)\s+(\S+(?:로|길))\s+(?:지하\s*)?(\d+(?:-\d+)?)")
@@ -67,7 +71,7 @@ def read_targets(path: Path) -> list[str]:
     """번호 빈칸이고 none 아닌 가게."""
     with path.open(encoding="utf-8-sig", newline="") as fh:
         return [clean(r["음식점 명"]) for r in csv.DictReader(fh)
-                if not clean(r.get("sbiz_store_no")) and clean(r.get("매칭")) != "none"]
+                if not clean(r.get("store_no")) and clean(r.get("매칭")) != "none"]
 
 
 def index_sbiz(path: Path, districts: set[str]) -> dict[tuple[str, str, str], list[dict]]:
@@ -96,7 +100,8 @@ def kakao_search(api_key: str) -> Search:
 
 
 def describe(row: dict) -> str:
-    loaded = "" if row["상권업종중분류코드"] == LOADED_CATEGORY else " (DB 없음: 한식 외 업종)"
+    loaded = "" if in_scope(row["상권업종중분류코드"], row["상권업종소분류코드"], LOAD_SCOPE) \
+        else " (DB 없음: 적재 범위 밖 업종)"
     branch = f" {row['지점명']}" if row["지점명"] else ""
     floor = f" {row['층정보']}층" if row["층정보"] else ""
     return f"{row['상가업소번호']} {row['상호명']}{branch} [{row['상권업종중분류명']}]{floor}{loaded}"

@@ -4,7 +4,7 @@
 
 입력
   · --menus: 조사 시트 CSV. 열 '음식점 명', '메뉴명'. 가게명은 첫 메뉴 행에만 있음.
-  · --store-map: 열 '음식점 명', 'sbiz_store_no'. 시트의 모든 가게 필수, 번호 빈칸은 건너뜀.
+  · --store-map: 열 '음식점 명', 'store_no'(상가업소번호 또는 LOCALDATA 관리번호). 시트의 모든 가게 필수, 번호 빈칸은 건너뜀.
 
 설계 메모
   · 표준 라이브러리만 사용. 전체가 단일 트랜잭션.
@@ -36,9 +36,9 @@ except ImportError:
 
 STORE_COL = "음식점 명"
 MENU_COL = "메뉴명"
-SBIZ_COL = "sbiz_store_no"
+STORE_NO_COL = "store_no"
 MAX_MENU_NAME = 255   # store_menus.display_name
-MAX_SBIZ_NO = 24      # stores.sbiz_store_no
+MAX_STORE_NO = 24     # stores.sbiz_store_no(24)·localdata_mgmt_no(22)
 NOTICE_NAMES = frozenset({"신규"})
 NOTICE_KEYWORDS = ("운영합니다",)
 
@@ -46,7 +46,7 @@ NOTICE_KEYWORDS = ("운영합니다",)
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--menus", required=True, type=Path, help="조사 시트 CSV")
-    p.add_argument("--store-map", required=True, type=Path, help="음식점 명 → sbiz_store_no CSV")
+    p.add_argument("--store-map", required=True, type=Path, help="음식점 명 → store_no CSV")
     p.add_argument("--dry-run", action="store_true", help="적재 결과 출력 후 롤백")
     p.add_argument("--psql", help="psql 실행 명령. 미지정 시 자동 탐지")
     p.add_argument("--dsn", default="postgresql://hanspoon:hanspoon@localhost:5432/hanspoon",
@@ -94,35 +94,35 @@ def read_menus(path: Path) -> tuple[list[tuple[str, str]], list[tuple[str, str]]
 
 
 def read_store_map(path: Path) -> dict[str, str]:
-    """음식점 명 → sbiz_store_no. 빈 번호는 적재 제외."""
+    """음식점 명 → store_no. 빈 번호는 적재 제외."""
     mapping: dict[str, str] = {}
-    for line, row in enumerate(open_csv(path, (STORE_COL, SBIZ_COL)), start=2):
+    for line, row in enumerate(open_csv(path, (STORE_COL, STORE_NO_COL)), start=2):
         store = clean(row.get(STORE_COL))
         if not store:
             continue
         if store in mapping:
             sys.exit(f"{path.name}:{line}: 음식점 명 중복 '{store}'")
-        sbiz_no = clean(row.get(SBIZ_COL))
-        if len(sbiz_no) > MAX_SBIZ_NO:
-            sys.exit(f"{path.name}:{line}: sbiz_store_no {MAX_SBIZ_NO}자 초과")
-        mapping[store] = sbiz_no
+        store_no = clean(row.get(STORE_NO_COL))
+        if len(store_no) > MAX_STORE_NO:
+            sys.exit(f"{path.name}:{line}: store_no {MAX_STORE_NO}자 초과")
+        mapping[store] = store_no
     return mapping
 
 
 def resolve_rows(menus: list[tuple[str, str]], mapping: dict[str, str]) -> tuple[list[list[object]], list[str]]:
-    """적재 행(sbiz_store_no, 메뉴명, 순서)과 번호 없어 건너뛴 가게."""
+    """적재 행(store_no, 메뉴명, 순서)과 번호 없어 건너뛴 가게."""
     unmapped = sorted({store for store, _ in menus if store not in mapping})
     if unmapped:
         sys.exit(f"store-map 에 없는 가게 {len(unmapped)}곳: {unmapped}")
     rows: list[list[object]] = []
     skipped: list[str] = []
     for order, (store, name) in enumerate(menus):
-        sbiz_no = mapping[store]
-        if not sbiz_no:
+        store_no = mapping[store]
+        if not store_no:
             if store not in skipped:
                 skipped.append(store)
             continue
-        rows.append([sbiz_no, name, order])
+        rows.append([store_no, name, order])
     return rows, skipped
 
 
@@ -130,7 +130,7 @@ def emit(w: io.TextIOBase, rows: list[list[object]], dry_run: bool) -> None:
     w.write("""\
 \\set ON_ERROR_STOP on
 BEGIN;
-CREATE TEMP TABLE stg_store_menu (sbiz_store_no text, display_name text, ord int) ON COMMIT DROP;
+CREATE TEMP TABLE stg_store_menu (store_no text, display_name text, ord int) ON COMMIT DROP;
 
 \\copy stg_store_menu FROM STDIN WITH (FORMAT csv)
 """)
@@ -142,13 +142,14 @@ CREATE TEMP TABLE stg_store_menu (sbiz_store_no text, display_name text, ord int
 DO $store_menu_stores$
 DECLARE
     unknown TEXT := (
-        SELECT string_agg(DISTINCT m.sbiz_store_no, ', ')
+        SELECT string_agg(DISTINCT m.store_no, ', ')
         FROM stg_store_menu m
         WHERE NOT EXISTS (
-            SELECT 1 FROM stores s WHERE s.sbiz_store_no = m.sbiz_store_no AND s.status = 'active'));
+            SELECT 1 FROM stores s
+            WHERE (s.sbiz_store_no = m.store_no OR s.localdata_mgmt_no = m.store_no) AND s.status = 'active'));
 BEGIN
     IF unknown IS NOT NULL THEN
-        RAISE EXCEPTION 'unknown or inactive sbiz_store_no: %', unknown;
+        RAISE EXCEPTION 'unknown or inactive store_no: %', unknown;
     END IF;
 END
 $store_menu_stores$;
@@ -158,7 +159,7 @@ WITH src AS (
     SELECT DISTINCT ON (s.id, normalize_food_name(m.display_name))
            s.id AS store_id, normalize_food_name(m.display_name) AS name_normalized, m.display_name
     FROM stg_store_menu m
-    JOIN stores s ON s.sbiz_store_no = m.sbiz_store_no
+    JOIN stores s ON s.sbiz_store_no = m.store_no OR s.localdata_mgmt_no = m.store_no
     WHERE normalize_food_name(m.display_name) <> ''
     ORDER BY s.id, normalize_food_name(m.display_name), m.ord
 ), ins AS (

@@ -1,11 +1,11 @@
 # 스키마 v2 결정 문서
 
 - **스키마의 원본은 Flyway 파일이다.** `src/main/resources/db/migration/V1~V13` + 보류 [`pending/V14__menu_analyses_contract.sql`](pending/V14__menu_analyses_contract.sql). 테이블·컬럼·제약 목록은 [`ERD.md`](ERD.md), 그림은 [`ERD.svg`](ERD.svg).
-- Flyway 번호: V1~V6 = MVP(스키마 v1), V7 = 약관 동의(2026-11-14 배포), **V8~V13 = 스키마 v2 확장 단계**, V14 = 축소 단계(Prepare/Judge 연동과 함께). 운영 DB 이력은 2026-11-16 현재 V7 까지다.
+- Flyway 번호: V1~V6 = MVP(스키마 v1), V7 = 약관 동의(2026-11-14 배포), **V8~V13 = 스키마 v2 확장 단계**, V13.1 = LOCALDATA 가게 식별자(2026-11-20), V14 = 축소 단계(Prepare/Judge 연동과 함께). V14 전 추가 변경은 V13.x 소수 버전으로 넣는다.
 - 상태: 2026-11-15 설계 확정, 미배포.
 - 기준: 프론트 화면(`frontend-webapp-demo`), Notion **API 명세서_V2 (AWS)**, AI 설계 문서 hanspoon-ai `docs/`(schema_version 3.0). 사장님 페이지는 만들지 않는다(11-01).
 
-| 규모 | 테이블 51 (+ VIEW 1) · 컬럼 474 · FK 80 · UNIQUE 44 · CHECK 181 · 인덱스 154 (V14 적용 후) |
+| 규모 | 테이블 51 (+ VIEW 1) · 컬럼 475 · FK 80 · UNIQUE 45 · CHECK 183 · 인덱스 154 (V14 적용 후) |
 |---|---|
 
 ---
@@ -15,7 +15,7 @@
 | 시점 | 방법 |
 |---|---|
 | V8~V13 을 운영에 올리기 전 | 해당 V 파일을 직접 고친다. 아직 적용된 곳이 없어 체크섬 문제가 없다 |
-| 올린 뒤 | 새 `V15__…sql` 을 추가한다. 이미 적용된 파일은 고치지 않는다 |
+| 올린 뒤 | 새 파일을 추가한다(V14 전은 `V13_x__…sql`, 후는 `V15__…sql`). 이미 적용된 파일은 고치지 않는다 |
 | 코멘트 | 같은 마이그레이션 안에 `COMMENT ON` 으로 단다. 형식 `'논리명 \| 비고'` |
 | 확인 | `./gradlew test` (Testcontainers 로 V1~V13 적용 + JPA `validate` + `SchemaV2MigrationIntegrationTest`) |
 
@@ -183,6 +183,7 @@
 | `V11__ai_store_scoped_evidence.sql` | 가게 메뉴 · 확정값 · 직원 질문 · 증거 · VIEW · 캐시 · 출처 신뢰도 |
 | `V12__store_menus_and_content.sql` | 스캔 AI 원본, `menu_analyses` 새 컬럼, 저장 카드, 찜, 이미지 · 큐레이션 · 번역 캐시 · 후기 · 신고 · 동네 |
 | `V13__comments.sql` | 코멘트 (확장 단계 기준) |
+| `V13_1__store_localdata_identity.sql` | `stores.localdata_mgmt_no`(LOCALDATA 관리번호) UNIQUE·형식·출처 CHECK |
 | `erd/pending/V14__menu_analyses_contract.sql` | `menu_analyses` 이름 변경·삭제·카드 배열 전환·CHECK, `risky_menu_count` 삭제, 제목 30자 CHECK |
 
 **배포 절차**: 배포 직전 RDS 수동 스냅샷을 만든다. 되돌릴 때는 스냅샷 복구로 한다(R-08).

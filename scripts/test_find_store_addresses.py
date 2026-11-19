@@ -5,10 +5,13 @@ from pathlib import Path
 from scripts import find_store_addresses as fsa
 
 
-def sbiz_row(no, name, address, middle="I201", branch="", floor="1"):
+MIDDLE_NAMES = {"I201": "한식", "I203": "일식", "I210": "기타 간이"}
+
+
+def sbiz_row(no, name, address, middle="I201", small="I20101", branch="", floor="1"):
     return {"상가업소번호": no, "상호명": name, "지점명": branch, "층정보": floor,
-            "상권업종중분류코드": middle, "상권업종중분류명": "한식" if middle == "I201" else "일식",
-            "도로명주소": address}
+            "상권업종중분류코드": middle, "상권업종중분류명": MIDDLE_NAMES[middle],
+            "상권업종소분류코드": small, "도로명주소": address}
 
 
 class FindStoreAddressesTest(unittest.TestCase):
@@ -24,7 +27,7 @@ class FindStoreAddressesTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "map.csv"
             path.write_text(
-                "음식점 명,sbiz_store_no,매칭,후보\n"
+                "음식점 명,store_no,매칭,후보\n"
                 "가게A,MA1,exact,\n"
                 "가게B,,none,\n"
                 "가게C,,review,\n", encoding="utf-8")
@@ -34,7 +37,8 @@ class FindStoreAddressesTest(unittest.TestCase):
     def test_candidates_match_by_road_address(self):
         index = {fsa.address_key("서울특별시 용산구 한강대로 128"): [
             sbiz_row("MA1", "호보갈비", "서울특별시 용산구 한강대로 128"),
-            sbiz_row("MA2", "호보스시", "서울특별시 용산구 한강대로 128", middle="I203"),
+            sbiz_row("MA2", "호보스시", "서울특별시 용산구 한강대로 128", middle="I203", small="I20301"),
+            sbiz_row("MA3", "호보김밥", "서울특별시 용산구 한강대로 128", middle="I210", small="I21007"),
         ]}
         search = lambda q: [
             {"place_name": "호보갈비 용산본점", "category_name": "음식점 > 한식",
@@ -47,7 +51,9 @@ class FindStoreAddressesTest(unittest.TestCase):
         self.assertEqual(1, len(rows))
         self.assertEqual("서울 용산구 한강대로 128", rows[0][3])
         self.assertIn("MA1 호보갈비 [한식] 1층", rows[0][4])
-        self.assertIn("MA2 호보스시 [일식] 1층 (DB 없음: 한식 외 업종)", rows[0][4])
+        self.assertIn("MA2 호보스시 [일식] 1층 (DB 없음: 적재 범위 밖 업종)", rows[0][4])
+        self.assertIn("MA3 호보김밥 [기타 간이] 1층", rows[0][4])
+        self.assertNotIn("MA3 호보김밥 [기타 간이] 1층 (DB 없음", rows[0][4])
 
     def test_queries_fall_back_to_brand_then_district(self):
         self.assertEqual(["호보갈비 용산본점", "호보갈비", "호보갈비 마포구", "호보갈비 용산구"],
