@@ -71,7 +71,7 @@ def read_targets(path: Path) -> list[str]:
     """번호 빈칸이고 none 아닌 가게."""
     with path.open(encoding="utf-8-sig", newline="") as fh:
         return [clean(r["음식점 명"]) for r in csv.DictReader(fh)
-                if not clean(r.get("sbiz_store_no")) and clean(r.get("매칭")) != "none"]
+                if not clean(r.get("store_no")) and clean(r.get("매칭")) != "none"]
 
 
 def index_sbiz(path: Path, districts: set[str]) -> dict[tuple[str, str, str], list[dict]]:

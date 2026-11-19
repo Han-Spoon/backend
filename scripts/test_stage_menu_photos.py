@@ -28,14 +28,12 @@ class StageMenuPhotosTest(unittest.TestCase):
 
     def test_public_prefix_is_rejected(self):
         with self.assertRaises(SystemExit):
-            smp.parse_args(["--photos", "p.csv", "--store-map", "m.csv", "--download-dir", "d",
-                            "--bucket", "b", "--prefix", "menus/naver/"])
+            smp.parse_args(["--photos", "p.csv", "--download-dir", "d", "--bucket", "b", "--prefix", "menus/naver/"])
 
     def test_bucket_required_unless_download_only(self):
         with self.assertRaises(SystemExit):
-            smp.parse_args(["--photos", "p.csv", "--store-map", "m.csv", "--download-dir", "d"])
-        a = smp.parse_args(["--photos", "p.csv", "--store-map", "m.csv", "--download-dir", "d",
-                            "--download-only", "--prefix", "imports"])
+            smp.parse_args(["--photos", "p.csv", "--download-dir", "d"])
+        a = smp.parse_args(["--photos", "p.csv", "--download-dir", "d", "--download-only", "--prefix", "imports"])
         self.assertEqual("imports/", a.prefix)
 
     def test_same_url_fetched_once_and_same_content_stored_once(self):
@@ -49,14 +47,13 @@ class StageMenuPhotosTest(unittest.TestCase):
         manifest = smp.stage(
             [row("가게A", "김치찌개", "u1"), row("가게A", "김치찌개 2인", "u1"),
              row("가게B", "된장찌개", "u2"), row("가게B", "제육", "u3")],
-            {"가게A": "MA1"}, self.out, "image-imports/naver/", fetch=fetch, pause=0)
+            self.out, "image-imports/naver/", fetch=fetch, pause=0)
 
         sha = hashlib.sha256(JPEG).hexdigest()
         self.assertEqual(["u1", "u2", "u3"], calls)
         self.assertEqual(2, len(list(self.out.iterdir())))
         self.assertEqual(f"image-imports/naver/{sha}.jpg", manifest[0]["storage_key"])
         self.assertEqual(manifest[0]["storage_key"], manifest[2]["storage_key"])
-        self.assertEqual(["MA1", "MA1", "", ""], [m["sbiz_store_no"] for m in manifest])
 
     def test_failure_is_recorded_without_stopping(self):
         def fetch(url):
@@ -65,7 +62,7 @@ class StageMenuPhotosTest(unittest.TestCase):
             return b"GIF89a" if url == "gif" else JPEG
 
         manifest = smp.stage([row("가게A", "a", "bad"), row("가게A", "b", "gif"), row("가게A", "c", "ok")],
-                             {}, self.out, "p/", fetch=fetch, pause=0)
+                             self.out, "p/", fetch=fetch, pause=0)
 
         self.assertEqual(["HTTP Error 404", "지원하지 않는 이미지 형식", ""], [m["error"] for m in manifest])
         self.assertEqual("", manifest[0]["storage_key"])

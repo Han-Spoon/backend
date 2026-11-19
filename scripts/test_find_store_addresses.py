@@ -27,7 +27,7 @@ class FindStoreAddressesTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "map.csv"
             path.write_text(
-                "음식점 명,sbiz_store_no,매칭,후보\n"
+                "음식점 명,store_no,매칭,후보\n"
                 "가게A,MA1,exact,\n"
                 "가게B,,none,\n"
                 "가게C,,review,\n", encoding="utf-8")
