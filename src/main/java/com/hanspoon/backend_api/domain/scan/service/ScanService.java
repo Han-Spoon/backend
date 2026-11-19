@@ -14,6 +14,7 @@ import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
 import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
+import com.hanspoon.backend_api.domain.scan.service.MenuPhotoResolver.MenuPhoto;
 import com.hanspoon.backend_api.domain.store.entity.Store;
 import com.hanspoon.backend_api.domain.store.entity.StoreStatus;
 import com.hanspoon.backend_api.domain.store.repository.StoreRepository;
@@ -47,6 +48,7 @@ public class ScanService {
     private final ScanProcessor scanProcessor;
     private final ScanStateWriter scanStateWriter;
     private final ConsentService consentService;
+    private final MenuPhotoResolver menuPhotoResolver;
 
     public ScanService(
             S3StorageService s3StorageService,
@@ -56,7 +58,8 @@ public class ScanService {
             ScanRecordService scanRecordService,
             ScanProcessor scanProcessor,
             ScanStateWriter scanStateWriter,
-            ConsentService consentService) {
+            ConsentService consentService,
+            MenuPhotoResolver menuPhotoResolver) {
         this.s3StorageService = s3StorageService;
         this.scanSessionRepository = scanSessionRepository;
         this.menuAnalysisRepository = menuAnalysisRepository;
@@ -65,6 +68,7 @@ public class ScanService {
         this.scanProcessor = scanProcessor;
         this.scanStateWriter = scanStateWriter;
         this.consentService = consentService;
+        this.menuPhotoResolver = menuPhotoResolver;
     }
 
     public ScanCreatedResponse startScan(UUID userId, StartScanRequest request) {
@@ -120,8 +124,9 @@ public class ScanService {
         ScanSession session = scanSessionRepository
                 .findByIdAndUserId(scanId, userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SCAN_NOT_FOUND));
+        Map<UUID, MenuPhoto> photos = menuPhotoResolver.find(scanId, session.getStoreId());
         List<MenuResult> menus = menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(scanId).stream()
-                .map(ScanService::toMenuResult)
+                .map(m -> toMenuResult(m, photos.get(m.getId())))
                 .toList();
         // title 은 유저 수정본(없으면 null). 기본 제목(스캔 시각) 현지화는 scannedAt 으로 FE 가 로케일 포맷.
         return new ScanResultResponse(
@@ -169,7 +174,7 @@ public class ScanService {
         scanSessionRepository.delete(session);
     }
 
-    private static MenuResult toMenuResult(MenuAnalysis m) {
+    private static MenuResult toMenuResult(MenuAnalysis m, MenuPhoto photo) {
         return new MenuResult(
                 m.getDisplayOrder(),
                 m.getMenuNameKo(),
@@ -177,6 +182,8 @@ public class ScanService {
                 m.getDescriptionKo(),
                 m.getDescriptionEn(),
                 m.getPriceText(),
+                photo == null ? null : photo.url(),
+                photo == null ? null : photo.attribution(),
                 m.getIsSpicy(),
                 m.getRiskLevel(),
                 m.getHitTags(),
