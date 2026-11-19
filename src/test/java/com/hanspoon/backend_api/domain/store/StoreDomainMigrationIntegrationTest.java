@@ -113,6 +113,46 @@ class StoreDomainMigrationIntegrationTest {
     }
 
     @Test
+    void acceptsLocaldataStoreWithManagementNumber() {
+        assertThat(insertLocaldataStore(insertRootCategory(), insertCompletedBatch(), "3020000-101-2026-00318"))
+                .isPositive();
+    }
+
+    @Test
+    void rejectsLocaldataStoreWithoutManagementNumber() {
+        long categoryId = insertRootCategory();
+        long batchId = insertCompletedBatch();
+
+        assertThatThrownBy(() -> insertLocaldataStore(categoryId, batchId, null))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void rejectsMalformedLocaldataManagementNumber() {
+        long categoryId = insertRootCategory();
+        long batchId = insertCompletedBatch();
+
+        assertThatThrownBy(() -> insertLocaldataStore(categoryId, batchId, "3020000-101-26-318"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void rejectsLocaldataManagementNumberOnSbizStore() {
+        long categoryId = insertRootCategory();
+        long batchId = insertCompletedBatch();
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                        """
+                        insert into stores
+                            (sbiz_store_no, localdata_mgmt_no, name, category_id, lat, lng, origin, last_batch_id)
+                        values ('MA1', '3020000-101-2026-00319', '두번호식당', ?, 37.5, 127.0, 'sbiz', ?)
+                        """,
+                        categoryId,
+                        batchId))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
     void preservesLegacyScanWithoutStoreContext() {
         UUID userId = insertUser("legacy-store-context@example.com");
         UUID scanId = UUID.randomUUID();
@@ -183,6 +223,20 @@ class StoreDomainMigrationIntegrationTest {
                 returning id
                 """,
                 Long.class);
+    }
+
+    private long insertLocaldataStore(long categoryId, long batchId, String mgmtNo) {
+        return jdbcTemplate.queryForObject(
+                """
+                insert into stores
+                    (localdata_mgmt_no, name, category_id, lat, lng, origin, last_batch_id)
+                values (?, '인허가식당', ?, 37.5000, 127.0000, 'localdata', ?)
+                returning id
+                """,
+                Long.class,
+                mgmtNo,
+                categoryId,
+                batchId);
     }
 
     private long insertPublicStore(long categoryId, long batchId, String storeNo, String name) {

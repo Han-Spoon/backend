@@ -1,6 +1,6 @@
 # 스키마 v2 ERD
 
-- **원본은 Flyway** `src/main/resources/db/migration/V1~V13` + [`pending/V14`](pending/V14__menu_analyses_contract.sql). 이 문서와 [`ERD.svg`](ERD.svg)는 **V14 까지 적용한 상태**를 2026-11-15 DB 카탈로그에서 만든 스냅샷이다. 스키마를 바꾸면 해당 테이블 부분을 손으로 고친다
+- **원본은 Flyway** `src/main/resources/db/migration/V1~V13`(+V13.1) + [`pending/V14`](pending/V14__menu_analyses_contract.sql). 이 문서와 [`ERD.svg`](ERD.svg)는 **V14 까지 적용한 상태**를 2026-11-15 DB 카탈로그에서 만든 스냅샷이다. 스키마를 바꾸면 해당 테이블 부분을 손으로 고친다
 - 결정 근거·구현 규칙·배포·미결: [`DECISIONS.md`](DECISIONS.md)
 - 컬럼 설명 형식: `논리명 | N(NOT NULL)/Y(NULL 허용) | 비고`. 비고 끝 `[#n]`은 AI 백엔드 변경 요청 번호(AI 레포 `docs/caution-db-schema.md` §6), `[V5]`는 기존 마이그레이션 번호
 
@@ -361,6 +361,7 @@ erDiagram
         TIMESTAMPTZ created_at "생성 시각 | N | 기본 now()"
         TIMESTAMPTZ updated_at "수정 시각 | N | 기본 now()"
         BIGINT image_asset_id FK "대표 이미지 ID | Y | image_assets.id; RESTRICT; 적재 스크립트가 덮어쓰지 않는 컬럼"
+        VARCHAR(22) localdata_mgmt_no UK "LOCALDATA 관리번호 | Y | [V13.1] 인허가 데이터 멱등 키; sbiz는 NULL"
     }
 
     brand_aliases["브랜드 별칭 (brand_aliases)"] {
@@ -963,7 +964,10 @@ END)` |
 |---|---|
 | 생성 컬럼 | `name_normalized` = `normalize_store_name((name)::text)` |
 | UNIQUE | `uq_stores_sbiz_no`: `(sbiz_store_no)` |
+| UNIQUE | `uq_stores_localdata_mgmt_no`: `(localdata_mgmt_no)` |
 | CHECK | `ck_stores_inactive_at`: `((((status)::text = 'inactive'::text) = (inactive_at IS NOT NULL)))` |
+| CHECK | `ck_stores_localdata_identity`: `((((origin)::text = 'localdata'::text) = (localdata_mgmt_no IS NOT NULL)))` |
+| CHECK | `ck_stores_localdata_mgmt_no`: `(((localdata_mgmt_no IS NULL) OR ((localdata_mgmt_no)::text ~ '^[0-9]{7}-[0-9]{3}-[0-9]{4}-[0-9]{5}$'::text)))` |
 | CHECK | `ck_stores_lat`: `(((lat >= (33)::double precision) AND (lat <= (39)::double precision)))` |
 | CHECK | `ck_stores_lng`: `(((lng >= (124)::double precision) AND (lng <= (132)::double precision)))` |
 | CHECK | `ck_stores_name`: `(((btrim((name)::text) <> ''::text) AND ((name)::text = btrim((name)::text))))` |
