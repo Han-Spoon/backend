@@ -2,6 +2,7 @@ package com.hanspoon.backend_api.domain.scan.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -24,6 +25,7 @@ import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
 import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
+import com.hanspoon.backend_api.domain.scan.service.MenuPhotoResolver.MenuPhoto;
 import com.hanspoon.backend_api.domain.store.entity.Store;
 import com.hanspoon.backend_api.domain.store.entity.StoreMatchMethod;
 import com.hanspoon.backend_api.domain.store.entity.StoreStatus;
@@ -75,6 +77,9 @@ class ScanServiceTest {
 
     @Mock
     private ConsentService consentService;
+
+    @Mock
+    private MenuPhotoResolver menuPhotoResolver;
 
     @InjectMocks
     private ScanService scanService;
@@ -259,6 +264,29 @@ class ScanServiceTest {
         assertThat(response.menuCount()).isEqualTo(2);
         assertThat(response.riskyMenuCount()).isEqualTo(1);
         assertThat(response.menus()).isEmpty();
+    }
+
+    @Test
+    void getScanAddsStoreMenuPhotoOnlyToMatchedMenus() {
+        UUID userId = UUID.randomUUID();
+        ScanSession session = ScanSession.start(userId, "scans/photo.jpg", 10L, "기와", StoreMatchMethod.NAME_SEARCH);
+        UUID scanId = session.getId();
+        MenuAnalysis withPhoto =
+                MenuAnalysis.create(scanId, 1, "김치찌개", null, null, null, null, null, null, null, List.of(), null, null);
+        MenuAnalysis withoutPhoto =
+                MenuAnalysis.create(scanId, 2, "공기밥", null, null, null, null, null, null, null, List.of(), null, null);
+        when(scanSessionRepository.findByIdAndUserId(scanId, userId)).thenReturn(Optional.of(session));
+        when(menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(scanId))
+                .thenReturn(List.of(withPhoto, withoutPhoto));
+        when(menuPhotoResolver.find(scanId, 10L))
+                .thenReturn(
+                        Map.of(withPhoto.getId(), new MenuPhoto("https://cdn.test/menus/stores/a.jpg", "사진 제공: 기와")));
+
+        var response = scanService.getScan(userId, scanId);
+
+        assertThat(response.menus())
+                .extracting("imageUrl", "imageAttribution")
+                .containsExactly(tuple("https://cdn.test/menus/stores/a.jpg", "사진 제공: 기와"), tuple(null, null));
     }
 
     @Test
