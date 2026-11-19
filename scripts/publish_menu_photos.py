@@ -4,6 +4,7 @@
 
 입력
   · --photo-dir: stage_menu_photos.py 의 내려받기 폴더(원본 + manifest.csv).
+  · --store-map: 가게 매핑 CSV(load_store_menus.py 와 같은 파일). 번호 빈칸 가게는 건너뜀.
   · --permitted-stores: 열 '음식점 명'. 허락 받은 가게만 게시. 전체 게시는 --all-stores 로 명시.
 
 설계 메모
@@ -14,7 +15,8 @@
   · --dry-run: 업로드 없이 DB 반영 결과만 출력 후 롤백.
 
 사용 예
-  python3 scripts/publish_menu_photos.py --photo-dir ~/hanspoon-menu-photos --all-stores \\
+  python3 scripts/publish_menu_photos.py --photo-dir ~/hanspoon-menu-photos \\
+      --store-map scripts/data/demo_store_map.csv --all-stores \\
       --bucket <images 버킷> --work-dir ~/hanspoon-menu-photos-public --dry-run
 """
 from __future__ import annotations
@@ -32,8 +34,10 @@ from pathlib import Path
 from typing import Callable
 
 try:
+    from scripts.load_store_menus import is_notice, read_store_map
     from scripts.load_stores import resolve_psql
 except ImportError:
+    from load_store_menus import is_notice, read_store_map
     from load_stores import resolve_psql
 
 MANIFEST_NAME = "manifest.csv"
@@ -47,7 +51,7 @@ CACHE_CONTROL = "public, max-age=31536000, immutable"
 @dataclass(frozen=True)
 class Photo:
     store: str
-    sbiz_store_no: str
+    store_no: str   # 상가업소번호 또는 LOCALDATA 관리번호
     menu: str
     source_url: str
     original: str   # 원본 파일명(<sha256>.<ext>)
@@ -68,6 +72,7 @@ Convert = Callable[[Path, Path], tuple[int, int]]
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--photo-dir", required=True, type=Path, help="원본 사진 + manifest.csv 폴더")
+    p.add_argument("--store-map", required=True, type=Path, help="가게 매핑 CSV (열 '음식점 명', 'store_no')")
     scope = p.add_mutually_exclusive_group(required=True)
     scope.add_argument("--permitted-stores", type=Path, help="허락 받은 가게 CSV (열 '음식점 명')")
     scope.add_argument("--all-stores", action="store_true", help="매니페스트의 모든 가게 게시")
@@ -97,17 +102,18 @@ def read_permitted(path: Path) -> set[str]:
         return {clean(r["음식점 명"]) for r in csv.DictReader(fh) if clean(r.get("음식점 명"))}
 
 
-def read_photos(manifest: Path, permitted: set[str] | None) -> list[Photo]:
-    """보관 성공 + 가게 번호 있음 + 허락 가게 행."""
+def read_photos(manifest: Path, permitted: set[str] | None, store_nos: dict[str, str]) -> list[Photo]:
+    """보관 성공 + 가게 번호 있음 + 허락 가게 + 메뉴 행(안내 행 제외)."""
     with manifest.open(encoding="utf-8-sig", newline="") as fh:
         rows = [{k: clean(v) for k, v in r.items()} for r in csv.DictReader(fh)]
     photos = []
     for r in rows:
-        if r["error"] or not r["sbiz_store_no"] or not r["storage_key"]:
+        store_no = store_nos.get(r["음식점 명"], "")
+        if r["error"] or not store_no or not r["storage_key"] or is_notice(r["메뉴명"]):
             continue
         if permitted is not None and r["음식점 명"] not in permitted:
             continue
-        photos.append(Photo(r["음식점 명"], r["sbiz_store_no"], r["메뉴명"], r["source_url"],
+        photos.append(Photo(r["음식점 명"], store_no, r["메뉴명"], r["source_url"],
                             r["storage_key"].rsplit("/", 1)[-1]))
     return photos
 
@@ -158,7 +164,7 @@ def emit(w: io.TextIOBase, photos: list[Photo], published: dict[str, Published],
 \\set ON_ERROR_STOP on
 BEGIN;
 CREATE TEMP TABLE stg_menu_photo (
-  sbiz_store_no text, store_name text, display_name text, source_url text,
+  store_no text, store_name text, display_name text, source_url text,
   sha256 text, storage_key text, width int, height int, file_size bigint, ord int
 ) ON COMMIT DROP;
 
@@ -167,7 +173,7 @@ CREATE TEMP TABLE stg_menu_photo (
     out = csv.writer(w, lineterminator="\n")
     for order, p in enumerate(photos):
         pub = published[p.original]
-        out.writerow([p.sbiz_store_no, p.store, p.menu, p.source_url,
+        out.writerow([p.store_no, p.store, p.menu, p.source_url,
                       pub.sha256, pub.storage_key, pub.width, pub.height, pub.size, order])
     w.write(f"""\
 \\.
@@ -175,13 +181,14 @@ CREATE TEMP TABLE stg_menu_photo (
 DO $menu_photo_stores$
 DECLARE
     unknown TEXT := (
-        SELECT string_agg(DISTINCT p.sbiz_store_no, ', ')
+        SELECT string_agg(DISTINCT p.store_no, ', ')
         FROM stg_menu_photo p
         WHERE NOT EXISTS (
-            SELECT 1 FROM stores s WHERE s.sbiz_store_no = p.sbiz_store_no AND s.status = 'active'));
+            SELECT 1 FROM stores s
+            WHERE (s.sbiz_store_no = p.store_no OR s.localdata_mgmt_no = p.store_no) AND s.status = 'active'));
 BEGIN
     IF unknown IS NOT NULL THEN
-        RAISE EXCEPTION 'unknown or inactive sbiz_store_no: %', unknown;
+        RAISE EXCEPTION 'unknown or inactive store_no: %', unknown;
     END IF;
 END
 $menu_photo_stores$;
@@ -205,7 +212,7 @@ WITH linked AS (
     UPDATE store_menus sm
        SET image_asset_id = ia.id, updated_at = now()
       FROM stg_menu_photo p
-      JOIN stores s        ON s.sbiz_store_no = p.sbiz_store_no
+      JOIN stores s        ON s.sbiz_store_no = p.store_no OR s.localdata_mgmt_no = p.store_no
       JOIN image_assets ia ON ia.content_sha256 = p.sha256
      WHERE sm.store_id = s.id
        AND sm.name_normalized = normalize_food_name(p.display_name)
@@ -217,7 +224,7 @@ SELECT count(*) AS linked_store_menus FROM linked;
 \\echo '── 연결할 가게 메뉴 없는 사진 ──'
 SELECT p.store_name, p.display_name
 FROM stg_menu_photo p
-JOIN stores s ON s.sbiz_store_no = p.sbiz_store_no
+JOIN stores s ON s.sbiz_store_no = p.store_no OR s.localdata_mgmt_no = p.store_no
 WHERE NOT EXISTS (
     SELECT 1 FROM store_menus sm
     WHERE sm.store_id = s.id AND sm.name_normalized = normalize_food_name(p.display_name))
@@ -234,11 +241,11 @@ def sql_literal(value: str) -> str:
 def main() -> None:
     a = parse_args()
     permitted = None if a.all_stores else read_permitted(a.permitted_stores)
-    photos = read_photos(a.photo_dir / MANIFEST_NAME, permitted)
+    photos = read_photos(a.photo_dir / MANIFEST_NAME, permitted, read_store_map(a.store_map))
     if not photos:
         sys.exit("게시할 사진 없음")
     published = convert_all(photos, a.photo_dir, a.work_dir, a.prefix)
-    print(f"사진 행 {len(photos)} · 가게 {len({p.sbiz_store_no for p in photos})}곳"
+    print(f"사진 행 {len(photos)} · 가게 {len({p.store_no for p in photos})}곳"
           f" · 게시 파일 {len({v.sha256 for v in published.values()})}"
           f"{' · dry-run (업로드 안 함)' if a.dry_run else ''}", file=sys.stderr)
 

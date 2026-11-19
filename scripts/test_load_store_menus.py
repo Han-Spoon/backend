@@ -45,7 +45,7 @@ class LoadStoreMenusTest(unittest.TestCase):
             load_store_menus.read_menus(path)
 
     def test_duplicate_store_in_map_is_rejected(self):
-        path = self.write("map.csv", "음식점 명,sbiz_store_no\n가게A,MA1\n가게A,MA2\n")
+        path = self.write("map.csv", "음식점 명,store_no\n가게A,MA1\n가게A,MA2\n")
 
         with self.assertRaisesRegex(SystemExit, "음식점 명 중복"):
             load_store_menus.read_store_map(path)
@@ -68,6 +68,7 @@ class LoadStoreMenusTest(unittest.TestCase):
 
     def test_existing_store_menus_are_kept(self):
         self.assertIn("ON CONFLICT (store_id, name_normalized) DO NOTHING", self.emit(dry_run=False))
+        self.assertIn("s.sbiz_store_no = m.store_no OR s.localdata_mgmt_no = m.store_no", self.emit(dry_run=False))
 
     def test_menu_name_with_comma_is_quoted(self):
         sql = emit([["MA1", "라면, 우동", 0]], dry_run=True)

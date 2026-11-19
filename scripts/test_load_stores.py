@@ -24,7 +24,7 @@ class LoadStoresSafetyTest(unittest.TestCase):
             load_stores.validate_sweep_scope(args, self.files(["서울"]))
 
     def test_non_default_category_rejects_sweep(self):
-        args = self.args(sweep_inactive=True, category="I202")
+        args = self.args(sweep_inactive=True, category=frozenset({"I201"}))
 
         with self.assertRaisesRegex(SystemExit, "기본 적재 범위"):
             load_stores.validate_sweep_scope(args, self.files())
@@ -42,7 +42,7 @@ class LoadStoresSafetyTest(unittest.TestCase):
             load_stores.validate_sweep_scope(self.args(sweep_inactive=True), files)
 
     def test_partial_load_without_sweep_is_allowed(self):
-        args = self.args(sweep_inactive=False, regions="서울", category="I202")
+        args = self.args(sweep_inactive=False, regions="서울", category=frozenset({"I202"}))
 
         load_stores.validate_sweep_scope(args, self.files(["서울"]))
 
@@ -60,19 +60,19 @@ class LoadStoresSafetyTest(unittest.TestCase):
     def test_inactive_sweep_sql_does_not_claim_store_is_closed(self):
         output = io.StringIO()
 
-        load_stores.emit(output, [], load_stores.MIDDLE_CATEGORY, True, "202606")
+        load_stores.emit(output, [], load_stores.LOAD_SCOPE, True, "202606")
 
         sql = output.getvalue()
         self.assertIn("status = 'inactive'", sql)
         self.assertIn("inactive_at = now()", sql)
         self.assertNotIn("is_verified", sql)
         self.assertNotIn("status = 'closed'", sql)
-        self.assertIn("parent.code = 'I201'", sql)
+        self.assertIn("child.code IN ('I201', 'I21007') OR parent.code IN ('I201', 'I21007')", sql)
 
     def test_import_sql_serializes_loaders_and_analyzes_before_commit(self):
         output = io.StringIO()
 
-        load_stores.emit(output, [], load_stores.MIDDLE_CATEGORY, False, "202606")
+        load_stores.emit(output, [], load_stores.LOAD_SCOPE, False, "202606")
 
         sql = output.getvalue()
         self.assertIn("pg_advisory_xact_lock", sql)
@@ -119,38 +119,55 @@ class LoadStoresSafetyTest(unittest.TestCase):
 
     def test_source_validation_accepts_valid_target_row(self):
         with self.csv_file([self.valid_row()]) as path:
-            stats = load_stores.validate_source([path], load_stores.MIDDLE_CATEGORY, True)
+            stats = load_stores.validate_source([path], load_stores.LOAD_SCOPE, True)
 
         self.assertEqual(1, stats["source_rows"])
         self.assertEqual(1, stats["target_rows"])
         self.assertEqual(1, stats["valid_rows"])
 
+    def test_scope_takes_korean_middle_and_snack_small_category_only(self):
+        snack = self.valid_row() | {load_stores.COL["no"]: "MA2", load_stores.COL["l2c"]: "I210",
+                                    load_stores.COL["l2n"]: "기타 간이", load_stores.COL["l3c"]: "I21007",
+                                    load_stores.COL["l3n"]: "김밥/만두/분식"}
+        chicken = snack | {load_stores.COL["no"]: "MA3", load_stores.COL["l3c"]: "I21006",
+                           load_stores.COL["l3n"]: "치킨"}
+        with self.csv_file([self.valid_row(), snack, chicken]) as path:
+            stats = load_stores.validate_source([path], load_stores.LOAD_SCOPE, True)
+
+        self.assertEqual(2, stats["valid_rows"])
+
+    def test_category_option_parses_comma_separated_codes(self):
+        args = load_stores.parse_args(["--csv-dir", "/tmp", "--category", "I202, I21007"])
+
+        self.assertEqual(frozenset({"I202", "I21007"}), args.category)
+        self.assertEqual(load_stores.LOAD_SCOPE, load_stores.parse_args(["--csv-dir", "/tmp"]).category)
+
     def test_source_validation_rejects_duplicate_store_ids(self):
         row = self.valid_row()
         with self.csv_file([row, row]) as path:
             with self.assertRaisesRegex(SystemExit, "중복 상가업소번호"):
-                load_stores.validate_source([path], load_stores.MIDDLE_CATEGORY, False)
+                load_stores.validate_source([path], load_stores.LOAD_SCOPE, False)
 
     def test_lossless_validation_rejects_invalid_coordinate(self):
         row = self.valid_row()
         row[load_stores.COL["lat"]] = ""
         with self.csv_file([row]) as path:
             with self.assertRaisesRegex(SystemExit, "무손실 원본"):
-                load_stores.validate_source([path], load_stores.MIDDLE_CATEGORY, True)
+                load_stores.validate_source([path], load_stores.LOAD_SCOPE, True)
 
     def test_source_validation_rejects_missing_header(self):
         row = self.valid_row()
         del row[load_stores.COL["lat"]]
         with self.csv_file([row]) as path:
             with self.assertRaisesRegex(SystemExit, "필수 CSV 헤더"):
-                load_stores.validate_source([path], load_stores.MIDDLE_CATEGORY, False)
+                load_stores.validate_source([path], load_stores.LOAD_SCOPE, False)
 
     @staticmethod
     def args(**overrides) -> argparse.Namespace:
         values = {
             "sweep_inactive": False,
             "regions": None,
-            "category": load_stores.MIDDLE_CATEGORY,
+            "category": load_stores.LOAD_SCOPE,
         }
         values.update(overrides)
         return argparse.Namespace(**values)
