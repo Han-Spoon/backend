@@ -32,7 +32,7 @@ import unicodedata
 import sys
 from pathlib import Path
 
-MIDDLE_CATEGORY = "I201"          # 한식. MVP 범위
+LOAD_SCOPE = frozenset({"I201", "I21007"})   # 한식 중분류 + 분식(김밥/만두/분식) 소분류. MVP 범위
 SOURCE = "sbiz"
 FULL_DATASET_REGIONS = frozenset({
     "강원", "경기", "경남", "경북", "대구", "대전", "부산", "서울",
@@ -61,12 +61,29 @@ STORE_FIELD_LIMITS = {
 }
 
 
+def parse_scope(value: str) -> frozenset[str]:
+    codes = frozenset(c.strip() for c in value.split(",") if c.strip())
+    if not codes:
+        raise argparse.ArgumentTypeError("업종 코드가 비어 있습니다.")
+    return codes
+
+
+def scope_label(scope: frozenset[str]) -> str:
+    return ",".join(sorted(scope))
+
+
+def in_scope(l2_code: str, l3_code: str, scope: frozenset[str]) -> bool:
+    """중분류 전체 또는 소분류 단위 적재 범위 판정."""
+    return l2_code in scope or l3_code in scope
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--csv-dir", required=True, type=Path, help="지역별 CSV 가 들어있는 디렉터리")
     p.add_argument("--source-version", help="스냅샷 버전. 미지정 시 파일명에서 추출 (예: 202606)")
     p.add_argument("--regions", help="쉼표 구분 지역 필터 (예: 경북,서울). 미지정 시 전체")
-    p.add_argument("--category", default=MIDDLE_CATEGORY, help=f"적재할 상권업종 중분류 코드 (기본 {MIDDLE_CATEGORY})")
+    p.add_argument("--category", type=parse_scope, default=LOAD_SCOPE,
+                   help=f"적재할 상권업종 중분류·소분류 코드, 쉼표 구분 (기본 {scope_label(LOAD_SCOPE)})")
     p.add_argument("--sweep-inactive", "--sweep-closed", dest="sweep_inactive", action="store_true",
                    help="이번 배치에 없는 sbiz 가게를 비활성 처리. 전국 16개·기본 업종의 완전한 적재에서만 허용")
     p.add_argument("--psql", help="psql 실행 명령. 미지정 시 자동 탐지")
@@ -168,10 +185,10 @@ def validate_sweep_scope(a: argparse.Namespace, files: list[Path]) -> None:
         return
     if a.regions:
         sys.exit("--sweep-inactive는 --regions와 함께 사용할 수 없습니다.")
-    if a.category != MIDDLE_CATEGORY:
+    if a.category != LOAD_SCOPE:
         sys.exit(
-            f"--sweep-inactive는 기본 적재 범위({MIDDLE_CATEGORY})에서만 사용할 수 있습니다. "
-            f"현재 범위: {a.category}"
+            f"--sweep-inactive는 기본 적재 범위({scope_label(LOAD_SCOPE)})에서만 사용할 수 있습니다. "
+            f"현재 범위: {scope_label(a.category)}"
         )
 
     regions = [file_metadata(f)[0] for f in files]
@@ -231,9 +248,9 @@ def validate_value(value: str, label: str, limit: int, path: Path, line: int) ->
         )
 
 
-def prepare_store_row(row: dict[str, str], category: str) -> tuple[list[object] | None, str | None]:
+def prepare_store_row(row: dict[str, str], scope: frozenset[str]) -> tuple[list[object] | None, str | None]:
     """대상 업종 행을 DB 적재 형태로 바꾸고, 제외 시 정형화된 원인을 반환한다."""
-    if clean(row, "l2c") != category:
+    if not in_scope(clean(row, "l2c"), clean(row, "l3c"), scope):
         return None, None
 
     no = clean(row, "no")
@@ -271,7 +288,7 @@ def prepare_store_row(row: dict[str, str], category: str) -> tuple[list[object] 
     ], None
 
 
-def validate_source(files: list[Path], category: str, require_lossless: bool) -> dict[str, int]:
+def validate_source(files: list[Path], category: frozenset[str], require_lossless: bool) -> dict[str, int]:
     """DB 접속 전에 원본 전체를 검증한다.
 
     비활성 스윕은 한 행만 제외돼도 정상 가게를 비활성화할 수 있으므로 무손실일 때만 허용한다.
@@ -335,7 +352,7 @@ def validate_source(files: list[Path], category: str, require_lossless: bool) ->
         stats["valid_rows"] += 1
 
     if stats["target_rows"] == 0:
-        sys.exit(f"적재 대상 업종({category}) 행이 없습니다.")
+        sys.exit(f"적재 대상 업종({scope_label(category)}) 행이 없습니다.")
     if stats["duplicate_ids"]:
         sys.exit(
             f"중복 상가업소번호 {stats['duplicate_ids']:,}건이 발견됐습니다. "
@@ -354,7 +371,7 @@ def validate_source(files: list[Path], category: str, require_lossless: bool) ->
     return dict(stats)
 
 
-def emit(w: io.TextIOBase, files: list[Path], category: str, sweep: bool, version: str) -> dict:
+def emit(w: io.TextIOBase, files: list[Path], category: frozenset[str], sweep: bool, version: str) -> dict:
     """SQL 전문을 w 에 스트리밍하고 집계를 돌려준다."""
     stat = {"rows": 0, "cats": 0, "ksic": 0, "skipped": 0}
     out = csv.writer(w, lineterminator="\n")
@@ -492,7 +509,8 @@ $store_count_contract$;
 """)
 
     if sweep:
-        w.write("""\
+        codes = ", ".join(f"'{c}'" for c in sorted(category))
+        w.write(f"""\
 -- 이번 스냅샷에 없는 sbiz 가게를 비활성 처리. 실제 폐업 확정으로 해석하지 않는다.
 -- Python 사전 검증을 통과한 전국 16개·기본 업종의 완전한 스냅샷에서만 실행된다.
 UPDATE stores SET status = 'inactive', inactive_at = now(), updated_at = now()
@@ -502,8 +520,8 @@ WHERE origin = 'sbiz'
   AND category_id IN (
       SELECT child.id
       FROM store_categories child
-      JOIN store_categories parent ON parent.id = child.parent_id
-      WHERE parent.code = 'I201'
+      LEFT JOIN store_categories parent ON parent.id = child.parent_id
+      WHERE child.code IN ({codes}) OR parent.code IN ({codes})
   );
 
 """)
@@ -532,7 +550,7 @@ def main() -> None:
     files = discover(a.csv_dir, a.regions)
     version = resolve_version(files, a.source_version)
     validate_sweep_scope(a, files)
-    print(f"대상 파일 {len(files)}개 · 스냅샷 {version} · 중분류 {a.category}"
+    print(f"대상 파일 {len(files)}개 · 스냅샷 {version} · 업종 {scope_label(a.category)}"
           f"{' · 비활성 스윕 ON' if a.sweep_inactive else ''}", file=sys.stderr)
 
     validation = validate_source(files, a.category, a.sweep_inactive)
