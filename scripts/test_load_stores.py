@@ -68,6 +68,17 @@ class LoadStoresSafetyTest(unittest.TestCase):
         self.assertNotIn("is_verified", sql)
         self.assertNotIn("status = 'closed'", sql)
         self.assertIn("child.code IN ('I201', 'I21007') OR parent.code IN ('I201', 'I21007')", sql)
+        self.assertIn("AND verified_at IS NULL", sql)
+
+    def test_upsert_keeps_verified_store_name_and_status(self):
+        output = io.StringIO()
+
+        load_stores.emit(output, [], load_stores.LOAD_SCOPE, False, "202606")
+
+        sql = output.getvalue()
+        self.assertIn("WHEN stores.verified_at IS NULL THEN EXCLUDED.name ELSE stores.name", sql)
+        self.assertIn("WHEN stores.verified_at IS NULL THEN EXCLUDED.branch_name ELSE stores.branch_name", sql)
+        self.assertIn("stores.status = 'inactive' AND stores.verified_at IS NULL THEN 'active'", sql)
 
     def test_import_sql_serializes_loaders_and_analyzes_before_commit(self):
         output = io.StringIO()

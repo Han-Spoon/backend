@@ -475,8 +475,9 @@ SELECT s.sbiz_store_no, s.name, coalesce(s.branch_name, ''), c.id,
 FROM stg_store s
 JOIN store_categories c ON c.code = s.category_code
 ON CONFLICT (sbiz_store_no) DO UPDATE SET
-  name            = EXCLUDED.name,
-  branch_name     = EXCLUDED.branch_name,   -- EXCLUDED 는 위 SELECT 의 coalesce 결과라 NULL 이 아니다
+  -- 검증 가게(verified_at)는 서비스가 정한 표시명·상태 유지
+  name            = CASE WHEN stores.verified_at IS NULL THEN EXCLUDED.name ELSE stores.name END,
+  branch_name     = CASE WHEN stores.verified_at IS NULL THEN EXCLUDED.branch_name ELSE stores.branch_name END,
   category_id     = EXCLUDED.category_id,
   ksic_code       = EXCLUDED.ksic_code,
   admin_dong_code = EXCLUDED.admin_dong_code,
@@ -487,8 +488,8 @@ ON CONFLICT (sbiz_store_no) DO UPDATE SET
   last_batch_id   = EXCLUDED.last_batch_id,
   updated_at      = now(),
   -- 이전 스냅샷에서 빠졌던 가게가 다시 나타나면 활성 상태로 되돌린다.
-  status      = CASE WHEN stores.status = 'inactive' THEN 'active' ELSE stores.status END,
-  inactive_at = CASE WHEN stores.status = 'inactive' THEN NULL     ELSE stores.inactive_at END;
+  status      = CASE WHEN stores.status = 'inactive' AND stores.verified_at IS NULL THEN 'active' ELSE stores.status END,
+  inactive_at = CASE WHEN stores.status = 'inactive' AND stores.verified_at IS NULL THEN NULL ELSE stores.inactive_at END;
 
 -- JOIN 누락 등으로 staging보다 적게 반영됐는데도 배치가 성공 처리되는 일을 막는다.
 SELECT set_config('hanspoon.store_import_batch_id', :'batch_id', true);
@@ -516,6 +517,7 @@ $store_count_contract$;
 UPDATE stores SET status = 'inactive', inactive_at = now(), updated_at = now()
 WHERE origin = 'sbiz'
   AND status = 'active'
+  AND verified_at IS NULL
   AND last_batch_id IS DISTINCT FROM :batch_id
   AND category_id IN (
       SELECT child.id
