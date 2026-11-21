@@ -78,6 +78,7 @@ class StoreRepositoryIntegrationTest {
         long verifiedId = insertStore("verified-store", "한스푼 강남점", 37.5010, 127.0000, StoreStatus.ACTIVE, true);
         insertStore("inactive-store", "한스푼 휴업점", 37.5000, 127.0000, StoreStatus.INACTIVE, true);
         insertStore("outside-store", "한스푼 외곽점", 37.5200, 127.0000, StoreStatus.ACTIVE, true);
+        jdbcTemplate.update("update stores set floor_info = 'B1' where id = ?", verifiedId);
 
         List<StoreCandidateProjection> candidates =
                 storeRepository.findNearbyCandidates(CENTER_LATITUDE, CENTER_LONGITUDE, 500, 10);
@@ -86,6 +87,8 @@ class StoreRepositoryIntegrationTest {
         assertThat(candidates.getFirst().getVerified()).isTrue();
         assertThat(candidates.getFirst().getCategoryCode()).isEqualTo("I20101");
         assertThat(candidates.getFirst().getCategoryName()).isEqualTo("한식 일반 음식점업");
+        assertThat(candidates.getFirst().getFloorInfo()).isEqualTo("B1");
+        assertThat(candidates.get(1).getFloorInfo()).isEmpty();
         assertThat(candidates.getFirst().getDistanceMeters()).isBetween(100, 120);
         assertThat(candidates.getFirst().getNameSimilarity()).isNull();
     }

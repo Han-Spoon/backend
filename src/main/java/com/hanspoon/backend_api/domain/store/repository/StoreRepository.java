@@ -20,6 +20,7 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
                            s.name as "name",
                            s.branch_name as "branchName",
                            s.road_address as "roadAddress",
+                           s.floor_info as "floorInfo",
                            s.lat as "latitude",
                            s.lng as "longitude",
                            cast(round(earth_distance(
@@ -70,6 +71,7 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
                            s.name as "name",
                            s.branch_name as "branchName",
                            s.road_address as "roadAddress",
+                           s.floor_info as "floorInfo",
                            s.lat as "latitude",
                            s.lng as "longitude",
                            cast(round(earth_distance(
@@ -123,6 +125,7 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
                            s.name as "name",
                            s.branch_name as "branchName",
                            s.road_address as "roadAddress",
+                           s.floor_info as "floorInfo",
                            s.lat as "latitude",
                            s.lng as "longitude",
                            cast(null as integer) as "distanceMeters",

@@ -3,7 +3,7 @@
 보관한 메뉴 사진 → 공개 경로(menus/) 게시 + image_assets 등록 + store_menus 연결
 
 입력
-  · --photo-dir: stage_menu_photos.py 의 내려받기 폴더(원본 + manifest.csv).
+  · --photo-dir: 내려받은 사진 폴더(원본 + manifest.csv).
   · --store-map: 가게 매핑 CSV(load_store_menus.py 와 같은 파일). 번호 빈칸 가게는 건너뜀.
   · --permitted-stores: 열 '음식점 명'. 허락 받은 가게만 게시. 전체 게시는 --all-stores 로 명시.
 

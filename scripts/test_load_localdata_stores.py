@@ -82,6 +82,8 @@ class LoadLocaldataStoresTest(unittest.TestCase):
         self.assertIn("ON CONFLICT (localdata_mgmt_no) DO UPDATE", sql)
         self.assertIn("VALUES ('localdata', '202611', 'running'", sql)
         self.assertIn("unknown store category", sql)
+        self.assertIn("WHEN stores.verified_at IS NULL THEN EXCLUDED.name ELSE stores.name", sql)
+        self.assertIn("stores.status = 'inactive' AND stores.verified_at IS NULL THEN 'active'", sql)
         self.assertTrue(sql.rstrip().endswith("ROLLBACK;"))
 
 

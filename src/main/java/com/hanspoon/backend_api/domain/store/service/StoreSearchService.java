@@ -49,6 +49,7 @@ public class StoreSearchService {
                 candidate.getName(),
                 candidate.getBranchName(),
                 candidate.getRoadAddress(),
+                candidate.getFloorInfo(),
                 candidate.getLatitude(),
                 candidate.getLongitude(),
                 candidate.getDistanceMeters(),

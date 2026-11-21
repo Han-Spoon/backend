@@ -213,7 +213,8 @@ SELECT s.mgmt_no, s.name, c.id, coalesce(s.road_address, ''), coalesce(s.floor_i
 FROM stg_localdata s
 JOIN store_categories c ON c.code = s.category_code
 ON CONFLICT (localdata_mgmt_no) DO UPDATE SET
-  name          = EXCLUDED.name,
+  -- 검증 가게(verified_at)는 서비스가 정한 표시명·상태 유지
+  name          = CASE WHEN stores.verified_at IS NULL THEN EXCLUDED.name ELSE stores.name END,
   category_id   = EXCLUDED.category_id,
   road_address  = EXCLUDED.road_address,
   floor_info    = EXCLUDED.floor_info,
@@ -221,8 +222,8 @@ ON CONFLICT (localdata_mgmt_no) DO UPDATE SET
   lng           = EXCLUDED.lng,
   last_batch_id = EXCLUDED.last_batch_id,
   updated_at    = now(),
-  status      = CASE WHEN stores.status = 'inactive' THEN 'active' ELSE stores.status END,
-  inactive_at = CASE WHEN stores.status = 'inactive' THEN NULL     ELSE stores.inactive_at END;
+  status      = CASE WHEN stores.status = 'inactive' AND stores.verified_at IS NULL THEN 'active' ELSE stores.status END,
+  inactive_at = CASE WHEN stores.status = 'inactive' AND stores.verified_at IS NULL THEN NULL ELSE stores.inactive_at END;
 
 UPDATE store_import_batches
    SET status = 'completed', finished_at = clock_timestamp(), row_count = (SELECT count(*) FROM stg_localdata)

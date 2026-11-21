@@ -38,6 +38,7 @@ class StoreSearchServiceTest {
         assertThat(response.items()).hasSize(1);
         assertThat(response.items().getFirst().storeId()).isEqualTo(42L);
         assertThat(response.items().getFirst().name()).isEqualTo("한스푼");
+        assertThat(response.items().getFirst().floorInfo()).isEqualTo("B1");
         assertThat(response.items().getFirst().verified()).isTrue();
         assertThat(response.items().getFirst().reviewCount()).isEqualTo(3);
         assertThat(response.items().getFirst().matchMethod()).isEqualTo(StoreMatchMethod.GPS_CANDIDATE);
@@ -79,6 +80,7 @@ class StoreSearchServiceTest {
         when(candidate.getName()).thenReturn("한스푼");
         when(candidate.getBranchName()).thenReturn("강남점");
         when(candidate.getRoadAddress()).thenReturn("서울특별시 강남구 테헤란로 1");
+        when(candidate.getFloorInfo()).thenReturn("B1");
         when(candidate.getLatitude()).thenReturn(37.4978);
         when(candidate.getLongitude()).thenReturn(127.0275);
         when(candidate.getDistanceMeters()).thenReturn(42);
