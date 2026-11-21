@@ -11,6 +11,8 @@ public interface StoreCandidateProjection {
 
     String getRoadAddress();
 
+    String getFloorInfo();
+
     Double getLatitude();
 
     Double getLongitude();

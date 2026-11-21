@@ -10,6 +10,7 @@ public record StoreCandidateResponse(
         @Schema(description = "상호명", example = "한스푼") String name,
         @Schema(description = "지점명", example = "강남점") String branchName,
         @Schema(description = "도로명 주소", example = "서울특별시 강남구 테헤란로 1") String roadAddress,
+        @Schema(description = "층 정보. 지상 1, 지하 B1, 미상은 빈 문자열", example = "B1") String floorInfo,
         @Schema(description = "가게 위도", example = "37.4978") double latitude,
         @Schema(description = "가게 경도", example = "127.0275") double longitude,
         @Schema(description = "사용자 위치와의 거리(m). 좌표 없이 검색하면 null", example = "42") Integer distanceMeters,
