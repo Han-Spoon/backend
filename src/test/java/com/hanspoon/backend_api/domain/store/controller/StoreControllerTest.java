@@ -43,6 +43,7 @@ class StoreControllerTest {
                         "한스푼",
                         "강남점",
                         "서울특별시 강남구 테헤란로 1",
+                        "B1",
                         37.4978,
                         127.0275,
                         42,
@@ -66,6 +67,7 @@ class StoreControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].storeId").value(42))
                 .andExpect(jsonPath("$.items[0].name").value("한스푼"))
+                .andExpect(jsonPath("$.items[0].floorInfo").value("B1"))
                 .andExpect(jsonPath("$.items[0].distanceMeters").value(42))
                 .andExpect(jsonPath("$.items[0].reviewCount").value(3))
                 .andExpect(jsonPath("$.items[0].verified").value(true))
