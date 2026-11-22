@@ -2,9 +2,11 @@ package com.hanspoon.backend_api.domain.scan.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.hanspoon.backend_api.domain.ai.client.AiClient;
@@ -31,8 +33,10 @@ import com.hanspoon.backend_api.domain.store.entity.StoreMatchMethod;
 import com.hanspoon.backend_api.domain.upload.dto.VerifiedUpload;
 import com.hanspoon.backend_api.domain.upload.service.S3StorageService;
 import com.hanspoon.backend_api.domain.user.entity.ReligionType;
+import com.hanspoon.backend_api.domain.user.entity.User;
 import com.hanspoon.backend_api.domain.user.entity.UserProfile;
 import com.hanspoon.backend_api.domain.user.repository.UserProfileRepository;
+import com.hanspoon.backend_api.domain.user.repository.UserRepository;
 import com.hanspoon.backend_api.global.exception.BusinessException;
 import com.hanspoon.backend_api.global.exception.ErrorCode;
 import java.util.List;
@@ -74,15 +78,31 @@ class ScanProcessorTest {
     @Mock
     private MenuAnalysisRepository menuAnalysisRepository;
 
+    @Mock
+    private AnalyzeScanFlow analyzeScanFlow;
+
+    @Mock
+    private UserRepository userRepository;
+
     private ScanProcessor scanProcessor;
 
     // ScanStateWriter 는 실제 객체 사용. 상태 전이 위임 지점까지 함께 검증.
     @BeforeEach
     void setUp() {
-        ScanStateWriter scanStateWriter =
-                new ScanStateWriter(scanSessionRepository, scanImageRepository, menuAnalysisRepository);
-        scanProcessor = new ScanProcessor(
-                aiClient, s3StorageService, userProfileRepository, scanSessionRepository, scanStateWriter, false);
+        scanProcessor = processor("legacy");
+    }
+
+    private ScanProcessor processor(String pipeline) {
+        return new ScanProcessor(
+                aiClient,
+                s3StorageService,
+                userProfileRepository,
+                scanSessionRepository,
+                new ScanStateWriter(scanSessionRepository, scanImageRepository, menuAnalysisRepository),
+                analyzeScanFlow,
+                userRepository,
+                false,
+                pipeline);
     }
 
     private static com.hanspoon.backend_api.domain.ai.dto.ocr.MenuAnalysis ocrMenu(
@@ -236,8 +256,8 @@ class ScanProcessorTest {
         assertThat(saved.get(0).getDisplayOrder()).isEqualTo(1);
         assertThat(saved.get(1).getRiskLevel()).isEqualTo(RiskLevel.CAUTION);
         // ai_result 최종 표시 필드 머지 확인
-        assertThat(saved.get(0).getMessage().ko()).isEqualTo("pork included");
-        assertThat(saved.get(1).getOwnerCard().question().ko()).isEqualTo("use anchovy?");
+        assertThat(saved.get(0).getMessage()).contains("\"ko\":\"pork included\"");
+        assertThat(saved.get(1).getOwnerCard()).contains("\"ko\":\"use anchovy?\"");
     }
 
     @Test
@@ -395,5 +415,57 @@ class ScanProcessorTest {
         assertThat(session.getScanStatus()).isEqualTo(ScanStatus.FAILED);
         assertThat(session.getFailureCode()).isEqualTo(ErrorCode.AI_RESULT_MISMATCH.getCode());
         verify(menuAnalysisRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void analyzePipelineRunsPrepareThenJudgeWithoutLegacyCalls() {
+        UUID userId = UUID.randomUUID();
+        ScanSession session = processingSession(userId);
+        UUID scanId = session.getId();
+        when(scanSessionRepository.findById(scanId)).thenReturn(Optional.of(session));
+        when(userProfileRepository.findByUserId(userId))
+                .thenReturn(Optional.of(UserProfile.create(
+                        userId, "KR", false, false, null, ReligionType.HALAL, true, true, List.of())));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(User.create("a@example.com", "a", "ja")));
+        var prepared = new AnalyzeScanFlow.PreparedScan(
+                null, List.of(), List.of(MenuAnalysis.prepared(scanId, 0, "김치찌개", null, null, null, null, null, null)));
+        when(analyzeScanFlow.prepare(scanId, VERIFIED_UPLOAD, "camera", "ja")).thenReturn(Optional.of(prepared));
+
+        processor("analyze").process(scanId, userId, VERIFIED_UPLOAD, "camera");
+
+        verify(analyzeScanFlow).judge(eq(scanId), eq(STORE_ID), eq(prepared), any(), eq("ja"));
+        verifyNoInteractions(aiClient);
+    }
+
+    @Test
+    void analyzePipelineSkipsJudgeWhenRetakeIsNeeded() {
+        UUID userId = UUID.randomUUID();
+        ScanSession session = processingSession(userId);
+        UUID scanId = session.getId();
+        when(scanSessionRepository.findById(scanId)).thenReturn(Optional.of(session));
+        when(userProfileRepository.findByUserId(userId))
+                .thenReturn(Optional.of(UserProfile.create(
+                        userId, "KR", false, false, null, ReligionType.HALAL, true, true, List.of())));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(User.create("a@example.com", "a", "ko")));
+        when(analyzeScanFlow.prepare(any(), any(), any(), any())).thenReturn(Optional.empty());
+
+        processor("analyze").process(scanId, userId, VERIFIED_UPLOAD, null);
+
+        verify(analyzeScanFlow, never()).judge(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void analyzePipelineFailsBeforeAiCallWithoutProfile() {
+        UUID userId = UUID.randomUUID();
+        ScanSession session = processingSession(userId);
+        UUID scanId = session.getId();
+        when(scanSessionRepository.findById(scanId)).thenReturn(Optional.of(session));
+        when(userProfileRepository.findByUserId(userId)).thenReturn(Optional.empty());
+
+        processor("analyze").process(scanId, userId, VERIFIED_UPLOAD, null);
+
+        assertThat(session.getScanStatus()).isEqualTo(ScanStatus.FAILED);
+        assertThat(session.getFailureCode()).isEqualTo(ErrorCode.PROFILE_NOT_FOUND.getCode());
+        verifyNoInteractions(analyzeScanFlow);
     }
 }

@@ -1,0 +1,38 @@
+{
+  "schema_version": "3.0",
+  "trace_id": "0199a2f0-0000-7000-8000-000000000001",
+  "prepare_id": "0199a2f0-0000-7000-8000-000000000101",
+  "scan_session_id": "scan-123",
+  "prepared_items_hash": "sha256:8d4f000000000000000000000000000000000000000000000000000000000001",
+  "scan_quality": {
+    "status": "usable",
+    "reasons": [],
+    "retake_suggestions": []
+  },
+  "prepare_signals": {
+    "scan_quality_status": "usable",
+    "warnings": []
+  },
+  "prepared_items": [
+    {
+      "item_id": "scan-123:0",
+      "source_index": 0,
+      "raw_menu_name": "■ 김치 찌개 2인",
+      "origin_text": null,
+      "foreign_text_segments": [],
+      "normalized_menu_name": "김치찌개",
+      "display_name": "김치 찌개",
+      "description": null,
+      "price_text": "8,000원",
+      "price_options": [],
+      "locale_hint": "ko",
+      "options": [
+        "2인"
+      ],
+      "residual_tokens": [],
+      "risk_tag_observations": []
+    }
+  ],
+  "warnings": [],
+  "errors": []
+}

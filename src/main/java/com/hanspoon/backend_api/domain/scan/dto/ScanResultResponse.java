@@ -14,7 +14,12 @@ import java.util.UUID;
  * @param title 유저가 수정한 제목(미수정이면 null). 기본 제목은 FE 가 scannedAt 을 로케일로 포맷해 표시
  * @param store 스캔 시점 가게 정보. 가게 도입 전 레거시 스캔은 null
  * @param record 사용자가 명시적으로 보관한 기록. 아직 저장하지 않았으면 null
+ * @param locale 분석 언어. Prepare/Judge 이전 스캔은 null
+ * @param dietSnapshot 스캔 당시 식단. Prepare/Judge 이전 스캔은 null
  * @param menuCount 추출된 메뉴 수
+ * @param dangerCount 위험 메뉴 수
+ * @param cautionCount 주의 메뉴 수
+ * @param safeCount 안전 메뉴 수
  * @param riskyMenuCount 위험/주의 메뉴 수
  * @param scannedAt 스캔 시각
  * @param menus 메뉴별 분석 결과
@@ -29,7 +34,12 @@ public record ScanResultResponse(
         String title,
         ScanStoreSummary store,
         ScanRecordResponse record,
+        String locale,
+        ScanDietSnapshot dietSnapshot,
         Integer menuCount,
+        Integer dangerCount,
+        Integer cautionCount,
+        Integer safeCount,
         Integer riskyMenuCount,
         Instant scannedAt,
         List<MenuResult> menus,
