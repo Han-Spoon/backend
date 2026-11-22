@@ -1,9 +1,6 @@
 package com.hanspoon.backend_api.global.config;
 
 import com.hanspoon.backend_api.domain.ai.dto.common.RiskLevel;
-import com.hanspoon.backend_api.domain.ai.dto.result.FinalMessage;
-import com.hanspoon.backend_api.domain.ai.dto.result.OwnerCard;
-import com.hanspoon.backend_api.domain.ai.dto.result.OwnerQuestion;
 import com.hanspoon.backend_api.domain.card.dto.CardText;
 import com.hanspoon.backend_api.domain.card.entity.CardType;
 import com.hanspoon.backend_api.domain.card.entity.SavedCard;
@@ -11,6 +8,8 @@ import com.hanspoon.backend_api.domain.card.repository.SavedCardRepository;
 import com.hanspoon.backend_api.domain.scan.entity.MenuAnalysis;
 import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
+import com.hanspoon.backend_api.domain.scan.repository.AnalyzeJudgeRepository;
+import com.hanspoon.backend_api.domain.scan.repository.AnalyzeJudgeRepository.MenuJudgment;
 import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
 import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
 import com.hanspoon.backend_api.domain.user.entity.AllergyCode;
@@ -47,11 +46,16 @@ public class DevDataSeeder implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(DevDataSeeder.class);
     private static final String DEMO_EMAIL = "demo@han-spoon.com";
+    private static final String DIET_SNAPSHOT =
+            """
+            {"religion_type":"halal","is_vegetarian":false,"vegetarian_type":null,"no_alcohol":true,\
+            "allergies":["is_peanut","is_shrimp","is_egg"],"no_spicy":false}""";
 
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
     private final ScanSessionRepository scanSessionRepository;
     private final MenuAnalysisRepository menuAnalysisRepository;
+    private final AnalyzeJudgeRepository analyzeJudgeRepository;
     private final SavedCardRepository savedCardRepository;
     private final JwtTokenProvider jwtTokenProvider;
 
@@ -60,12 +64,14 @@ public class DevDataSeeder implements ApplicationRunner {
             UserProfileRepository userProfileRepository,
             ScanSessionRepository scanSessionRepository,
             MenuAnalysisRepository menuAnalysisRepository,
+            AnalyzeJudgeRepository analyzeJudgeRepository,
             SavedCardRepository savedCardRepository,
             JwtTokenProvider jwtTokenProvider) {
         this.userRepository = userRepository;
         this.userProfileRepository = userProfileRepository;
         this.scanSessionRepository = scanSessionRepository;
         this.menuAnalysisRepository = menuAnalysisRepository;
+        this.analyzeJudgeRepository = analyzeJudgeRepository;
         this.savedCardRepository = savedCardRepository;
         this.jwtTokenProvider = jwtTokenProvider;
     }
@@ -115,73 +121,117 @@ public class DevDataSeeder implements ApplicationRunner {
     private void seedScans(UUID userId) {
         Instant now = Instant.now();
 
-        // 1) COMPLETED · 커스텀 제목 · 메뉴 2건(danger + caution+ownerCard)
-        ScanSession s1 = scanSessionRepository.save(
-                ScanSession.create(userId, "강남 삼겹살집", 2, 1, ScanStatus.COMPLETED, now.minus(Duration.ofHours(1))));
-        menuAnalysisRepository.saveAll(List.of(
-                MenuAnalysis.create(
-                        s1.getId(),
-                        1,
-                        "삼겹살",
-                        "Pork Belly",
-                        "구운 돼지고기",
-                        "Grilled pork belly",
-                        "12,000원",
-                        false,
-                        null,
-                        RiskLevel.DANGER,
-                        List.of("is_pork"),
-                        new FinalMessage("돼지고기가 포함되어 있어요.", "Contains pork.", "يحتوي على لحم الخنزير."),
-                        null),
-                MenuAnalysis.create(
-                        s1.getId(),
-                        2,
-                        "된장찌개",
-                        "Soybean Paste Stew",
-                        "된장 베이스 찌개",
-                        "Soybean paste stew",
-                        "8,000원",
-                        true,
-                        null,
-                        RiskLevel.CAUTION,
-                        List.of("has_unclear_broth"),
-                        new FinalMessage("육수 재료가 불명확해요.", "Broth base unclear.", null),
-                        new OwnerCard(
-                                "된장찌개",
-                                "has_unclear_broth",
-                                new OwnerQuestion(
-                                        "멸치 육수를 사용하나요?", "Do you use anchovy broth?", "هل تستخدم مرق الأنشوجة؟")))));
-
-        // 2) COMPLETED · 기본 제목(null) · 메뉴 1건(safe)
-        ScanSession s2 = scanSessionRepository.save(
-                ScanSession.create(userId, null, 1, 0, ScanStatus.COMPLETED, now.minus(Duration.ofDays(1))));
-        menuAnalysisRepository.save(MenuAnalysis.create(
-                s2.getId(),
+        // 1) COMPLETED · 커스텀 제목 · 메뉴 2건(danger + caution)
+        ScanSession s1 = ScanSession.create(userId, "강남 삼겹살집", null, ScanStatus.PROCESSING, null);
+        MenuAnalysis porkBelly =
+                MenuAnalysis.prepared(s1.getId(), 0, "삼겹살", "구운 돼지고기", "12,000원", null, null, null, null);
+        MenuAnalysis stew = MenuAnalysis.prepared(s1.getId(), 1, "된장찌개", "된장 베이스 찌개", "8,000원", null, true, null, null);
+        completeScan(
+                s1,
+                now.minus(Duration.ofHours(1)),
+                List.of(porkBelly, stew),
+                List.of(RiskLevel.DANGER, RiskLevel.CAUTION));
+        judge(
+                porkBelly,
+                0,
+                RiskLevel.DANGER,
+                "estimated",
+                "partial",
+                risk("돼지고기", "present", null, "is_pork", "identity", null),
+                "[\"is_pork\"]",
+                message("돼지고기가 들어 있어요.", "삼겹살은 돼지고기 메뉴예요."));
+        judge(
+                stew,
                 1,
-                "비빔밥",
-                "Bibimbap",
-                "야채 비빔밥",
-                "Vegetable rice bowl",
-                "9,000원",
-                false,
-                null,
-                RiskLevel.SAFE,
-                List.of(),
-                new FinalMessage("드셔도 괜찮아요.", "Safe to eat.", null),
-                null));
+                RiskLevel.CAUTION,
+                "unknown",
+                "partial",
+                risk("새우", "unknown", 0.42, "is_shrimp", "hidden", "global"),
+                "[\"is_shrimp\"]",
+                message("새우가 들어갈 수 있어요.", "육수에 새우를 쓰는지 확인이 필요해요."));
+
+        // 2) COMPLETED · 기본 제목(null) · 메뉴 1건(caution). 가게 없는 스캔은 직원 응답이 없어 safe 불가
+        ScanSession s2 = ScanSession.create(userId, null, null, ScanStatus.PROCESSING, null);
+        MenuAnalysis bibimbap = MenuAnalysis.prepared(s2.getId(), 0, "비빔밥", "야채 비빔밥", "9,000원", null, null, null, null);
+        completeScan(s2, now.minus(Duration.ofDays(1)), List.of(bibimbap), List.of(RiskLevel.CAUTION));
+        judge(
+                bibimbap,
+                0,
+                RiskLevel.CAUTION,
+                "estimated",
+                "partial",
+                risk("달걀", "unknown", 0.55, "is_egg", "component", "global"),
+                "[\"is_egg\"]",
+                message("달걀이 올라갈 수 있어요.", null));
 
         // 3) NEEDS_RETAKE · 재촬영 사유
-        ScanSession s3 =
-                ScanSession.create(userId, null, 0, null, ScanStatus.PROCESSING, now.minus(Duration.ofDays(2)));
+        ScanSession s3 = ScanSession.create(userId, null, 0, ScanStatus.PROCESSING, now.minus(Duration.ofDays(2)));
         s3.applyNeedsRetake(List.of("too blurry", "low light"), List.of("카메라를 메뉴판과 평행하게 두고 다시 촬영해 주세요."));
         scanSessionRepository.save(s3);
 
         // 4) PROCESSING · 진행 중
-        scanSessionRepository.save(ScanSession.create(userId, null, null, null, ScanStatus.PROCESSING, null));
+        scanSessionRepository.save(ScanSession.create(userId, null, null, ScanStatus.PROCESSING, null));
+    }
+
+    /** Prepare·Judge 저장과 같은 순서. 판정 컬럼은 JDBC 로 기록. */
+    private void completeScan(
+            ScanSession session, Instant scannedAt, List<MenuAnalysis> menus, List<RiskLevel> riskLevels) {
+        session.applyPrepareResult(menus.size(), scannedAt, "ko");
+        session.applyJudgeResult(riskLevels, DIET_SNAPSHOT);
+        scanSessionRepository.save(session);
+        menuAnalysisRepository.saveAllAndFlush(menus);
+    }
+
+    private void judge(
+            MenuAnalysis menu,
+            int displayOrder,
+            RiskLevel riskLevel,
+            String evidenceBasis,
+            String informationStatus,
+            String riskIngredients,
+            String matchedTags,
+            String message) {
+        analyzeJudgeRepository.updateMenuJudgment(new MenuJudgment(
+                menu.getId(),
+                riskLevel.getCode(),
+                displayOrder,
+                "unmatched",
+                "completed",
+                evidenceBasis,
+                informationStatus,
+                riskIngredients,
+                matchedTags,
+                message,
+                "[]",
+                null,
+                "unmatched",
+                "none"));
+    }
+
+    private static String risk(
+            String name, String status, Double posteriorMean, String tag, String role, String priorSource) {
+        return """
+                [{"ingredient":{"ingredient_id":null,"canonical_name":"%s","localized_name":"%s"},\
+                "constraint_tags":["%s"],"matched_tags":["%s"],"role":"%s","status":"%s",\
+                "posterior_mean":%s,"confidence":null,"prior_source":%s,"evidence_refs":[]}]"""
+                .formatted(
+                        name,
+                        name,
+                        tag,
+                        tag,
+                        role,
+                        status,
+                        posteriorMean,
+                        priorSource == null ? "null" : "\"" + priorSource + "\"");
+    }
+
+    private static String message(String verdict, String reason) {
+        return "{\"verdict\":\"%s\",\"reason\":%s,\"notes\":[]}"
+                .formatted(verdict, reason == null ? "null" : "\"" + reason + "\"");
     }
 
     private void seedCards(UUID userId) {
-        // 모든 카드는 화면에 보이는 text 를 그대로 저장(언어 스냅샷). 재료확인 text 는 AI owner_card.question 예시.
+        // 모든 카드는 화면에 보이는 text 를 그대로 저장(언어 스냅샷). 재료확인 text 는 AI 직원 카드 문구 예시.
         savedCardRepository.saveAll(List.of(
                 SavedCard.create(
                         userId,

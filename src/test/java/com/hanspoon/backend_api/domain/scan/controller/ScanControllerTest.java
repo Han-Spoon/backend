@@ -207,7 +207,6 @@ class ScanControllerTest {
                         null,
                         null,
                         null,
-                        1,
                         null,
                         List.of(),
                         null,
@@ -283,7 +282,7 @@ class ScanControllerTest {
     void getScansReturnsPage() throws Exception {
         UUID scanId = UUID.randomUUID();
         ScanHistoryItem item = new ScanHistoryItem(
-                scanId, "강남 삼겹살집", new ScanStoreSummary(42L, "한스푼"), ScanStatus.COMPLETED, 3, 1, 1, 2, null);
+                scanId, "강남 삼겹살집", new ScanStoreSummary(42L, "한스푼"), ScanStatus.COMPLETED, 3, 1, 1, null);
         when(scanService.getScans(eq(USER_ID), any())).thenReturn(new PageResponse<>(List.of(item), 0, 20, 1, 1));
 
         mockMvc.perform(get("/api/v1/scans?page=0&size=20"))
@@ -295,14 +294,14 @@ class ScanControllerTest {
                 .andExpect(jsonPath("$.items[0].store.name").value("한스푼"))
                 .andExpect(jsonPath("$.items[0].dangerCount").value(1))
                 .andExpect(jsonPath("$.items[0].cautionCount").value(1))
-                .andExpect(jsonPath("$.items[0].riskyMenuCount").value(2));
+                .andExpect(jsonPath("$.items[0].riskyMenuCount").doesNotExist());
     }
 
     @Test
     void updateTitleReturns200() throws Exception {
         UUID scanId = UUID.randomUUID();
         when(scanService.updateTitle(eq(USER_ID), eq(scanId), any()))
-                .thenReturn(new ScanHistoryItem(scanId, "새 제목", null, ScanStatus.COMPLETED, 2, 1, 0, 1, null));
+                .thenReturn(new ScanHistoryItem(scanId, "새 제목", null, ScanStatus.COMPLETED, 2, 1, 0, null));
 
         mockMvc.perform(patch("/api/v1/scans/{scanId}", scanId)
                         .contentType("application/json")

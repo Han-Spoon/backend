@@ -2,9 +2,6 @@ package com.hanspoon.backend_api.domain.scan.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.hanspoon.backend_api.domain.ai.dto.result.FinalMessage;
-import com.hanspoon.backend_api.domain.ai.dto.result.OwnerCard;
-import com.hanspoon.backend_api.domain.ai.dto.result.OwnerQuestion;
 import com.hanspoon.backend_api.domain.scan.dto.MenuResult;
 import com.hanspoon.backend_api.domain.scan.dto.RiskIngredientResult;
 import com.hanspoon.backend_api.domain.scan.dto.ScanDietSnapshot;
@@ -18,38 +15,29 @@ import org.springframework.test.util.ReflectionTestUtils;
 class MenuResultMapperTest {
 
     @Test
-    void mapsLegacyMessageAndOwnerCard() {
-        MenuAnalysis legacy = MenuAnalysis.create(
-                UUID.randomUUID(),
-                1,
-                "순두부",
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                List.of("has_unclear_jeotgal"),
-                new FinalMessage("젓갈 확인", "check jeotgal", null),
-                new OwnerCard("순두부", "has_unclear_jeotgal", new OwnerQuestion("젓갈 넣나요?", null, null)));
+    void passesThroughPreviousScanMessage() {
+        MenuAnalysis previous =
+                MenuAnalysis.prepared(UUID.randomUUID(), 0, "순두부", "순두부찌개", null, null, null, null, null);
+        ReflectionTestUtils.setField(previous, "message", "{\"ko\":\"젓갈 확인\",\"en\":\"check jeotgal\",\"ar\":null}");
+        ReflectionTestUtils.setField(previous, "matchedTags", List.of("has_unclear_jeotgal"));
 
-        MenuResult result = MenuResultMapper.toMenuResult(legacy, null, null);
+        MenuResult result = MenuResultMapper.toMenuResult(previous, null, null, null);
 
-        assertThat(result.scanMenuId()).isEqualTo(legacy.getId());
+        assertThat(result.scanMenuId()).isEqualTo(previous.getId());
+        assertThat(result.displayName()).isEqualTo("순두부");
+        assertThat(result.description()).isEqualTo("순두부찌개");
+        assertThat(result.translatedName()).isNull();
+        assertThat(result.translatedDescription()).isNull();
+        assertThat(result.matchedTags()).containsExactly("has_unclear_jeotgal");
         assertThat(result.message().get("ko").asString()).isEqualTo("젓갈 확인");
         assertThat(result.message().get("en").asString()).isEqualTo("check jeotgal");
-        assertThat(result.ownerCard().menuName()).isEqualTo("순두부");
-        assertThat(result.ownerCard().flag()).isEqualTo("has_unclear_jeotgal");
-        assertThat(result.ownerCard().question().ko()).isEqualTo("젓갈 넣나요?");
         assertThat(result.riskIngredients()).isNull();
     }
 
     @Test
-    void mapsJudgeMessageCardsAndRiskIngredients() {
+    void mapsJudgeMessageAndRiskIngredients() {
         MenuAnalysis judged = MenuAnalysis.prepared(UUID.randomUUID(), 0, "제육볶음", null, null, null, null, null, null);
         ReflectionTestUtils.setField(judged, "message", "{\"verdict\":\"먹지 마세요\",\"reason\":\"돼지고기\",\"notes\":[]}");
-        ReflectionTestUtils.setField(judged, "ownerCard", "[{\"card_id\":\"c1\"}]");
         ReflectionTestUtils.setField(
                 judged,
                 "riskIngredients",
@@ -61,10 +49,10 @@ class MenuResultMapperTest {
                   "constraint_tags":[],"matched_tags":[],"role":null,"status":"unknown",
                   "posterior_mean":null,"confidence":null,"prior_source":null,"evidence_refs":[]}]""");
 
-        MenuResult result = MenuResultMapper.toMenuResult(judged, null, "en");
+        MenuResult result = MenuResultMapper.toMenuResult(judged, null, "Jeyuk bokkeum", "en");
 
+        assertThat(result.translatedName()).isEqualTo("Jeyuk bokkeum");
         assertThat(result.message().get("verdict").asString()).isEqualTo("먹지 마세요");
-        assertThat(result.ownerCard()).isNull();
         assertThat(result.riskIngredients())
                 .containsExactly(
                         new RiskIngredientResult(

@@ -151,17 +151,42 @@ class SchemaV2MigrationIntegrationTest {
     }
 
     @Test
-    void defaultsStaffAnswerStatusToNoneForCurrentPipelineRows() {
+    void defaultsStaffAnswerStatusAndStaffCards() {
         Fixture f = fixture();
         UUID analysisId = UUID.randomUUID();
         jdbcTemplate.update(
-                "insert into menu_analyses (id, scan_session_id, menu_name_ko, risk_level) values (?, ?, '김치찌개', 'safe')",
+                "insert into menu_analyses (id, scan_session_id, source_index, display_name) values (?, ?, 0, '김치찌개')",
                 analysisId,
                 f.scanId());
 
         assertThat(jdbcTemplate.queryForObject(
-                        "select staff_answer_status from menu_analyses where id = ?", String.class, analysisId))
-                .isEqualTo("none");
+                        "select staff_answer_status || '/' || staff_cards::text from menu_analyses where id = ?",
+                        String.class,
+                        analysisId))
+                .isEqualTo("none/[]");
+    }
+
+    @Test
+    void requiresAiRiskLevelWithRiskLevel() {
+        Fixture f = fixture();
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                        "insert into menu_analyses (id, scan_session_id, source_index, display_name, risk_level)"
+                                + " values (?, ?, 0, '김치찌개', 'danger')",
+                        UUID.randomUUID(),
+                        f.scanId()))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_menu_analyses_ai_risk_pair");
+    }
+
+    @Test
+    void rejectsBlankOrLongScanTitle() {
+        Fixture f = fixture();
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                        "update scan_sessions set title = ? where id = ?", "가".repeat(31), f.scanId()))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_scan_sessions_title");
     }
 
     @Test
@@ -317,18 +342,19 @@ class SchemaV2MigrationIntegrationTest {
     }
 
     @Test
-    void keepsLegacyPipelineColumnsUntilContractPhase() {
+    void dropsLegacyPipelineColumnsInContractPhase() {
         Integer legacyColumns = jdbcTemplate.queryForObject(
                 """
                 select count(*) from information_schema.columns
                  where table_schema = 'public'
                    and ((table_name = 'menu_analyses'
-                         and column_name in ('menu_name_ko', 'menu_name_en', 'description_en', 'owner_card', 'hit_tags'))
+                         and column_name in ('menu_name_ko', 'menu_name_en', 'description_en', 'image_url',
+                                             'owner_card', 'hit_tags'))
                      or (table_name = 'scan_sessions' and column_name = 'risky_menu_count'))
                 """,
                 Integer.class);
 
-        assertThat(legacyColumns).isEqualTo(6);
+        assertThat(legacyColumns).isZero();
     }
 
     @Test
@@ -539,7 +565,7 @@ class SchemaV2MigrationIntegrationTest {
     private UUID insertMenuAnalysis(UUID scanId, int sourceIndex) {
         UUID id = UUID.randomUUID();
         jdbcTemplate.update(
-                "insert into menu_analyses (id, scan_session_id, source_index, menu_name_ko) values (?, ?, ?, '김치찌개')",
+                "insert into menu_analyses (id, scan_session_id, source_index, display_name) values (?, ?, ?, '김치찌개')",
                 id,
                 scanId,
                 sourceIndex);

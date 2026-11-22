@@ -4,9 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.hanspoon.backend_api.TestcontainersConfiguration;
 import com.hanspoon.backend_api.domain.ai.dto.common.RiskLevel;
-import com.hanspoon.backend_api.domain.ai.dto.result.FinalMessage;
-import com.hanspoon.backend_api.domain.ai.dto.result.OwnerCard;
-import com.hanspoon.backend_api.domain.ai.dto.result.OwnerQuestion;
 import com.hanspoon.backend_api.domain.scan.entity.MenuAnalysis;
 import com.hanspoon.backend_api.domain.scan.entity.ScanImage;
 import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
@@ -106,7 +103,7 @@ class ScanPersistenceIntegrationTest {
         UUID userId = user.getId();
 
         ScanSession session = scanSessionRepository.save(
-                ScanSession.create(userId, "menu_001.jpg", 2, null, ScanStatus.PROCESSING, Instant.now()));
+                ScanSession.create(userId, "menu_001", 2, ScanStatus.PROCESSING, Instant.now()));
         UUID sessionId = session.getId();
 
         scanImageRepository.save(ScanImage.create(
@@ -119,29 +116,24 @@ class ScanPersistenceIntegrationTest {
                 "version-1",
                 "\"etag-1\""));
 
-        menuAnalysisRepository.save(MenuAnalysis.create(
-                sessionId,
-                1,
-                "sundubu",
-                null,
-                "",
-                null,
-                "8000",
-                true,
-                null,
-                RiskLevel.CAUTION,
-                List.of("has_unclear_broth", "has_unclear_jeotgal"),
-                new FinalMessage("pork possible", null, null),
-                new OwnerCard("sundubu", "has_unclear_jeotgal", new OwnerQuestion("use jeotgal?", null, null))));
-
-        // 강제로 DB 까지 쓰고(L1 비우고) 다시 읽어 JSONB 직렬화/역직렬화 라운드트립을 검증
+        MenuAnalysis prepared = menuAnalysisRepository.save(
+                MenuAnalysis.prepared(sessionId, 0, "순두부", "", "8000", null, true, null, null));
         entityManager.flush();
+        // 판정 컬럼은 Judge 저장(JDBC) 전용
+        jdbcTemplate.update(
+                """
+                update menu_analyses
+                   set risk_level = 'caution', ai_risk_level = 'caution',
+                       matched_tags = '["is_shrimp","is_pork"]'::jsonb,
+                       message = '{"verdict":"새우가 들어갈 수 있어요.","reason":null,"notes":[]}'::jsonb
+                 where id = ?
+                """,
+                prepared.getId());
         entityManager.clear();
 
         ScanSession reloadedSession =
                 scanSessionRepository.findByIdAndUserId(sessionId, userId).orElseThrow();
         assertThat(reloadedSession.getScanStatus()).isEqualTo(ScanStatus.PROCESSING);
-        assertThat(reloadedSession.getRiskyMenuCount()).isNull();
 
         ScanImage reloadedImage =
                 scanImageRepository.findByScanSessionId(sessionId).orElseThrow();
@@ -153,40 +145,37 @@ class ScanPersistenceIntegrationTest {
         List<MenuAnalysis> analyses = menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(sessionId);
         assertThat(analyses).hasSize(1);
         MenuAnalysis analysis = analyses.get(0);
+        assertThat(analysis.getDisplayName()).isEqualTo("순두부");
+        assertThat(analysis.getIsSpicy()).isTrue();
         assertThat(analysis.getRiskLevel()).isEqualTo(RiskLevel.CAUTION);
-        assertThat(analysis.getHitTags()).containsExactly("has_unclear_broth", "has_unclear_jeotgal");
-        assertThat(jdbcTemplate.queryForObject(
-                        "SELECT message ->> 'ko' FROM menu_analyses WHERE id = ?", String.class, analysis.getId()))
-                .isEqualTo("pork possible");
-        assertThat(jdbcTemplate.queryForObject(
-                        "SELECT owner_card ->> 'menuName' || '/' || (owner_card -> 'question' ->> 'ko')"
-                                + " FROM menu_analyses WHERE id = ?",
-                        String.class,
-                        analysis.getId()))
-                .isEqualTo("sundubu/use jeotgal?");
+        assertThat(analysis.getMatchedTags()).containsExactly("is_shrimp", "is_pork");
+        assertThat(analysis.getMessage()).contains("새우가 들어갈 수 있어요.");
+        assertThat(analysis.getStaffCards()).isEqualTo("[]");
     }
 
     @Test
-    void appliesRuleEngineResultUpdatesCountAndStatus() {
+    void appliesJudgeResultStoresCountersAndCompletes() {
         User user = userRepository.save(User.create("scan-update@example.com", "scanuser2", "ko"));
         ScanSession session = scanSessionRepository.save(
-                ScanSession.create(user.getId(), "m.jpg", 3, null, ScanStatus.PROCESSING, Instant.now()));
+                ScanSession.create(user.getId(), "m", 3, ScanStatus.PROCESSING, Instant.now()));
 
-        session.applyRuleEngineResult(2, ScanStatus.COMPLETED);
+        session.applyJudgeResult(List.of(RiskLevel.DANGER, RiskLevel.CAUTION, RiskLevel.CAUTION), null);
         scanSessionRepository.save(session);
         entityManager.flush();
         entityManager.clear();
 
         ScanSession reloaded = scanSessionRepository.findById(session.getId()).orElseThrow();
-        assertThat(reloaded.getRiskyMenuCount()).isEqualTo(2);
         assertThat(reloaded.getScanStatus()).isEqualTo(ScanStatus.COMPLETED);
+        assertThat(reloaded.getDangerCount()).isEqualTo(1);
+        assertThat(reloaded.getCautionCount()).isEqualTo(2);
+        assertThat(reloaded.getSafeCount()).isZero();
     }
 
     @Test
     void appliesNeedsRetakePersistsReasonsAsJsonb() {
         User user = userRepository.save(User.create("scan-retake@example.com", "scanuser3", "ko"));
         ScanSession session = scanSessionRepository.save(
-                ScanSession.create(user.getId(), "blur.jpg", null, null, ScanStatus.PROCESSING, Instant.now()));
+                ScanSession.create(user.getId(), null, null, ScanStatus.PROCESSING, Instant.now()));
 
         session.applyNeedsRetake(List.of("too blurry", "low light"), List.of("카메라의 초점을 맞춰 다시 촬영해 주세요."));
         scanSessionRepository.save(session);
@@ -203,25 +192,12 @@ class ScanPersistenceIntegrationTest {
     void deletingScanSessionCascadesToImageAndAnalyses() {
         User user = userRepository.save(User.create("scan-del@example.com", "scanuser4", "ko"));
         UUID userId = user.getId();
-        ScanSession session = scanSessionRepository.save(
-                ScanSession.create(userId, "del.jpg", 1, 0, ScanStatus.COMPLETED, Instant.now()));
+        ScanSession session =
+                scanSessionRepository.save(ScanSession.create(userId, null, 1, ScanStatus.COMPLETED, Instant.now()));
         UUID sessionId = session.getId();
         scanImageRepository.save(
                 ScanImage.create(sessionId, "upload", "scans/del.jpg", "u", "image/jpeg", 1L, null, null));
-        menuAnalysisRepository.save(MenuAnalysis.create(
-                sessionId,
-                1,
-                "samgyeopsal",
-                null,
-                null,
-                null,
-                "9000",
-                false,
-                null,
-                RiskLevel.DANGER,
-                List.of("is_pork"),
-                new FinalMessage("pork included", null, null),
-                null));
+        menuAnalysisRepository.save(MenuAnalysis.prepared(sessionId, 0, "삼겹살", null, "9000", null, null, null, null));
         entityManager.flush();
         entityManager.clear();
 

@@ -1,7 +1,5 @@
 package com.hanspoon.backend_api.domain.scan.service;
 
-import com.hanspoon.backend_api.domain.ai.dto.result.OwnerCard;
-import com.hanspoon.backend_api.domain.ai.dto.result.OwnerQuestion;
 import com.hanspoon.backend_api.domain.scan.dto.MenuResult;
 import com.hanspoon.backend_api.domain.scan.dto.RiskIngredientResult;
 import com.hanspoon.backend_api.domain.scan.dto.ScanDietSnapshot;
@@ -14,7 +12,7 @@ import java.util.Map;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** 저장 JSON(레거시·Judge 형식) → 결과 응답. */
+/** 저장 JSON(Judge 형식, message 는 이전 형식 포함) → 결과 응답. */
 final class MenuResultMapper {
 
     private static final JsonMapper JSON = JsonMapper.shared();
@@ -23,14 +21,14 @@ final class MenuResultMapper {
 
     private MenuResultMapper() {}
 
-    static MenuResult toMenuResult(MenuAnalysis m, MenuPhoto photo, String locale) {
+    static MenuResult toMenuResult(MenuAnalysis m, MenuPhoto photo, String translatedName, String locale) {
         return new MenuResult(
                 m.getId(),
                 m.getDisplayOrder(),
-                m.getMenuNameKo(),
-                m.getMenuNameEn(),
-                m.getDescriptionKo(),
-                m.getDescriptionEn(),
+                m.getDisplayName(),
+                translatedName,
+                m.getDescription(),
+                null,
                 m.getPriceText(),
                 photo == null ? null : photo.url(),
                 photo == null ? null : photo.attribution(),
@@ -41,9 +39,8 @@ final class MenuResultMapper {
                 m.getInformationStatus(),
                 m.getStaffAnswerStatus(),
                 riskIngredients(m.getRiskIngredients(), locale),
-                m.getHitTags(),
-                object(m.getMessage()),
-                legacyOwnerCard(m.getOwnerCard()));
+                m.getMatchedTags(),
+                object(m.getMessage()));
     }
 
     /** DietProfile(snake_case, is_* 알레르기) → 유저 프로필 코드값. */
@@ -65,7 +62,7 @@ final class MenuResultMapper {
                 bool(node, "no_alcohol"));
     }
 
-    /** Judge 메뉴만. 레거시 메뉴는 null. */
+    /** Judge 메뉴만. 이전 스캔 메뉴는 null. */
     private static List<RiskIngredientResult> riskIngredients(String json, String locale) {
         JsonNode array = parse(json);
         if (array == null || !array.isArray()) {
@@ -90,21 +87,6 @@ final class MenuResultMapper {
                     text(item, "prior_source")));
         }
         return results;
-    }
-
-    /** 레거시 단일 카드만. Judge 카드 배열은 null. */
-    private static OwnerCard legacyOwnerCard(String json) {
-        JsonNode node = object(json);
-        if (node == null) {
-            return null;
-        }
-        JsonNode question = node.get("question");
-        return new OwnerCard(
-                text(node, "menuName"),
-                text(node, "flag"),
-                question == null || !question.isObject()
-                        ? null
-                        : new OwnerQuestion(text(question, KO), text(question, "en"), text(question, "ar")));
     }
 
     private static JsonNode object(String json) {

@@ -24,6 +24,7 @@ import com.hanspoon.backend_api.domain.scan.entity.ScanRecord;
 import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
+import com.hanspoon.backend_api.domain.scan.repository.MenuTranslationProjection;
 import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
 import com.hanspoon.backend_api.domain.scan.service.MenuPhotoResolver.MenuPhoto;
 import com.hanspoon.backend_api.domain.store.entity.Store;
@@ -243,8 +244,8 @@ class ScanServiceTest {
         ScanSession session = ScanSession.start(
                 userId, "scans/" + userId + "/completed.jpg", 42L, "한스푼", StoreMatchMethod.GPS_CANDIDATE);
         session.changeTitle("custom title");
-        session.applyOcrResult(2, Instant.now());
-        session.applyRuleEngineResult(1, ScanStatus.COMPLETED);
+        session.applyPrepareResult(2, Instant.now(), "ko");
+        session.applyJudgeResult(List.of(RiskLevel.DANGER, RiskLevel.SAFE), null);
         UUID scanId = session.getId();
         when(scanSessionRepository.findByIdAndUserId(scanId, userId)).thenReturn(Optional.of(session));
         when(menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(scanId))
@@ -262,7 +263,8 @@ class ScanServiceTest {
         assertThat(response.store().name()).isEqualTo("한스푼");
         assertThat(response.record()).isEqualTo(savedRecord);
         assertThat(response.menuCount()).isEqualTo(2);
-        assertThat(response.riskyMenuCount()).isEqualTo(1);
+        assertThat(response.dangerCount()).isEqualTo(1);
+        assertThat(response.safeCount()).isEqualTo(1);
         assertThat(response.menus()).isEmpty();
     }
 
@@ -271,10 +273,8 @@ class ScanServiceTest {
         UUID userId = UUID.randomUUID();
         ScanSession session = ScanSession.start(userId, "scans/photo.jpg", 10L, "기와", StoreMatchMethod.NAME_SEARCH);
         UUID scanId = session.getId();
-        MenuAnalysis withPhoto =
-                MenuAnalysis.create(scanId, 1, "김치찌개", null, null, null, null, null, null, null, List.of(), null, null);
-        MenuAnalysis withoutPhoto =
-                MenuAnalysis.create(scanId, 2, "공기밥", null, null, null, null, null, null, null, List.of(), null, null);
+        MenuAnalysis withPhoto = MenuAnalysis.prepared(scanId, 0, "김치찌개", null, null, null, null, 10L, 1L);
+        MenuAnalysis withoutPhoto = MenuAnalysis.prepared(scanId, 1, "공기밥", null, null, null, null, 10L, null);
         when(scanSessionRepository.findByIdAndUserId(scanId, userId)).thenReturn(Optional.of(session));
         when(menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(scanId))
                 .thenReturn(List.of(withPhoto, withoutPhoto));
@@ -290,34 +290,40 @@ class ScanServiceTest {
     }
 
     @Test
-    void getScanReturnsPersistedMenuDescriptions() {
+    void getScanReturnsMenuNamesAndTranslatedName() {
         UUID userId = UUID.randomUUID();
-        ScanSession session = ScanSession.create(userId, null, 1, 0, ScanStatus.COMPLETED, Instant.now());
+        ScanSession session = ScanSession.create(userId, null, null, ScanStatus.PROCESSING, null);
+        session.applyPrepareResult(1, Instant.now(), "en");
         UUID scanId = session.getId();
-        MenuAnalysis menu = MenuAnalysis.create(
-                scanId,
-                1,
-                "파돈불고기",
-                "Green Onion Bulgogi",
-                "파돈불고기 200g과 된장찌개",
-                "200g green onion bulgogi with soybean paste stew",
-                "14,000",
-                false,
-                null,
-                null,
-                List.of(),
-                null,
-                null);
+        MenuAnalysis menu =
+                MenuAnalysis.prepared(scanId, 0, "파돈불고기", "파돈불고기 200g과 된장찌개", "14,000", null, null, null, null);
         when(scanSessionRepository.findByIdAndUserId(scanId, userId)).thenReturn(Optional.of(session));
         when(menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(scanId))
                 .thenReturn(List.of(menu));
+        when(menuAnalysisRepository.findTranslatedNames(scanId, "en")).thenReturn(List.of(translation(menu.getId())));
 
         var response = scanService.getScan(userId, scanId);
 
         assertThat(response.menus()).singleElement().satisfies(result -> {
-            assertThat(result.descriptionKo()).isEqualTo("파돈불고기 200g과 된장찌개");
-            assertThat(result.descriptionEn()).isEqualTo("200g green onion bulgogi with soybean paste stew");
+            assertThat(result.displayName()).isEqualTo("파돈불고기");
+            assertThat(result.translatedName()).isEqualTo("Green Onion Bulgogi");
+            assertThat(result.description()).isEqualTo("파돈불고기 200g과 된장찌개");
+            assertThat(result.translatedDescription()).isNull();
         });
+    }
+
+    private static MenuTranslationProjection translation(UUID menuAnalysisId) {
+        return new MenuTranslationProjection() {
+            @Override
+            public UUID getMenuAnalysisId() {
+                return menuAnalysisId;
+            }
+
+            @Override
+            public String getTranslatedName() {
+                return "Green Onion Bulgogi";
+            }
+        };
     }
 
     @Test
@@ -356,7 +362,7 @@ class ScanServiceTest {
         UUID userId = UUID.randomUUID();
         Instant scannedAt = Instant.parse("2026-06-06T12:00:00Z");
         // title 미수정 → null. 기본 제목 현지화는 FE 가 scannedAt 으로 처리(백엔드는 포맷 안 함)
-        ScanSession session = ScanSession.create(userId, null, 1, 0, ScanStatus.COMPLETED, scannedAt);
+        ScanSession session = ScanSession.create(userId, null, 1, ScanStatus.COMPLETED, scannedAt);
         UUID scanId = session.getId();
         when(scanSessionRepository.findByIdAndUserId(scanId, userId)).thenReturn(Optional.of(session));
         when(menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(scanId))
@@ -373,9 +379,8 @@ class ScanServiceTest {
         UUID userId = UUID.randomUUID();
         Pageable pageable = PageRequest.of(0, 20);
         ScanSession session = ScanSession.startWithoutStore(userId, "scans/" + userId + "/list.jpg");
-        session.applyOcrResult(3, Instant.now());
-        session.applyRiskCounts(List.of(RiskLevel.DANGER, RiskLevel.CAUTION, RiskLevel.SAFE));
-        session.applyRuleEngineResult(2, ScanStatus.COMPLETED);
+        session.applyPrepareResult(3, Instant.now(), "ko");
+        session.applyJudgeResult(List.of(RiskLevel.DANGER, RiskLevel.CAUTION, RiskLevel.SAFE), null);
         ScanRecord record =
                 ScanRecord.create(session.getId(), 77L, "연결한 식당", StoreMatchMethod.NAME_SEARCH, Instant.now());
         when(scanSessionRepository.findByUserIdAndScanStatus(userId, ScanStatus.COMPLETED, pageable))
@@ -393,32 +398,30 @@ class ScanServiceTest {
         assertThat(item.store().name()).isEqualTo("연결한 식당");
         assertThat(item.dangerCount()).isEqualTo(1);
         assertThat(item.cautionCount()).isEqualTo(1);
-        assertThat(item.riskyMenuCount()).isEqualTo(2);
     }
 
     @Test
-    void getScansKeepsLockedStoreAndNullCountersForLegacyScan() {
+    void getScansKeepsLockedStore() {
         UUID userId = UUID.randomUUID();
         Pageable pageable = PageRequest.of(0, 20);
         ScanSession session = ScanSession.start(
                 userId, "scans/" + userId + "/locked.jpg", 42L, "한스푼", StoreMatchMethod.GPS_CANDIDATE);
-        session.applyOcrResult(2, Instant.now());
-        session.applyRuleEngineResult(1, ScanStatus.COMPLETED);
+        session.applyPrepareResult(2, Instant.now(), "ko");
+        session.applyJudgeResult(List.of(RiskLevel.CAUTION), null);
         when(scanSessionRepository.findByUserIdAndScanStatus(userId, ScanStatus.COMPLETED, pageable))
                 .thenReturn(new PageImpl<>(List.of(session), pageable, 1));
 
         ScanHistoryItem item = scanService.getScans(userId, pageable).items().get(0);
 
         assertThat(item.store().storeId()).isEqualTo(42L);
-        assertThat(item.dangerCount()).isNull();
-        assertThat(item.cautionCount()).isNull();
-        assertThat(item.riskyMenuCount()).isNull();
+        assertThat(item.dangerCount()).isZero();
+        assertThat(item.cautionCount()).isEqualTo(1);
     }
 
     @Test
     void updateTitleChangesTitleForOwner() {
         UUID userId = UUID.randomUUID();
-        ScanSession session = ScanSession.create(userId, null, 2, 1, ScanStatus.COMPLETED, Instant.now());
+        ScanSession session = ScanSession.create(userId, null, 2, ScanStatus.COMPLETED, Instant.now());
         UUID scanId = session.getId();
         when(scanSessionRepository.findByIdAndUserId(scanId, userId)).thenReturn(Optional.of(session));
 
@@ -443,7 +446,7 @@ class ScanServiceTest {
     @Test
     void deleteScanDeletesForOwner() {
         UUID userId = UUID.randomUUID();
-        ScanSession session = ScanSession.create(userId, "menu.jpg", 1, 0, ScanStatus.COMPLETED, Instant.now());
+        ScanSession session = ScanSession.create(userId, "menu.jpg", 1, ScanStatus.COMPLETED, Instant.now());
         UUID scanId = session.getId();
         when(scanSessionRepository.findByIdAndUserId(scanId, userId)).thenReturn(Optional.of(session));
 
