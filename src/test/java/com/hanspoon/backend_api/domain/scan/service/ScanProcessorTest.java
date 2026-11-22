@@ -256,8 +256,8 @@ class ScanProcessorTest {
         assertThat(saved.get(0).getDisplayOrder()).isEqualTo(1);
         assertThat(saved.get(1).getRiskLevel()).isEqualTo(RiskLevel.CAUTION);
         // ai_result 최종 표시 필드 머지 확인
-        assertThat(saved.get(0).getMessage().ko()).isEqualTo("pork included");
-        assertThat(saved.get(1).getOwnerCard().question().ko()).isEqualTo("use anchovy?");
+        assertThat(saved.get(0).getMessage()).contains("\"ko\":\"pork included\"");
+        assertThat(saved.get(1).getOwnerCard()).contains("\"ko\":\"use anchovy?\"");
     }
 
     @Test

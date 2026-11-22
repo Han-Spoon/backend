@@ -35,7 +35,7 @@
 | 해시 `VARCHAR(71)` + `^sha256:[0-9a-f]{64}$` | AI 계약의 접두사 포함 형식 |
 | `message` 는 `scan_sessions.locale` 한 언어 | AI 는 요청 언어로만 쓴다. 다른 언어는 번역 캐시 |
 | 위험도별 카운터 `danger_count`·`caution_count`·`safe_count` (`risky_menu_count` 는 V14 에서 삭제) | 이력 목록을 집계 없이 읽는다 |
-| `display_order`·`recommendation` 은 백엔드가 Judge 결과로 계산해 저장 | AI 계약에 없다 |
+| `display_order` 는 백엔드가 Judge 결과로 계산해 저장. `recommendation` 은 보류(NULL) | AI 계약에 없다. 추천은 쓰는 화면이 없다 |
 | 스캔 시작 때 Judge `user_profile` 을 `diet_snapshot` 에 저장. 프로필이 없으면 스캔을 시작하지 않는다 | 결과 화면 '내 식단'·후기 식단 항목이 스캔 당시 기준이어야 한다. 프로필 없는 판정은 FN-safe 가 아니다 |
 | 기록 제목 `title` 은 사용자가 고친 값만(미편집 NULL), 30자 CHECK 는 V14 | 마이페이지 연필 아이콘 |
 | `scan_records` 유지 | 화면의 "기록 저장하기"와 식당 없는 스캔의 식당 연결·해제. `feedback` 은 새로 쓰지 않는다 |
@@ -152,13 +152,13 @@
 |---|---|
 | 후보 조회 | 정확·별칭 일치 먼저, 미일치만 `ORDER BY name_normalized <-> :q LIMIT 10` → `ORDER BY similarity DESC, id LIMIT 5` |
 | Prepare 저장 | 한 트랜잭션: `scan_ai_results` → 가게 있으면 `store_menus` upsert → `menu_analyses` |
-| Judge 저장 | 한 트랜잭션: 판정(첫 판정이면 `ai_risk_level` 도) → `display_order`·`recommendation` → 매핑 갱신 → 카운터 → Judge 메타 → 명령은 `ai_command_inbox` |
+| Judge 저장 | 한 트랜잭션: 판정(첫 판정이면 `ai_risk_level` 도) → `display_order` → 매핑 갱신 → 카운터 → Judge 메타 → 명령은 `ai_command_inbox`(직원 질문 생성만 실행) |
 | 표시 순서 | SAFE → CAUTION+estimated → CAUTION+unknown → DANGER, 같은 칸은 `source_index` |
-| 스캔 내 추천 | `safe` + `complete` 만. 콘텐츠 태그가 금지 태그와 겹치면 추천 제외 |
-| Bundle 확정값 | 스캔 메뉴의 `store_menu_id` 로 확정값(무효화 제외)을 읽고 `store_menus.menu_id` 를 붙여 보낸다 |
+| 스캔 내 추천 | `safe` + `complete` 만. 콘텐츠 태그가 금지 태그와 겹치면 추천 제외 (보류) |
+| Bundle 확정값 | 스캔 메뉴의 `store_menu_id` 로 확정값(무효화 제외)을 읽어 후보 메뉴 전부에 붙인다 |
 | 직원 응답 | 한 트랜잭션: 질문 행 → present/absent 면 확정값 upsert + 링크, unknown 이면 링크 해제 + `invalidated_at` → `present` + 식단 겹침이면 `risk_level = danger` + 카운터. `present` 를 고쳤고 남은 `present` 가 없으면 `risk_level = ai_risk_level` |
 | 직원 응답 충돌 | 다른 스캔의 "없어요"는 "있어요" 확정값을 덮지 않는다 (R-04, 미구현) |
-| 직원 질문 생성 | 후보 메뉴가 없는 메뉴와 ID 없는 재료에는 질문을 만들지 않는다 (R-06·R-07, 미구현) |
+| 직원 질문 생성 | 후보 메뉴가 없는 메뉴와 ID 없는 재료에는 질문을 만들지 않는다 (R-06·R-07) |
 | 정리 작업 | `judge_raw` 90일 NULL 처리, `applied` 명령 90일 삭제 (부분 인덱스 있음) |
 | 로그 조회 | 관리자 화면 없이 읽기 전용 DB 계정으로 본다. 쓰기 권한 직접 접속 금지 |
 | 큐레이션 저장 | `ko` + 6개 언어를 한 트랜잭션, 원문 수정 시 전부 재번역 |
@@ -189,11 +189,16 @@
 
 **배포 절차**: 배포 직전 RDS 수동 스냅샷을 만든다. 되돌릴 때는 스냅샷 복구로 한다(R-08).
 
-**V14 를 Flyway 로 옮기는 조건** (Prepare/Judge 연동 PR 에서 함께):
+**Prepare/Judge 연동은 PR 두 개** (2026-11-22):
 
-1. Judge 결과를 `source_index`·`staff_cards`(배열)·판정 컬럼으로 저장하고 첫 판정을 `ai_risk_level` 에도 기록한다. `MenuAnalysis` 엔티티를 새 이름으로 바꾼다
+- PR 1 (전환): `app.ai-service.pipeline`(`AI_PIPELINE`, 기본 `legacy`)로 경로 선택. V14 없이 레거시 컬럼(`message`·`owner_card`)에 새 형식 저장, 결과 API 는 두 형식을 함께 읽는다. `riskyMenuCount` 는 V14 전까지 `danger + caution`
+- PR 2 (축소): 운영에서 PR 1 확인 뒤 V14 를 Flyway 로 옮기고 레거시 경로 제거
+
+**V14 를 Flyway 로 옮기는 조건** (PR 2):
+
+1. Judge 결과를 `source_index`·`staff_cards`(배열)·판정 컬럼으로 저장하고 첫 판정을 `ai_risk_level` 에도 기록한다 (PR 1 완료). `MenuAnalysis` 엔티티를 새 이름으로 바꾼다
 2. 영어 메뉴명 응답을 `menus.name_i18n` 과 번역 캐시로 대체한다
-3. `is_spicy` 를 "감지 시 true, 아니면 NULL" 로 기록한다
+3. `is_spicy` 를 "감지 시 true, 아니면 NULL" 로 기록한다 (PR 1 완료, 새 경로)
 4. `riskyMenuCount` 를 `dangerCount + cautionCount` 로 바꾼다 (API 변경이면 프론트 공지)
 5. `judge_raw` 90일 정리 스케줄러를 넣는다
 6. 기록 제목 검증을 30자로 줄인다(지금 255자). 31자 이상 제목이 있으면 먼저 정리
@@ -256,3 +261,4 @@
 | 11-15 | 프론트 화면을 데이터 항목 근거로 사용. 약관은 V7 테이블 사용. 후기는 화면대로(스캔 선택·메뉴 직접 입력·후기 단위 신고). `scan_records` 유지. 식단 코드는 화면 ID |
 | 11-16 | 원격 V8~V10(보호자 승인·찜·후기) 되돌리고 운영 DB 정리. 스키마 원본을 Flyway 로 하고 설계 도구·중간 문서 정리 |
 | 11-20 | 시연 가게 표시명 = 시트 식당명(회사명 상호 미표시), `verified_at` 기록. 같은 식당 중복 행은 비활성 |
+| 11-22 | Prepare/Judge 연동을 PR 두 개로(전환 → V14 축소). Bundle 확정값은 후보 메뉴 전부에. `recommendation` 보류 |

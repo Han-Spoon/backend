@@ -3,6 +3,7 @@ package com.hanspoon.backend_api.domain.scan.entity;
 import com.hanspoon.backend_api.domain.ai.dto.common.RiskLevel;
 import com.hanspoon.backend_api.domain.ai.dto.result.FinalMessage;
 import com.hanspoon.backend_api.domain.ai.dto.result.OwnerCard;
+import com.hanspoon.backend_api.domain.ai.dto.result.OwnerQuestion;
 import com.hanspoon.backend_api.global.common.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -15,10 +16,13 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * 메뉴 분석 결과. scan_sessions 와 N:1 (FK ON DELETE CASCADE).
  * OCR(menu_name/price/...)과 ai_result FinalOutput(risk_level/hit_tags/message/owner_card)을 index 순서로 머지해 저장한다.
+ * message·owner_card 는 레거시·Judge 두 형식이 섞여 원본 JSON 문자열로 보관.
  *
  * <p>Prepare/Judge 경로는 Prepare 저장 때 source_index·가게 메뉴 연결로 생성, 판정은 Judge 저장 때 기록.
  */
@@ -29,6 +33,7 @@ import org.hibernate.type.SqlTypes;
 public class MenuAnalysis extends BaseEntity {
 
     private static final String EMPTY_ARRAY = "[]";
+    private static final JsonMapper LEGACY_JSON = JsonMapper.shared();
 
     @Id
     @Column(name = "id", columnDefinition = "uuid", updatable = false, nullable = false)
@@ -81,14 +86,32 @@ public class MenuAnalysis extends BaseEntity {
     @Column(name = "hit_tags", columnDefinition = "jsonb")
     private List<String> hitTags;
 
-    // ai_result(최종) 표시용
+    /** 레거시 {ko,en,ar} 또는 Judge DecisionMessage 원본 JSON. */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "message", columnDefinition = "jsonb")
-    private FinalMessage message;
+    private String message;
 
+    /** 레거시 단일 카드 또는 Judge owner_cards 배열 원본 JSON. */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "owner_card", columnDefinition = "jsonb")
-    private OwnerCard ownerCard;
+    private String ownerCard;
+
+    // Judge 저장(JDBC) 전용 컬럼. 엔티티에서는 읽기만.
+    @Column(name = "status", length = 20, insertable = false, updatable = false)
+    private String status;
+
+    @Column(name = "evidence_basis", length = 20, insertable = false, updatable = false)
+    private String evidenceBasis;
+
+    @Column(name = "information_status", length = 20, insertable = false, updatable = false)
+    private String informationStatus;
+
+    @Column(name = "staff_answer_status", length = 10, insertable = false, updatable = false)
+    private String staffAnswerStatus;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "risk_ingredients", columnDefinition = "jsonb", insertable = false, updatable = false)
+    private String riskIngredients;
 
     private MenuAnalysis(
             UUID scanSessionId,
@@ -116,8 +139,8 @@ public class MenuAnalysis extends BaseEntity {
         this.imageUrl = imageUrl;
         this.riskLevel = riskLevel;
         this.hitTags = hitTags;
-        this.message = message;
-        this.ownerCard = ownerCard;
+        this.message = legacyJson(message);
+        this.ownerCard = legacyJson(ownerCard);
     }
 
     public static MenuAnalysis create(
@@ -180,5 +203,36 @@ public class MenuAnalysis extends BaseEntity {
         analysis.storeId = storeId;
         analysis.storeMenuId = storeMenuId;
         return analysis;
+    }
+
+    /** 기존 Hibernate(Jackson 2) 저장 형식과 같은 camelCase 키. */
+    private static String legacyJson(FinalMessage message) {
+        if (message == null) {
+            return null;
+        }
+        return LEGACY_JSON
+                .createObjectNode()
+                .put("ko", message.ko())
+                .put("en", message.en())
+                .put("ar", message.ar())
+                .toString();
+    }
+
+    private static String legacyJson(OwnerCard card) {
+        if (card == null) {
+            return null;
+        }
+        ObjectNode node =
+                LEGACY_JSON.createObjectNode().put("menuName", card.menuName()).put("flag", card.flag());
+        OwnerQuestion question = card.question();
+        if (question == null) {
+            node.putNull("question");
+        } else {
+            node.putObject("question")
+                    .put("ko", question.ko())
+                    .put("en", question.en())
+                    .put("ar", question.ar());
+        }
+        return node.toString();
     }
 }

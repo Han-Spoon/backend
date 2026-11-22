@@ -6,10 +6,13 @@ import com.hanspoon.backend_api.TestcontainersConfiguration;
 import com.hanspoon.backend_api.domain.ai.dto.analyze.JudgeResponse;
 import com.hanspoon.backend_api.domain.ai.dto.analyze.JudgeResult;
 import com.hanspoon.backend_api.domain.ai.dto.analyze.PreparedItem;
+import com.hanspoon.backend_api.domain.ai.dto.common.RiskLevel;
+import com.hanspoon.backend_api.domain.scan.dto.MenuResult;
 import com.hanspoon.backend_api.domain.scan.entity.ScanAiResult;
 import com.hanspoon.backend_api.domain.scan.entity.ScanImage;
 import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
+import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
 import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
 import com.hanspoon.backend_api.domain.store.entity.StoreMatchMethod;
 import com.hanspoon.backend_api.domain.user.entity.User;
@@ -37,6 +40,9 @@ class AnalyzeStateWriterIntegrationTest {
 
     @Autowired
     private ScanSessionRepository scanSessionRepository;
+
+    @Autowired
+    private MenuAnalysisRepository menuAnalysisRepository;
 
     @Autowired
     private UserRepository userRepository;
@@ -287,6 +293,23 @@ class AnalyzeStateWriterIntegrationTest {
                         .get("religion_type")
                         .asString())
                 .isEqualTo("halal");
+        assertThat(MenuResultMapper.dietSnapshot(reloaded.getDietSnapshot()).religionType())
+                .isEqualTo("halal");
+
+        // 카드 배열 행도 엔티티로 읽혀 결과 응답으로 변환
+        List<MenuResult> results = menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(scanId).stream()
+                .map(m -> MenuResultMapper.toMenuResult(m, null, reloaded.getLocale()))
+                .toList();
+        MenuResult jeyuk = results.get(2);
+        assertThat(jeyuk.riskLevel()).isEqualTo(RiskLevel.DANGER);
+        assertThat(jeyuk.message().get("verdict").asString()).isEqualTo("verdict-0");
+        assertThat(jeyuk.ownerCard()).isNull();
+        assertThat(jeyuk.status()).isEqualTo("completed");
+        assertThat(jeyuk.evidenceBasis()).isEqualTo("confirmed");
+        assertThat(jeyuk.informationStatus()).isEqualTo("complete");
+        assertThat(jeyuk.staffAnswerStatus()).isEqualTo("partial");
+        assertThat(jeyuk.riskIngredients()).isEmpty();
+        assertThat(jeyuk.hits()).containsExactly("is_pork");
 
         Map<String, Object> meta = jdbcTemplate.queryForMap(
                 """
