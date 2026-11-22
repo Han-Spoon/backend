@@ -8,12 +8,15 @@ import com.hanspoon.backend_api.domain.ai.dto.analyze.JudgeResult;
 import com.hanspoon.backend_api.domain.ai.dto.analyze.PreparedItem;
 import com.hanspoon.backend_api.domain.ai.dto.common.RiskLevel;
 import com.hanspoon.backend_api.domain.scan.dto.MenuResult;
+import com.hanspoon.backend_api.domain.scan.dto.StaffQuestionResult;
 import com.hanspoon.backend_api.domain.scan.entity.ScanAiResult;
 import com.hanspoon.backend_api.domain.scan.entity.ScanImage;
 import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
 import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
+import com.hanspoon.backend_api.domain.scan.repository.StaffQuestionRepository;
+import com.hanspoon.backend_api.domain.scan.repository.StaffQuestionRepository.MenuStaffQuestion;
 import com.hanspoon.backend_api.domain.store.entity.StoreMatchMethod;
 import com.hanspoon.backend_api.domain.user.entity.User;
 import com.hanspoon.backend_api.domain.user.repository.UserRepository;
@@ -43,6 +46,9 @@ class AnalyzeStateWriterIntegrationTest {
 
     @Autowired
     private MenuAnalysisRepository menuAnalysisRepository;
+
+    @Autowired
+    private StaffQuestionRepository staffQuestionRepository;
 
     @Autowired
     private UserRepository userRepository;
@@ -184,6 +190,7 @@ class AnalyzeStateWriterIntegrationTest {
                 "insert into ingredients (name_ko, tag_codes) values (?, '{is_pork}') returning id",
                 Long.class,
                 "돼지" + tag);
+        jdbcTemplate.update("update ingredients set name_i18n = '{\"en\":\"pork\"}' where id = ?", porkId);
         long menuId = jdbcTemplate.queryForObject(
                 "insert into menus (name_ko, source, needs_review) values (?, 'curated', true) returning id",
                 Long.class,
@@ -297,7 +304,7 @@ class AnalyzeStateWriterIntegrationTest {
 
         // 판정 행을 엔티티로 읽어 결과 응답으로 변환
         List<MenuResult> results = menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(scanId).stream()
-                .map(m -> MenuResultMapper.toMenuResult(m, null, null, reloaded.getLocale()))
+                .map(m -> MenuResultMapper.toMenuResult(m, null, null, reloaded.getLocale(), List.of()))
                 .toList();
         MenuResult jeyuk = results.get(2);
         assertThat(jeyuk.riskLevel()).isEqualTo(RiskLevel.DANGER);
@@ -355,6 +362,28 @@ class AnalyzeStateWriterIntegrationTest {
             assertThat(question.get("has_fr")).isEqualTo(false);
             assertThat(question.get("status")).isEqualTo("pending");
         });
+
+        // 결과 응답용 조회: 같은 가게 메뉴의 스캔 메뉴에 연결, ko + 스캔 locale
+        UUID jeyukId = jeyuk.scanMenuId();
+        List<MenuStaffQuestion> found = staffQuestionRepository.findByScan(scanId, "en");
+        assertThat(found).extracting(MenuStaffQuestion::menuAnalysisId).containsOnly(jeyukId);
+        assertThat(found)
+                .extracting(MenuStaffQuestion::question)
+                .extracting(StaffQuestionResult::target)
+                .containsExactly("flag", "ingredient");
+        StaffQuestionResult flag = found.get(0).question();
+        assertThat(flag.ingredientName()).isNull();
+        assertThat(flag.ambiguityFlag()).isEqualTo("has_unclear_jeotgal");
+        assertThat(flag.askedTags()).containsExactly("is_fish", "is_shrimp");
+        assertThat(flag.questionText()).isEqualTo(Map.of("ko", "질문", "en", "question"));
+        StaffQuestionResult ingredient = found.get(1).question();
+        assertThat(ingredient.ingredientName()).isEqualTo(Map.of("ko", "돼지" + tag, "en", "pork"));
+        assertThat(ingredient.askedTags()).isNull();
+        assertThat(ingredient.status()).isEqualTo("pending");
+        assertThat(ingredient.answer()).isNull();
+        assertThat(ingredient.answeredAt()).isNull();
+        assertThat(staffQuestionRepository.findByScan(scanId, "ko"))
+                .allSatisfy(q -> assertThat(q.question().questionText()).containsOnlyKeys("ko"));
     }
 
     private String judged(
