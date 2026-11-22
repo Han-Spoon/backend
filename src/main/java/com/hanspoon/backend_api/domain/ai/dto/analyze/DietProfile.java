@@ -1,11 +1,11 @@
-package com.hanspoon.backend_api.domain.ai.dto.ruleengine;
+package com.hanspoon.backend_api.domain.ai.dto.analyze;
 
 import java.util.List;
 import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.annotation.JsonNaming;
 
 /**
- * 룰엔진 입력 프로필 (백엔드 → AI 서비스). 키는 {@code ai_ruleengine/main.py} 코드 기준.
+ * Judge user_profile (백엔드 → AI). 스캔 결과 diet_snapshot 으로도 저장.
  *
  * @param religionType 종교 식단 ("halal" | "kosher" | "hindu" | null)
  * @param isVegetarian 채식 여부
@@ -15,7 +15,7 @@ import tools.jackson.databind.annotation.JsonNaming;
  * @param noSpicy 매운맛 비선호 여부
  */
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public record RuleProfile(
+public record DietProfile(
         String religionType,
         Boolean isVegetarian,
         String vegetarianType,

@@ -86,13 +86,13 @@ class AnalyzeStateWriterIntegrationTest {
         assertThat(analyses).hasSize(4);
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 """
-                select source_index, menu_name_ko, store_id, store_menu_id, price_options::text as price_options,
+                select source_index, display_name, store_id, store_menu_id, price_options::text as price_options,
                        is_spicy, risk_level
                 from menu_analyses where scan_session_id = ? order by source_index
                 """,
                 scanId);
         assertThat(rows).extracting(row -> row.get("source_index")).containsExactly(0, 1, 2, 3);
-        assertThat(rows.get(0).get("menu_name_ko")).isEqualTo("김치 찌개");
+        assertThat(rows.get(0).get("display_name")).isEqualTo("김치 찌개");
         assertThat(rows.get(0).get("is_spicy")).isEqualTo(true);
         assertThat(rows.get(1).get("is_spicy")).isNull();
         assertThat(rows.get(0).get("price_options").toString()).contains("16,000원");
@@ -254,8 +254,8 @@ class AnalyzeStateWriterIntegrationTest {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 """
                 select source_index, risk_level, ai_risk_level, display_order, menu_id, menu_match_type,
-                       staff_answer_status, evidence_basis, hit_tags::text as hit_tags, message ->> 'verdict' as verdict,
-                       jsonb_array_length(owner_card) as cards, jsonb_array_length(risk_ingredients) as risks
+                       staff_answer_status, evidence_basis, matched_tags::text as matched_tags, message ->> 'verdict' as verdict,
+                       jsonb_array_length(staff_cards) as cards, jsonb_array_length(risk_ingredients) as risks
                 from menu_analyses where scan_session_id = ? order by source_index
                 """,
                 scanId);
@@ -267,7 +267,7 @@ class AnalyzeStateWriterIntegrationTest {
         assertThat(rows.get(0).get("menu_match_type")).isEqualTo("fuzzy");
         assertThat(rows.get(2).get("menu_match_type")).isEqualTo("unmatched");
         assertThat(rows.get(0).get("staff_answer_status")).isEqualTo("partial");
-        assertThat(rows.get(0).get("hit_tags")).isEqualTo("[\"is_pork\"]");
+        assertThat(rows.get(0).get("matched_tags")).isEqualTo("[\"is_pork\"]");
         assertThat(rows.get(0).get("verdict")).isEqualTo("verdict-0");
         assertThat(rows.get(0).get("cards")).isEqualTo(1);
         assertThat(rows.get(1).get("risks")).isEqualTo(0);
@@ -287,7 +287,6 @@ class AnalyzeStateWriterIntegrationTest {
         assertThat(reloaded.getDangerCount()).isEqualTo(1);
         assertThat(reloaded.getCautionCount()).isEqualTo(1);
         assertThat(reloaded.getSafeCount()).isEqualTo(1);
-        assertThat(reloaded.getRiskyMenuCount()).isEqualTo(2);
         assertThat(jsonMapper
                         .readTree(reloaded.getDietSnapshot())
                         .get("religion_type")
@@ -296,20 +295,19 @@ class AnalyzeStateWriterIntegrationTest {
         assertThat(MenuResultMapper.dietSnapshot(reloaded.getDietSnapshot()).religionType())
                 .isEqualTo("halal");
 
-        // 카드 배열 행도 엔티티로 읽혀 결과 응답으로 변환
+        // 판정 행을 엔티티로 읽어 결과 응답으로 변환
         List<MenuResult> results = menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(scanId).stream()
-                .map(m -> MenuResultMapper.toMenuResult(m, null, reloaded.getLocale()))
+                .map(m -> MenuResultMapper.toMenuResult(m, null, null, reloaded.getLocale()))
                 .toList();
         MenuResult jeyuk = results.get(2);
         assertThat(jeyuk.riskLevel()).isEqualTo(RiskLevel.DANGER);
         assertThat(jeyuk.message().get("verdict").asString()).isEqualTo("verdict-0");
-        assertThat(jeyuk.ownerCard()).isNull();
         assertThat(jeyuk.status()).isEqualTo("completed");
         assertThat(jeyuk.evidenceBasis()).isEqualTo("confirmed");
         assertThat(jeyuk.informationStatus()).isEqualTo("complete");
         assertThat(jeyuk.staffAnswerStatus()).isEqualTo("partial");
         assertThat(jeyuk.riskIngredients()).isEmpty();
-        assertThat(jeyuk.hits()).containsExactly("is_pork");
+        assertThat(jeyuk.matchedTags()).containsExactly("is_pork");
 
         Map<String, Object> meta = jdbcTemplate.queryForMap(
                 """

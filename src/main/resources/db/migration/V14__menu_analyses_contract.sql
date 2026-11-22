@@ -1,8 +1,7 @@
--- V14 (보류) 축소 단계 — API 명세 V2 · Prepare/Judge 연동 코드와 같은 배포에서만 적용한다.
--- 적용 전 조건: 백엔드가 Judge 결과를 staff_cards 배열·source_index 로 저장하고 AI 첫 판정(ai_risk_level)을 함께 기록하며,
---             영어 메뉴명 대신 menus.name_i18n·번역 캐시를 쓰고, is_spicy 를 '감지 시 true, 아니면 NULL' 로 기록하고,
---             이력 API 가 danger/caution 카운터를 쓰고, 기록 제목을 30자로 검증하는 상태.
--- 이 파일을 src/main/resources/db/migration 으로 옮기면 Flyway 가 적용한다. 배포를 나눠야 하면 문단 단위로 파일을 나눈다.
+-- V14 축소 단계 — API 명세 V2 · Prepare/Judge 단일 경로와 같은 배포.
+-- 전제: Judge 결과를 staff_cards 배열·source_index·ai_risk_level 로 저장, 번역명은 menus.name_i18n,
+--       is_spicy 는 감지 시 true 아니면 NULL, 이력 API 는 danger/caution 카운터, 기록 제목 30자 검증.
+-- 배포 전 확인: 제목 위반 행 0건 (btrim 빈 값 또는 30자 초과).
 
 -- scan_sessions: risky_menu_count 제거 (V8 부터 danger/caution/safe 카운터를 함께 기록)
 ALTER TABLE scan_sessions DROP COLUMN risky_menu_count;
@@ -25,11 +24,14 @@ FROM (SELECT id, row_number() OVER (PARTITION BY scan_session_id ORDER BY displa
 WHERE m.id = r.id;
 UPDATE menu_analyses
 SET staff_cards = CASE
-        WHEN staff_cards IS NULL THEN '[]'::jsonb
+        WHEN staff_cards IS NULL OR jsonb_typeof(staff_cards) = 'null' THEN '[]'::jsonb
         WHEN jsonb_typeof(staff_cards) = 'array' THEN staff_cards
         ELSE jsonb_build_array(staff_cards)
     END;
 UPDATE menu_analyses SET is_spicy = NULL WHERE is_spicy = false;
+-- JSON null 리터럴 → SQL NULL (아래 jsonb_typeof CHECK 대비)
+UPDATE menu_analyses SET message = NULL WHERE jsonb_typeof(message) = 'null';
+UPDATE menu_analyses SET matched_tags = NULL WHERE jsonb_typeof(matched_tags) = 'null';
 UPDATE menu_analyses SET ai_risk_level = risk_level WHERE ai_risk_level IS NULL AND risk_level IS NOT NULL;
 
 ALTER TABLE menu_analyses
@@ -43,7 +45,6 @@ ALTER TABLE menu_analyses
     ADD CONSTRAINT ck_menu_analyses_message CHECK (message IS NULL OR jsonb_typeof(message) = 'object'),
     ADD CONSTRAINT ck_menu_analyses_is_spicy CHECK (is_spicy IS NULL OR is_spicy),
     ADD CONSTRAINT ck_menu_analyses_risk_level CHECK (risk_level IS NULL OR risk_level IN ('danger', 'caution', 'safe')),
-    -- 판정이 있으면 AI 첫 판정도 있다 (현재 룰엔진 코드는 ai_risk_level 을 쓰지 않으므로 V14 에서 적용)
     ADD CONSTRAINT ck_menu_analyses_ai_risk_pair CHECK ((risk_level IS NULL) = (ai_risk_level IS NULL));
 
 -- 코멘트: 이름이 바뀌거나 의미가 확정된 컬럼

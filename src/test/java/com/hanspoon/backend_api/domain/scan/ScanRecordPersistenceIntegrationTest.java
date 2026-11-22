@@ -48,7 +48,7 @@ class ScanRecordPersistenceIntegrationTest {
     void persistsAttachedStoreSnapshotAsOneToOneRecord() {
         User user = userRepository.save(User.create(uniqueEmail("record"), "record-user", "ko"));
         ScanSession scan = scanSessionRepository.save(
-                ScanSession.create(user.getId(), null, 1, 0, ScanStatus.COMPLETED, Instant.now()));
+                ScanSession.create(user.getId(), null, 1, ScanStatus.COMPLETED, Instant.now()));
         long storeId = insertStore("RECORD-STORE-1", "기록 식당");
 
         scanRecordRepository.save(ScanRecord.create(
@@ -71,7 +71,7 @@ class ScanRecordPersistenceIntegrationTest {
     void scanDeletionCascadesToRecord() {
         User user = userRepository.save(User.create(uniqueEmail("cascade"), "record-user", "ko"));
         ScanSession scan = scanSessionRepository.save(
-                ScanSession.create(user.getId(), null, 1, 0, ScanStatus.COMPLETED, Instant.now()));
+                ScanSession.create(user.getId(), null, 1, ScanStatus.COMPLETED, Instant.now()));
         scanRecordRepository.save(ScanRecord.create(scan.getId(), null, null, null, Instant.now()));
         entityManager.flush();
         entityManager.clear();
@@ -88,7 +88,7 @@ class ScanRecordPersistenceIntegrationTest {
     void databaseRejectsPartialAttachedStoreContext() {
         User user = userRepository.save(User.create(uniqueEmail("partial"), "record-user", "ko"));
         ScanSession scan = scanSessionRepository.save(
-                ScanSession.create(user.getId(), null, 1, 0, ScanStatus.COMPLETED, Instant.now()));
+                ScanSession.create(user.getId(), null, 1, ScanStatus.COMPLETED, Instant.now()));
         long storeId = insertStore("RECORD-STORE-2", "불완전 기록 식당");
         entityManager.flush();
 

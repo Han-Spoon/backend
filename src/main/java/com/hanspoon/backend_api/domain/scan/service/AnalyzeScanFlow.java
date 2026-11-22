@@ -1,6 +1,7 @@
 package com.hanspoon.backend_api.domain.scan.service;
 
 import com.hanspoon.backend_api.domain.ai.client.AiAnalyzeClient;
+import com.hanspoon.backend_api.domain.ai.dto.analyze.DietProfile;
 import com.hanspoon.backend_api.domain.ai.dto.analyze.JudgeRequest;
 import com.hanspoon.backend_api.domain.ai.dto.analyze.JudgeResponse;
 import com.hanspoon.backend_api.domain.ai.dto.analyze.JudgeResponse.ItemResult;
@@ -8,7 +9,6 @@ import com.hanspoon.backend_api.domain.ai.dto.analyze.JudgeResult;
 import com.hanspoon.backend_api.domain.ai.dto.analyze.PrepareRequest;
 import com.hanspoon.backend_api.domain.ai.dto.analyze.PrepareResponse;
 import com.hanspoon.backend_api.domain.ai.dto.analyze.PreparedItem;
-import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleProfile;
 import com.hanspoon.backend_api.domain.ai.knowledge.KnowledgeBundleBuilder;
 import com.hanspoon.backend_api.domain.ai.knowledge.KnowledgeBundleBuilder.BuiltBundle;
 import com.hanspoon.backend_api.domain.ai.knowledge.KnowledgeBundleBuilder.BundleItem;
@@ -62,7 +62,7 @@ public class AnalyzeScanFlow {
     }
 
     /** Bundle 구성 → Judge 호출·검증 → 저장. */
-    public void judge(UUID scanId, Long storeId, PreparedScan prepared, RuleProfile profile, String locale) {
+    public void judge(UUID scanId, Long storeId, PreparedScan prepared, DietProfile profile, String locale) {
         List<BundleItem> bundleItems = new ArrayList<>(prepared.items().size());
         for (int i = 0; i < prepared.items().size(); i++) {
             PreparedItem item = prepared.items().get(i);

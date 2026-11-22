@@ -125,26 +125,6 @@ public class S3StorageService {
         }
     }
 
-    /** 로컬 개발과 단계적 롤백을 위한 URL fallback. 운영 기본 경로는 S3 IAM 직접 조회다. */
-    public String createReadUrl(String key, String versionId) {
-        GetObjectRequest.Builder requestBuilder =
-                GetObjectRequest.builder().bucket(properties.bucket()).key(key);
-        if (versionId != null && !versionId.isBlank()) {
-            requestBuilder.versionId(versionId);
-        }
-        GetObjectRequest getRequest = requestBuilder.build();
-
-        try {
-            return presigner
-                    .presignGetObject(builder ->
-                            builder.signatureDuration(properties.readUrlTtl()).getObjectRequest(getRequest))
-                    .url()
-                    .toString();
-        } catch (RuntimeException exception) {
-            throw new BusinessException(ErrorCode.STORAGE_PRESIGN_ERROR, "Failed to presign read URL.", exception);
-        }
-    }
-
     // DB 기록용 객체 좌표.
     public String objectUri(String key) {
         return "s3://" + properties.bucket() + "/" + key;

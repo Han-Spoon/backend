@@ -57,9 +57,6 @@ public enum ErrorCode {
     CARD_NOT_FOUND(HttpStatus.NOT_FOUND, "CARD_NOT_FOUND", "Saved card not found."),
 
     // ── AI 서비스 연동 ──────────────────────────────────────────────────
-    OCR_SERVICE_ERROR(HttpStatus.BAD_GATEWAY, "OCR_SERVICE_ERROR", "OCR service failed."),
-    RULE_ENGINE_ERROR(HttpStatus.BAD_GATEWAY, "RULE_ENGINE_ERROR", "Rule engine evaluation failed."),
-    RESULT_SERVICE_ERROR(HttpStatus.BAD_GATEWAY, "RESULT_SERVICE_ERROR", "Result generation failed."),
     AI_SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "AI_SERVICE_UNAVAILABLE", "AI service is unavailable."),
     AI_SERVICE_OVERLOADED(
             HttpStatus.SERVICE_UNAVAILABLE, "AI_SERVICE_OVERLOADED", "AI service is temporarily overloaded."),

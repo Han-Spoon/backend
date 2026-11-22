@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.hanspoon.backend_api.domain.ai.dto.common.RiskLevel;
 import com.hanspoon.backend_api.domain.store.entity.StoreMatchMethod;
 import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -16,8 +17,7 @@ class ScanSessionTest {
         ScanSession session = ScanSession.startLegacy(UUID.randomUUID(), "scans/user/menu.jpg");
         session.markFailed("SCAN_PROCESSING_TIMEOUT");
 
-        assertThatThrownBy(() -> session.applyRuleEngineResult(1, ScanStatus.COMPLETED))
-                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> session.applyJudgeResult(List.of(), null)).isInstanceOf(IllegalStateException.class);
         session.markFailed("INTERNAL_SERVER_ERROR");
 
         assertThat(session.getScanStatus()).isEqualTo(ScanStatus.FAILED);
@@ -28,7 +28,7 @@ class ScanSessionTest {
     void countsRiskLevelsAndSkipsMenusWithoutVerdict() {
         ScanSession session = ScanSession.startLegacy(UUID.randomUUID(), "scans/user/menu.jpg");
 
-        session.applyRiskCounts(Arrays.asList(RiskLevel.SAFE, RiskLevel.CAUTION, null, RiskLevel.CAUTION));
+        session.applyJudgeResult(Arrays.asList(RiskLevel.SAFE, RiskLevel.CAUTION, null, RiskLevel.CAUTION), null);
 
         assertThat(session.getDangerCount()).isZero();
         assertThat(session.getCautionCount()).isEqualTo(2);
@@ -40,7 +40,7 @@ class ScanSessionTest {
         ScanSession session = ScanSession.startLegacy(UUID.randomUUID(), "scans/user/menu.jpg");
         session.markFailed("SCAN_PROCESSING_TIMEOUT");
 
-        assertThatThrownBy(() -> session.applyRiskCounts(Arrays.asList(RiskLevel.DANGER)))
+        assertThatThrownBy(() -> session.applyJudgeResult(Arrays.asList(RiskLevel.DANGER), null))
                 .isInstanceOf(IllegalStateException.class);
     }
 

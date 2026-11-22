@@ -11,7 +11,6 @@ import static org.mockito.Mockito.when;
 import com.hanspoon.backend_api.domain.scan.dto.SaveScanRecordRequest;
 import com.hanspoon.backend_api.domain.scan.entity.ScanRecord;
 import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
-import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.repository.ScanRecordRepository;
 import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
 import com.hanspoon.backend_api.domain.store.entity.Store;
@@ -21,6 +20,7 @@ import com.hanspoon.backend_api.domain.store.repository.StoreRepository;
 import com.hanspoon.backend_api.global.exception.BusinessException;
 import com.hanspoon.backend_api.global.exception.ErrorCode;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -171,15 +171,15 @@ class ScanRecordServiceTest {
     private ScanSession completedSessionWithStore(UUID userId, Long storeId, String storeName) {
         ScanSession session =
                 ScanSession.start(userId, "scans/locked.jpg", storeId, storeName, StoreMatchMethod.GPS_CANDIDATE);
-        session.applyOcrResult(1, Instant.now());
-        session.applyRuleEngineResult(0, ScanStatus.COMPLETED);
+        session.applyPrepareResult(1, Instant.now(), "ko");
+        session.applyJudgeResult(List.of(), null);
         return session;
     }
 
     private ScanSession completedSessionWithoutStore(UUID userId) {
         ScanSession session = ScanSession.startWithoutStore(userId, "scans/unlocked.jpg");
-        session.applyOcrResult(1, Instant.now());
-        session.applyRuleEngineResult(0, ScanStatus.COMPLETED);
+        session.applyPrepareResult(1, Instant.now(), "ko");
+        session.applyJudgeResult(List.of(), null);
         return session;
     }
 

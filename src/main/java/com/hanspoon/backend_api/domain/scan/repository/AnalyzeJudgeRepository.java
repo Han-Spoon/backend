@@ -7,9 +7,7 @@ import java.util.UUID;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-/**
- * Judge 저장용 JDBC 쓰기. V14 전까지 menu_analyses 레거시 컬럼(message·owner_card)에 새 형식 JSON 저장.
- */
+/** Judge 저장용 JDBC 쓰기. */
 @Repository
 public class AnalyzeJudgeRepository {
 
@@ -47,9 +45,9 @@ public class AnalyzeJudgeRepository {
                     evidence_basis = :evidenceBasis,
                     information_status = :informationStatus,
                     risk_ingredients = CAST(:riskIngredients AS jsonb),
-                    hit_tags = CAST(:matchedTags AS jsonb),
+                    matched_tags = CAST(:matchedTags AS jsonb),
                     message = CAST(:message AS jsonb),
-                    owner_card = CAST(:staffCards AS jsonb),
+                    staff_cards = COALESCE(CAST(:staffCards AS jsonb), '[]'::jsonb),
                     menu_id = :menuId,
                     menu_match_type = :menuMatchType,
                     staff_answer_status = :staffAnswerStatus,

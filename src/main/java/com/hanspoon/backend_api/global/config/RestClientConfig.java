@@ -17,33 +17,6 @@ public class RestClientConfig {
         return RestClient.builder();
     }
 
-    @Bean("aiOcrRestClient")
-    public RestClient aiOcrRestClient(
-            RestClient.Builder builder,
-            @Value("${app.ai-service.base-url:http://localhost:8000}") String aiServiceBaseUrl,
-            @Value("${app.ai-service.connect-timeout:500ms}") Duration connectTimeout,
-            @Value("${app.ai-service.ocr-read-timeout:18s}") Duration readTimeout) {
-        return aiClient(builder, aiServiceBaseUrl, connectTimeout, readTimeout);
-    }
-
-    @Bean("aiRuleEngineRestClient")
-    public RestClient aiRuleEngineRestClient(
-            RestClient.Builder builder,
-            @Value("${app.ai-service.base-url:http://localhost:8000}") String aiServiceBaseUrl,
-            @Value("${app.ai-service.connect-timeout:500ms}") Duration connectTimeout,
-            @Value("${app.ai-service.rule-engine-read-timeout:2s}") Duration readTimeout) {
-        return aiClient(builder, aiServiceBaseUrl, connectTimeout, readTimeout);
-    }
-
-    @Bean("aiResultRestClient")
-    public RestClient aiResultRestClient(
-            RestClient.Builder builder,
-            @Value("${app.ai-service.base-url:http://localhost:8000}") String aiServiceBaseUrl,
-            @Value("${app.ai-service.connect-timeout:500ms}") Duration connectTimeout,
-            @Value("${app.ai-service.result-read-timeout:7s}") Duration readTimeout) {
-        return aiClient(builder, aiServiceBaseUrl, connectTimeout, readTimeout);
-    }
-
     @Bean("aiPrepareRestClient")
     public RestClient aiPrepareRestClient(
             RestClient.Builder builder,

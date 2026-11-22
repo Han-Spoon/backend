@@ -108,7 +108,7 @@ class CardPersistenceIntegrationTest {
     void deletingScanSetsCardScanReferenceNull() {
         User user = userRepository.save(User.create("card-scannull@example.com", "carduser3", "ko"));
         ScanSession scan = scanSessionRepository.save(
-                ScanSession.create(user.getId(), "m.jpg", 1, 0, ScanStatus.COMPLETED, Instant.now()));
+                ScanSession.create(user.getId(), "m.jpg", 1, ScanStatus.COMPLETED, Instant.now()));
         UUID cardId = savedCardRepository
                 .save(SavedCard.create(user.getId(), CardType.EXCLUDE, "비빔밥", CardText.ko("계란 빼주세요."), scan.getId()))
                 .getId();
