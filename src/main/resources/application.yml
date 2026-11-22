@@ -46,6 +46,8 @@ app:
     ocr-read-timeout: ${AI_OCR_READ_TIMEOUT:18s}
     rule-engine-read-timeout: ${AI_RULE_ENGINE_READ_TIMEOUT:2s}
     result-read-timeout: ${AI_RESULT_READ_TIMEOUT:7s}
+    prepare-read-timeout: ${AI_PREPARE_READ_TIMEOUT:20s}
+    judge-read-timeout: ${AI_JUDGE_READ_TIMEOUT:30s}
     # 로컬/전환 환경만 URL fallback을 사용하고 운영 프로필에서는 끈다.
     presigned-url-fallback-enabled: ${AI_OCR_PRESIGNED_FALLBACK_ENABLED:true}
   s3:
