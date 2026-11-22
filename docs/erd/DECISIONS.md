@@ -2,7 +2,7 @@
 
 - **스키마의 원본은 Flyway 파일이다.** `src/main/resources/db/migration/V1~V14`. 테이블·컬럼·제약 목록은 [`ERD.md`](ERD.md), 그림은 [`ERD.svg`](ERD.svg).
 - Flyway 번호: V1~V6 = MVP(스키마 v1), V7 = 약관 동의(2026-11-14 배포), **V8~V13 = 스키마 v2 확장 단계**, V13.1 = LOCALDATA 가게 식별자(2026-11-20), V14 = 축소 단계(Prepare/Judge 단일 경로, 2026-11-22). 이후 변경은 V15 부터.
-- 상태: 2026-11-15 설계 확정. V8~V13.1 운영 적용, V14 는 Prepare/Judge PR 2 배포 때 적용.
+- 상태: 2026-11-15 설계 확정. V8~V14 운영 적용 (V14 는 2026-11-23).
 - 기준: 프론트 화면(`frontend-webapp-demo`), Notion **API 명세서_V2 (AWS)**, AI 설계 문서 hanspoon-ai `docs/`(schema_version 3.0). 사장님 페이지는 만들지 않는다(11-01).
 
 | 규모 | 테이블 51 (+ VIEW 1) · 컬럼 475 · FK 80 · UNIQUE 45 · CHECK 183 · 인덱스 154 (V14 적용 후) |
@@ -193,12 +193,12 @@
 - PR 1 (전환, PR #91·#92): `AI_PIPELINE` 토글로 경로 선택, V14 없이 기존 컬럼에 새 형식 저장
 - PR 2 (축소, 이슈 #90): V14 Flyway 적용, 기존 AI 연동·토글 제거, 결과 API V2 필드, `judge_raw` 90일 정리
 
-**PR 2 배포 전 확인**:
+**PR 2 배포 결과** (2026-11-23, PR #93·#94, 태스크 정의 `:129`):
 
-1. 운영에서 PR 1 의 Prepare/Judge 경로 확인 (PR 2 뒤에는 되돌릴 토글 없음)
-2. 제목 위반 행 0건 (`btrim(title) = ''` 또는 30자 초과)
-3. ECS 환경 변수 `AI_PREPARE_READ_TIMEOUT`·`AI_JUDGE_READ_TIMEOUT` 반영(Terraform apply), 기존 단계 변수 삭제
-4. 프론트 결과 화면 매핑 변경과 같은 배포
+- 배포 전: 운영 Prepare → Judge 1회 완료(합성 메뉴판, prepare 1.7초·judge 4.3초), 제목 위반 0건, RDS 스냅샷 `hanspoon-prod-db-before-v14-20261123`
+- Flyway 13.1 → 14 (0.15초). 기존 행 변환 확인(`source_index`, `staff_cards` 배열)
+- 프론트는 같이 배포하지 않음. V2 필드를 먼저 읽고 예전 필드는 대체값으로만 쓴다
+- 이전 리비전(`:128` 이하)은 삭제된 컬럼을 읽어 기동하지 못한다. 되돌리기는 스냅샷 복구만
 
 ---
 
@@ -206,11 +206,12 @@
 
 | 분류 | 할 일 |
 |---|---|
-| 프론트 (PR 2) | 결과 메뉴 V2 필드(`displayName`·`translatedName`·`description`·`matchedTags`, `menuNameKo/En`·`descriptionKo/En`·`hits`·`ownerCard` 삭제), 이력·결과 `riskyMenuCount` 삭제 → `dangerCount`·`cautionCount`. 실패 코드 `PREPARE_SERVICE_ERROR`·`JUDGE_SERVICE_ERROR` 처리 |
+| 프론트 | V2 필드 호환 확인(11-23). 남은 정리: 예전 필드 대체 코드(`menuNameKo/En`·`descriptionKo/En`·`hits`·`ownerCard`·`riskyMenuCount`) 삭제, 실패 코드 `PREPARE_SERVICE_ERROR`·`JUDGE_SERVICE_ERROR` 문구(지금 기본 문구) |
 | PM·프론트 | 직원 응답 규칙(있어요 → 위험, 없어요·모름 → 표시만) 공유. 프론트 문구는 지금 "판정은 자동으로 바뀌지 않는다"로 되어 있다. Notion No 16·23 수정(사용자 확인 후) |
 | 화면 쪽 정리 | 환율 "매일 00:00 갱신" 문구(지금은 고정 환율), 출처 간 불일치 표시(AI 값 없음), 주문·빼기·덜 맵게 응답(저장 안 함), 파트너 식당·등록 레시피(시연 전용) |
-| AI 팀 | ① Prepare/Judge 타임아웃·Judge 재시도(백엔드 20초·30초, 웹서치로 30초 초과 가능) ② `persistence_commands` 적용 시점·실패 명령 재처리 ③ `recipe_probability` 코드에서 제거 요청(문서는 10/27 철회, 백엔드는 무시) ④ 확정값을 `store_menu_id` 기준으로 후보 메뉴 전부에 넣는 방식 확인 ⑤ ⑦ §8 "백엔드 반영 대기" 항목이 V11 에 반영됐다고 알림 |
-| 백엔드 (PR 1 후속) | `save_web_search_cache`·`update_source_reliability`·`menu_ingredient_cache` 명령 실행과 Bundle 웹 캐시 조회(지금은 저장 안 하고 `not_found`, 모르는 메뉴는 매번 재검색). 한국어 fuzzy 점수 개선(AI 기준 0.65 는 v1 고정) |
+| AI 팀 | ① Prepare/Judge 타임아웃·Judge 재시도(백엔드 20초·30초, 웹서치로 30초 초과 가능) ② `persistence_commands` 적용 시점·실패 명령 재처리 ③ `recipe_probability` 코드에서 제거 요청(문서는 10/27 철회, 백엔드는 무시) ④ 확정값을 `store_menu_id` 기준으로 후보 메뉴 전부에 넣는 방식 확인 ⑤ ⑦ §8 "백엔드 반영 대기" 항목이 V11 에 반영됐다고 알림 ⑥ 사진 품질 판정: 이미지 지표 사유 하나만 있어도 `low_confidence` → 재촬영, 흰 배경을 빛 반사로 셈 → 실사진 대부분 재촬영(11-23 운영) ⑦ 게이트웨이(`OPENAI_BASE_URL`)의 Responses API·모델 이름 확인. LLM 실패는 규칙 판정으로 대체돼 AI 로그로만 보인다 |
+| 운영 설정 | `OPENAI_BASE_URL`·`NORMALIZATION_OPENAI_MODEL` 은 태스크 정의에만 있음 → Terraform·AI 배포 워크플로 반영. 쓰지 않는 백엔드 변수(`AI_PIPELINE`·`AI_OCR_READ_TIMEOUT`·`AI_OCR_PRESIGNED_FALLBACK_ENABLED`·`AI_RULE_ENGINE_READ_TIMEOUT`·`AI_RESULT_READ_TIMEOUT`) 삭제. Naver 웹 검색 키 미설정(사진 품질 판정 수정 뒤 결정, 없으면 모르는 메뉴는 `no_information`) |
+| 백엔드 (후속) | `save_web_search_cache`·`update_source_reliability`·`menu_ingredient_cache` 명령 실행과 Bundle 웹 캐시 조회(지금은 저장 안 하고 `not_found`, 모르는 메뉴는 매번 재검색). 한국어 fuzzy 점수 개선(AI 기준 0.65 는 v1 고정) |
 | 법률·약관 | 원문의 14세 미만 조항 정리(보호자 절차 없음) + 버전 올림, 위치정보 약관 필요 여부(필요하면 문서 ID CHECK 에 추가), 탈퇴 후 동의 기록 보존 여부(지금 CASCADE, R-17) |
 | 인증 | `user_auth_identities` 의 `email_verified` 규칙, `provider` 기본값·CHECK |
 
@@ -234,13 +235,14 @@
 
 ---
 
-## 8. 검증 기록 (2026-11-15~16)
+## 8. 검증 기록 (2026-11-15~23)
 
 | 확인 | 결과 |
 |---|---|
 | 설계본과 Flyway V1~V14 | `pg_dump` 스키마 일치 |
 | 무결성 시나리오 | 303/303 (FK·CHECK·부분 UNIQUE·CASCADE, 복합 FK, 직원 응답, 후기·신고, 찜) |
 | `./gradlew test` | 210/210 (11-16, 원격 dev 합친 뒤), 267/267 (11-22, V14 Flyway 적용) |
+| 운영 배포 (11-23) | V14 적용, 기존 행 변환 확인, Prepare → Judge 1회 완료 |
 | 성능 (3년 가정 합성 데이터: 스캔 30만·메뉴 300만·후기 18만) | 대부분 1ms 미만. 가장 느린 것은 인기 가게 1곳(후기 줄 1.2만)의 후기 칩 집계 40~110ms, 동네 목록 51ms |
 
 ---
@@ -261,3 +263,4 @@
 | 11-16 | 원격 V8~V10(보호자 승인·찜·후기) 되돌리고 운영 DB 정리. 스키마 원본을 Flyway 로 하고 설계 도구·중간 문서 정리 |
 | 11-20 | 시연 가게 표시명 = 시트 식당명(회사명 상호 미표시), `verified_at` 기록. 같은 식당 중복 행은 비활성 |
 | 11-22 | Prepare/Judge 연동을 PR 두 개로(전환 → V14 축소). Bundle 확정값은 후보 메뉴 전부에. `recommendation` 보류. AI 문서로 확인: 확정 "있음" + 금지 태그 = DANGER, 가게 prior·출처 신뢰도 `not_found` 허용, fuzzy 라이브러리는 백엔드가 정함, 출처 신뢰도 = `(맞춘 수+1)/(비교한 수+2)`. PR 2: V14 Flyway 적용, 판정 컬럼은 JDBC 전용(엔티티 읽기만), 번역명은 `menus.name_i18n` 만(설명 번역 없음), 사진은 `store_menu_id` 우선 |
+| 11-23 | PR 2 운영 배포(V14). 되돌리기는 스냅샷 복구만. 프론트는 V2 필드 우선 읽기로 같이 배포하지 않음. 사진 품질 판정 수정은 AI 레포에서, Naver 웹 검색 키는 그 뒤로 미룸 |
