@@ -19,12 +19,16 @@ import org.hibernate.type.SqlTypes;
 /**
  * 메뉴 분석 결과. scan_sessions 와 N:1 (FK ON DELETE CASCADE).
  * OCR(menu_name/price/...)과 ai_result FinalOutput(risk_level/hit_tags/message/owner_card)을 index 순서로 머지해 저장한다.
+ *
+ * <p>Prepare/Judge 경로는 Prepare 저장 때 source_index·가게 메뉴 연결로 생성, 판정은 Judge 저장 때 기록.
  */
 @Entity
 @Table(name = "menu_analyses")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class MenuAnalysis extends BaseEntity {
+
+    private static final String EMPTY_ARRAY = "[]";
 
     @Id
     @Column(name = "id", columnDefinition = "uuid", updatable = false, nullable = false)
@@ -35,6 +39,15 @@ public class MenuAnalysis extends BaseEntity {
 
     @Column(name = "display_order")
     private Integer displayOrder;
+
+    @Column(name = "source_index")
+    private Integer sourceIndex;
+
+    @Column(name = "store_id")
+    private Long storeId;
+
+    @Column(name = "store_menu_id")
+    private Long storeMenuId;
 
     @Column(name = "menu_name_ko", length = 255)
     private String menuNameKo;
@@ -50,6 +63,10 @@ public class MenuAnalysis extends BaseEntity {
 
     @Column(name = "price_text", length = 100)
     private String priceText;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "price_options", columnDefinition = "jsonb", nullable = false)
+    private String priceOptions = EMPTY_ARRAY;
 
     @Column(name = "is_spicy")
     private Boolean isSpicy;
@@ -131,5 +148,37 @@ public class MenuAnalysis extends BaseEntity {
                 hitTags,
                 message,
                 ownerCard);
+    }
+
+    /** Prepare 저장용. 판정 컬럼은 비워 둠. isSpicy 는 감지 시 true, 아니면 null. */
+    public static MenuAnalysis prepared(
+            UUID scanSessionId,
+            int sourceIndex,
+            String displayName,
+            String description,
+            String priceText,
+            String priceOptions,
+            Boolean isSpicy,
+            Long storeId,
+            Long storeMenuId) {
+        MenuAnalysis analysis = new MenuAnalysis(
+                scanSessionId,
+                null,
+                displayName,
+                null,
+                description,
+                null,
+                priceText,
+                isSpicy,
+                null,
+                null,
+                null,
+                null,
+                null);
+        analysis.sourceIndex = sourceIndex;
+        analysis.priceOptions = priceOptions != null ? priceOptions : EMPTY_ARRAY;
+        analysis.storeId = storeId;
+        analysis.storeMenuId = storeMenuId;
+        return analysis;
     }
 }

@@ -69,6 +69,9 @@ public class ScanSession extends BaseEntity {
     @Column(name = "safe_count")
     private Integer safeCount;
 
+    @Column(name = "locale", length = 5)
+    private String locale;
+
     @Column(name = "scan_status", length = 20, nullable = false)
     private ScanStatus scanStatus;
 
@@ -160,6 +163,12 @@ public class ScanSession extends BaseEntity {
         this.menuCount = menuCount;
         this.scannedAt = scannedAt;
         this.failureCode = null;
+    }
+
+    /** Prepare 저장 후 메뉴 수/스캔 시각/판정 언어 반영. */
+    public void applyPrepareResult(Integer menuCount, Instant scannedAt, String locale) {
+        applyOcrResult(menuCount, scannedAt);
+        this.locale = locale;
     }
 
     /** 룰엔진 판정 후 위험 메뉴 수/상태 갱신. */
