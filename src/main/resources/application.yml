@@ -28,6 +28,8 @@ app:
   scan-recovery:
     stale-after: ${SCAN_STALE_AFTER:2m}
     interval-ms: ${SCAN_RECOVERY_INTERVAL_MS:60000}
+  judge-raw-cleanup:
+    cron: ${JUDGE_RAW_CLEANUP_CRON:0 30 4 * * *}
   cache:
     maximum-size: ${CACHE_MAXIMUM_SIZE:10000}
     expire-after-write: ${CACHE_EXPIRE_AFTER_WRITE:10m}
