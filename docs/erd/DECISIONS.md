@@ -211,7 +211,8 @@
 |---|---|
 | PM·프론트 | 직원 응답 규칙(있어요 → 위험, 없어요·모름 → 표시만) 공유. 프론트 문구는 지금 "판정은 자동으로 바뀌지 않는다"로 되어 있다. Notion No 16·23 수정(사용자 확인 후) |
 | 화면 쪽 정리 | 환율 "매일 00:00 갱신" 문구(지금은 고정 환율), 출처 간 불일치 표시(AI 값 없음), 주문·빼기·덜 맵게 응답(저장 안 함), 파트너 식당·등록 레시피(시연 전용) |
-| AI 팀 | ① 확정 "있음" + 금지 태그 겹침이면 Judge 도 `danger` 인가 ② 가게 prior·출처 신뢰도가 `not_found` 로 가도 되는가 ③ 테이블 이름 매핑(`staff_*`) 알림 ④ `recipe_probability` payload 제거 요청 ⑤ 출처 신뢰도 입력 계약 ⑥ `name-{canonical_name}` 카드가 질문 명령으로 오는지 |
+| AI 팀 | ① Prepare/Judge 타임아웃·Judge 재시도(백엔드 20초·30초, 웹서치로 30초 초과 가능) ② `persistence_commands` 적용 시점·실패 명령 재처리 ③ `recipe_probability` 코드에서 제거 요청(문서는 10/27 철회, 백엔드는 무시) ④ 확정값을 `store_menu_id` 기준으로 후보 메뉴 전부에 넣는 방식 확인 ⑤ ⑦ §8 "백엔드 반영 대기" 항목이 V11 에 반영됐다고 알림 |
+| 백엔드 (PR 1 후속) | `save_web_search_cache`·`update_source_reliability`·`menu_ingredient_cache` 명령 실행과 Bundle 웹 캐시 조회(지금은 저장 안 하고 `not_found`, 모르는 메뉴는 매번 재검색). 한국어 fuzzy 점수 개선(AI 기준 0.65 는 v1 고정) |
 | 법률·약관 | 원문의 14세 미만 조항 정리(보호자 절차 없음) + 버전 올림, 위치정보 약관 필요 여부(필요하면 문서 ID CHECK 에 추가), 탈퇴 후 동의 기록 보존 여부(지금 CASCADE, R-17) |
 | 인증 | `user_auth_identities` 의 `email_verified` 규칙, `provider` 기본값·CHECK |
 
@@ -261,4 +262,4 @@
 | 11-15 | 프론트 화면을 데이터 항목 근거로 사용. 약관은 V7 테이블 사용. 후기는 화면대로(스캔 선택·메뉴 직접 입력·후기 단위 신고). `scan_records` 유지. 식단 코드는 화면 ID |
 | 11-16 | 원격 V8~V10(보호자 승인·찜·후기) 되돌리고 운영 DB 정리. 스키마 원본을 Flyway 로 하고 설계 도구·중간 문서 정리 |
 | 11-20 | 시연 가게 표시명 = 시트 식당명(회사명 상호 미표시), `verified_at` 기록. 같은 식당 중복 행은 비활성 |
-| 11-22 | Prepare/Judge 연동을 PR 두 개로(전환 → V14 축소). Bundle 확정값은 후보 메뉴 전부에. `recommendation` 보류 |
+| 11-22 | Prepare/Judge 연동을 PR 두 개로(전환 → V14 축소). Bundle 확정값은 후보 메뉴 전부에. `recommendation` 보류. AI 문서로 확인: 확정 "있음" + 금지 태그 = DANGER, 가게 prior·출처 신뢰도 `not_found` 허용, fuzzy 라이브러리는 백엔드가 정함, 출처 신뢰도 = `(맞춘 수+1)/(비교한 수+2)` |
