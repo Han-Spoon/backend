@@ -385,6 +385,13 @@ resource "aws_ecs_task_definition" "app" {
         { name = "OCR_QUEUE_WAIT_SECONDS", value = "1" },
         { name = "OCR_ENABLE_GPT_POST_PROCESS", value = "false" },
         { name = "OCR_ENABLE_GPT_JUDGMENT", value = "false" },
+
+        # OpenAI 호환 게이트웨이. 정규화 ②·웹검색 ⑥·설명 ⑧ 공용.
+        { name = "OPENAI_BASE_URL", value = "https://factchat-cloud.mindlogic.ai/v1/gateway" },
+        { name = "NORMALIZATION_OPENAI_MODEL", value = "gpt-5.4-mini" },
+        { name = "OPENAI_TIMEOUT_SECONDS", value = "5" },
+        { name = "RESULT_GPT_TOTAL_BUDGET_SECONDS", value = "5" },
+        { name = "RESULT_GPT_MAX_CALLS", value = "1" },
       ]
 
       secrets = [
