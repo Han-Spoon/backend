@@ -46,7 +46,7 @@ final class MenuResultMapper {
                 legacyOwnerCard(m.getOwnerCard()));
     }
 
-    /** RuleProfile(snake_case, is_* 알레르기) → 유저 프로필 코드값. */
+    /** DietProfile(snake_case, is_* 알레르기) → 유저 프로필 코드값. */
     static ScanDietSnapshot dietSnapshot(String json) {
         JsonNode node = object(json);
         if (node == null) {

@@ -43,21 +43,13 @@ app:
   ai-service:
     base-url: ${AI_SERVICE_BASE_URL:http://localhost:8000}
     connect-timeout: ${AI_SERVICE_CONNECT_TIMEOUT:500ms}
-    ocr-read-timeout: ${AI_OCR_READ_TIMEOUT:18s}
-    rule-engine-read-timeout: ${AI_RULE_ENGINE_READ_TIMEOUT:2s}
-    result-read-timeout: ${AI_RESULT_READ_TIMEOUT:7s}
     prepare-read-timeout: ${AI_PREPARE_READ_TIMEOUT:20s}
     judge-read-timeout: ${AI_JUDGE_READ_TIMEOUT:30s}
-    # legacy(OCR → 룰엔진 → 결과) | analyze(Prepare → Judge)
-    pipeline: ${AI_PIPELINE:legacy}
-    # 로컬/전환 환경만 URL fallback을 사용. 운영 환경은 false.
-    presigned-url-fallback-enabled: ${AI_OCR_PRESIGNED_FALLBACK_ENABLED:true}
   s3:
     bucket: ${S3_BUCKET:hanspoon-local-images}
     region: ${AWS_REGION:ap-northeast-2}
     endpoint: ${S3_ENDPOINT:}
     upload-url-ttl: ${S3_UPLOAD_URL_TTL:10m}
-    read-url-ttl: ${S3_READ_URL_TTL:15m}
     max-file-size: ${S3_MAX_FILE_SIZE:10485760} # 10MB
   cdn:
     base-url: ${CDN_BASE_URL:https://api.han-spoon.site}

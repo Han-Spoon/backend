@@ -11,13 +11,13 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.hanspoon.backend_api.domain.ai.client.AiAnalyzeClient;
+import com.hanspoon.backend_api.domain.ai.dto.analyze.DietProfile;
 import com.hanspoon.backend_api.domain.ai.dto.analyze.JudgeRequest;
 import com.hanspoon.backend_api.domain.ai.dto.analyze.JudgeResponse;
 import com.hanspoon.backend_api.domain.ai.dto.analyze.JudgeResult;
 import com.hanspoon.backend_api.domain.ai.dto.analyze.PrepareRequest;
 import com.hanspoon.backend_api.domain.ai.dto.analyze.PrepareResponse;
 import com.hanspoon.backend_api.domain.ai.dto.analyze.PreparedItem;
-import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleProfile;
 import com.hanspoon.backend_api.domain.ai.knowledge.KnowledgeBundleBuilder;
 import com.hanspoon.backend_api.domain.ai.knowledge.KnowledgeBundleBuilder.BuiltBundle;
 import com.hanspoon.backend_api.domain.ai.knowledge.KnowledgeBundleBuilder.BundleItem;
@@ -49,7 +49,7 @@ class AnalyzeScanFlowTest {
             new VerifiedUpload("scans/u/menu.jpg", "version-1", "\"etag-1\"", 123L, "image/jpeg");
 
     private static final Long STORE_ID = 123456L;
-    private static final RuleProfile PROFILE = new RuleProfile("halal", false, null, false, List.of(), false);
+    private static final DietProfile PROFILE = new DietProfile("halal", false, null, false, List.of(), false);
 
     private final JsonMapper mapper = JsonMapper.builder().build();
 

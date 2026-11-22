@@ -1,6 +1,5 @@
 package com.hanspoon.backend_api.domain.ai.dto.analyze;
 
-import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleProfile;
 import java.util.UUID;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.PropertyNamingStrategies;
@@ -24,5 +23,5 @@ public record JudgeRequest(
         JsonNode prepareSignals,
         JsonNode preparedItems,
         KnowledgeBundle knowledgeBundle,
-        RuleProfile userProfile,
+        DietProfile userProfile,
         String locale) {}
