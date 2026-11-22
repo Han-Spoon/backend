@@ -109,7 +109,7 @@ class CardServiceTest {
     @Test
     void saveAcceptsOwnedScanId() {
         UUID userId = UUID.randomUUID();
-        ScanSession session = ScanSession.create(userId, null, 1, 0, ScanStatus.COMPLETED, Instant.now());
+        ScanSession session = ScanSession.create(userId, null, 1, ScanStatus.COMPLETED, Instant.now());
         UUID scanId = session.getId();
         when(scanSessionRepository.findByIdAndUserId(scanId, userId)).thenReturn(Optional.of(session));
         when(savedCardRepository.findByUserIdAndCardTypeAndMenuNameKo(userId, CardType.ORDER, "삼겹살"))

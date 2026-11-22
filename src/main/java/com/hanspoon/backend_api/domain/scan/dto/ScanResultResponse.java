@@ -20,7 +20,6 @@ import java.util.UUID;
  * @param dangerCount 위험 메뉴 수
  * @param cautionCount 주의 메뉴 수
  * @param safeCount 안전 메뉴 수
- * @param riskyMenuCount 위험/주의 메뉴 수
  * @param scannedAt 스캔 시각
  * @param menus 메뉴별 분석 결과
  * @param retakeReasons 재촬영 사유 (status 가 NEEDS_RETAKE 일 때만 채워짐, 그 외 null). OCR 이 제공한 문자열 그대로(언어 혼재 가능, i18n 키 아님)
@@ -40,7 +39,6 @@ public record ScanResultResponse(
         Integer dangerCount,
         Integer cautionCount,
         Integer safeCount,
-        Integer riskyMenuCount,
         Instant scannedAt,
         List<MenuResult> menus,
         List<String> retakeReasons,

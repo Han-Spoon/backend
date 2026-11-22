@@ -2,6 +2,7 @@ package com.hanspoon.backend_api.domain.ai.dto;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.hanspoon.backend_api.domain.ai.dto.analyze.DietProfile;
 import com.hanspoon.backend_api.domain.ai.dto.analyze.EvidenceRef;
 import com.hanspoon.backend_api.domain.ai.dto.analyze.JudgeRequest;
 import com.hanspoon.backend_api.domain.ai.dto.analyze.JudgeResponse;
@@ -30,7 +31,6 @@ import com.hanspoon.backend_api.domain.ai.dto.analyze.PrepareResponse;
 import com.hanspoon.backend_api.domain.ai.dto.analyze.PreparedItem;
 import com.hanspoon.backend_api.domain.ai.dto.analyze.SliceStatus;
 import com.hanspoon.backend_api.domain.ai.dto.common.RiskLevel;
-import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleProfile;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Instant;
@@ -60,7 +60,7 @@ class AnalyzeContractTest {
                 expected.get("prepare_signals"),
                 expected.get("prepared_items"),
                 documentedBundle(),
-                new RuleProfile("halal", false, null, false, List.of(), false),
+                new DietProfile("halal", false, null, false, List.of(), false),
                 "ko");
 
         JsonNode actual = mapper.readTree(mapper.writeValueAsString(request));

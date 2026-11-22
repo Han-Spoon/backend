@@ -2,7 +2,7 @@ package com.hanspoon.backend_api.domain.ai.mapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleProfile;
+import com.hanspoon.backend_api.domain.ai.dto.analyze.DietProfile;
 import com.hanspoon.backend_api.domain.user.entity.AllergyCode;
 import com.hanspoon.backend_api.domain.user.entity.ReligionType;
 import com.hanspoon.backend_api.domain.user.entity.UserProfile;
@@ -25,21 +25,21 @@ class AiProfileMapperTest {
 
     @Test
     void mapsReligionNoneToNull() {
-        RuleProfile result = AiProfileMapper.toRuleProfile(profile(false, null, ReligionType.NONE));
+        DietProfile result = AiProfileMapper.toDietProfile(profile(false, null, ReligionType.NONE));
 
         assertThat(result.religionType()).isNull();
     }
 
     @Test
     void mapsReligionCode() {
-        RuleProfile result = AiProfileMapper.toRuleProfile(profile(false, null, ReligionType.HALAL));
+        DietProfile result = AiProfileMapper.toDietProfile(profile(false, null, ReligionType.HALAL));
 
         assertThat(result.religionType()).isEqualTo("halal");
     }
 
     @Test
     void dropsVegetarianTypeWhenNotVegetarian() {
-        RuleProfile result = AiProfileMapper.toRuleProfile(profile(false, VegetarianType.VEGAN, ReligionType.NONE));
+        DietProfile result = AiProfileMapper.toDietProfile(profile(false, VegetarianType.VEGAN, ReligionType.NONE));
 
         assertThat(result.isVegetarian()).isFalse();
         assertThat(result.vegetarianType()).isNull();
@@ -47,7 +47,7 @@ class AiProfileMapperTest {
 
     @Test
     void keepsVegetarianTypeWhenVegetarian() {
-        RuleProfile result = AiProfileMapper.toRuleProfile(profile(true, VegetarianType.LACTO_OVO, ReligionType.NONE));
+        DietProfile result = AiProfileMapper.toDietProfile(profile(true, VegetarianType.LACTO_OVO, ReligionType.NONE));
 
         assertThat(result.isVegetarian()).isTrue();
         assertThat(result.vegetarianType()).isEqualTo("lacto_ovo");
@@ -55,7 +55,7 @@ class AiProfileMapperTest {
 
     @Test
     void carriesNoAlcoholAndNoSpicy() {
-        RuleProfile result = AiProfileMapper.toRuleProfile(profile(false, null, ReligionType.NONE));
+        DietProfile result = AiProfileMapper.toDietProfile(profile(false, null, ReligionType.NONE));
 
         assertThat(result.noAlcohol()).isTrue();
         assertThat(result.noSpicy()).isTrue();
@@ -76,7 +76,7 @@ class AiProfileMapperTest {
 
     @Test
     void mapsAllergyListSortedByCode() {
-        RuleProfile result = AiProfileMapper.toRuleProfile(
+        DietProfile result = AiProfileMapper.toDietProfile(
                 profile(false, null, ReligionType.NONE, List.of(AllergyCode.SOYBEAN, AllergyCode.MILK)));
 
         assertThat(result.allergies()).containsExactly("is_milk", "is_soybean");
@@ -84,7 +84,7 @@ class AiProfileMapperTest {
 
     @Test
     void handlesEmptyAllergies() {
-        RuleProfile result = AiProfileMapper.toRuleProfile(profile(false, null, ReligionType.NONE));
+        DietProfile result = AiProfileMapper.toDietProfile(profile(false, null, ReligionType.NONE));
 
         assertThat(result.allergies()).isEmpty();
     }

@@ -19,9 +19,8 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 /**
- * 스캔 세션. users 와 N:1 (FK ON DELETE CASCADE). OCR 결과의 scan_session 매핑.
- * riskyMenuCount 는 룰엔진 단계에서 채워진다. danger/caution/safe 카운터는 같은 완료 트랜잭션에서 메뉴별 위험도로 채우며,
- * V14(Prepare/Judge 연동)에서 riskyMenuCount 를 대체한다.
+ * 스캔 세션. users 와 N:1 (FK ON DELETE CASCADE).
+ * danger/caution/safe 카운터는 Judge 저장 트랜잭션에서 메뉴별 위험도로 기록.
  */
 @Entity
 @Table(name = "scan_sessions")
@@ -55,9 +54,6 @@ public class ScanSession extends BaseEntity {
 
     @Column(name = "menu_count")
     private Integer menuCount;
-
-    @Column(name = "risky_menu_count")
-    private Integer riskyMenuCount;
 
     /** 이력 목록용 비정규화 카운터(C10). 목록 조회가 menu_analyses 를 집계하지 않게 한다. */
     @Column(name = "danger_count")
@@ -107,7 +103,6 @@ public class ScanSession extends BaseEntity {
             StoreMatchMethod storeMatchMethod,
             String title,
             Integer menuCount,
-            Integer riskyMenuCount,
             ScanStatus scanStatus,
             Instant scannedAt) {
         this.id = UUID.randomUUID();
@@ -118,19 +113,13 @@ public class ScanSession extends BaseEntity {
         this.storeMatchMethod = storeMatchMethod;
         this.title = title;
         this.menuCount = menuCount;
-        this.riskyMenuCount = riskyMenuCount;
         this.scanStatus = scanStatus;
         this.scannedAt = scannedAt;
     }
 
     public static ScanSession create(
-            UUID userId,
-            String title,
-            Integer menuCount,
-            Integer riskyMenuCount,
-            ScanStatus scanStatus,
-            Instant scannedAt) {
-        return new ScanSession(userId, null, null, null, null, title, menuCount, riskyMenuCount, scanStatus, scannedAt);
+            UUID userId, String title, Integer menuCount, ScanStatus scanStatus, Instant scannedAt) {
+        return new ScanSession(userId, null, null, null, null, title, menuCount, scanStatus, scannedAt);
     }
 
     public static ScanSession start(
@@ -143,60 +132,42 @@ public class ScanSession extends BaseEntity {
                 storeMatchMethod,
                 null,
                 null,
-                null,
                 ScanStatus.PROCESSING,
                 null);
     }
 
     /** 사용자가 가게 연결을 건너뛴 신규 스캔. 세 가게 컨텍스트 컬럼은 모두 null로 유지한다. */
     public static ScanSession startWithoutStore(UUID userId, String storageKey) {
-        return new ScanSession(userId, storageKey, null, null, null, null, null, null, ScanStatus.PROCESSING, null);
+        return new ScanSession(userId, storageKey, null, null, null, null, null, ScanStatus.PROCESSING, null);
     }
 
     /** 가게 도입 전 세션을 재현하는 테스트·마이그레이션 전용 팩토리. 신규 스캔에서 사용하지 않는다. */
     public static ScanSession startLegacy(UUID userId, String storageKey) {
-        return new ScanSession(userId, storageKey, null, null, null, null, null, null, ScanStatus.PROCESSING, null);
+        return new ScanSession(userId, storageKey, null, null, null, null, null, ScanStatus.PROCESSING, null);
     }
 
     public boolean hasSameStoreContext(Long storeId, StoreMatchMethod storeMatchMethod) {
         return Objects.equals(this.storeId, storeId) && this.storeMatchMethod == storeMatchMethod;
     }
 
-    /** OCR 완료 후 메뉴 수/스캔 시각 반영. */
-    public void applyOcrResult(Integer menuCount, Instant scannedAt) {
+    /** Prepare 저장 후 메뉴 수/스캔 시각/판정 언어 반영. */
+    public void applyPrepareResult(Integer menuCount, Instant scannedAt, String locale) {
         ensureProcessing();
         this.menuCount = menuCount;
         this.scannedAt = scannedAt;
-        this.failureCode = null;
-    }
-
-    /** Prepare 저장 후 메뉴 수/스캔 시각/판정 언어 반영. */
-    public void applyPrepareResult(Integer menuCount, Instant scannedAt, String locale) {
-        applyOcrResult(menuCount, scannedAt);
         this.locale = locale;
-    }
-
-    /** Judge 저장 후 카운터·식단 스냅샷·완료. riskyMenuCount 는 V14 전까지 danger + caution. */
-    public void applyJudgeResult(List<RiskLevel> riskLevels, String dietSnapshot) {
-        applyRiskCounts(riskLevels);
-        this.dietSnapshot = dietSnapshot;
-        applyRuleEngineResult(dangerCount + cautionCount, ScanStatus.COMPLETED);
-    }
-
-    /** 룰엔진 판정 후 위험 메뉴 수/상태 갱신. */
-    public void applyRuleEngineResult(Integer riskyMenuCount, ScanStatus scanStatus) {
-        ensureProcessing();
-        this.riskyMenuCount = riskyMenuCount;
-        this.scanStatus = scanStatus;
         this.failureCode = null;
     }
 
-    /** 완료 직전 메뉴별 위험도로 위험도별 메뉴 수를 기록. 판정이 없는 메뉴(null)는 어느 칸에도 세지 않는다. */
-    public void applyRiskCounts(List<RiskLevel> riskLevels) {
+    /** Judge 저장 후 위험도별 메뉴 수·식단 스냅샷·완료. 판정 없는 메뉴(null)는 미집계. */
+    public void applyJudgeResult(List<RiskLevel> riskLevels, String dietSnapshot) {
         ensureProcessing();
         this.dangerCount = count(riskLevels, RiskLevel.DANGER);
         this.cautionCount = count(riskLevels, RiskLevel.CAUTION);
         this.safeCount = count(riskLevels, RiskLevel.SAFE);
+        this.dietSnapshot = dietSnapshot;
+        this.scanStatus = ScanStatus.COMPLETED;
+        this.failureCode = null;
     }
 
     public void markFailed(String failureCode) {
@@ -212,7 +183,7 @@ public class ScanSession extends BaseEntity {
         this.title = title;
     }
 
-    /** 재촬영 필요 시 상태와 OCR 이 제공한 사유·개선 안내를 반영. */
+    /** 재촬영 필요 시 상태와 Prepare 가 제공한 사유·개선 안내를 반영. */
     public void applyNeedsRetake(List<String> retakeReasons, List<String> retakeSuggestions) {
         ensureProcessing();
         this.scanStatus = ScanStatus.NEEDS_RETAKE;

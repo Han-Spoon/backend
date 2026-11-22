@@ -14,7 +14,6 @@ import com.hanspoon.backend_api.domain.user.entity.User;
 import com.hanspoon.backend_api.domain.user.repository.UserRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -59,21 +58,28 @@ class MenuPhotoQueryIntegrationTest {
         insertStoreMenu(storeId, "김치찌개", insertImage("a", "active"));
         insertStoreMenu(storeId, "된장찌개", insertImage("b", "hidden"));
         insertStoreMenu(otherStoreId, "제육볶음", insertImage("c", "active"));
+        Long linkedMenuId = insertStoreMenu(storeId, "돼지불백", insertImage("d", "active"));
 
         User user = userRepository.save(User.create("menu-photo@example.com", "menuphoto", "ko"));
         ScanSession session = scanSessionRepository.save(ScanSession.start(
                 user.getId(), "scans/" + user.getId() + "/photo.jpg", storeId, "기와", StoreMatchMethod.NAME_SEARCH));
-        MenuAnalysis kimchi = menuAnalysisRepository.save(menu(session.getId(), 1, "김치 찌개"));
-        menuAnalysisRepository.save(menu(session.getId(), 2, "된장찌개"));
-        menuAnalysisRepository.save(menu(session.getId(), 3, "제육볶음"));
+        MenuAnalysis kimchi = menuAnalysisRepository.save(menu(session.getId(), 0, "김치 찌개", null, null));
+        menuAnalysisRepository.save(menu(session.getId(), 1, "된장찌개", null, null));
+        menuAnalysisRepository.save(menu(session.getId(), 2, "제육볶음", null, null));
+        // 연결된 가게 메뉴는 표기가 달라도 그 사진
+        MenuAnalysis linked = menuAnalysisRepository.save(menu(session.getId(), 3, "불백 정식", storeId, linkedMenuId));
         entityManager.flush();
 
         Map<UUID, MenuPhoto> photos = menuPhotoResolver.find(session.getId(), storeId);
 
         assertThat(photos)
-                .containsExactly(Map.entry(
-                        kimchi.getId(),
-                        new MenuPhoto("https://cdn.test/menus/stores/" + sha("a") + ".jpg", "사진 제공: 기와")));
+                .containsOnly(
+                        Map.entry(
+                                kimchi.getId(),
+                                new MenuPhoto("https://cdn.test/menus/stores/" + sha("a") + ".jpg", "사진 제공: 기와")),
+                        Map.entry(
+                                linked.getId(),
+                                new MenuPhoto("https://cdn.test/menus/stores/" + sha("d") + ".jpg", "사진 제공: 기와")));
     }
 
     private Long insertStore(String sbizNo, Long categoryId, Long batchId) {
@@ -104,21 +110,22 @@ class MenuPhotoQueryIntegrationTest {
                 status);
     }
 
-    private void insertStoreMenu(Long storeId, String name, Long imageAssetId) {
-        jdbcTemplate.update(
+    private Long insertStoreMenu(Long storeId, String name, Long imageAssetId) {
+        return jdbcTemplate.queryForObject(
                 """
                 insert into store_menus(store_id, name_normalized, display_name, image_asset_id)
                 values (?, normalize_food_name(?), ?, ?)
+                returning id
                 """,
+                Long.class,
                 storeId,
                 name,
                 name,
                 imageAssetId);
     }
 
-    private static MenuAnalysis menu(UUID scanId, int order, String name) {
-        return MenuAnalysis.create(
-                scanId, order, name, null, null, null, null, null, null, null, List.of(), null, null);
+    private static MenuAnalysis menu(UUID scanId, int sourceIndex, String name, Long storeId, Long storeMenuId) {
+        return MenuAnalysis.prepared(scanId, sourceIndex, name, null, null, null, null, storeId, storeMenuId);
     }
 
     private static String sha(String seed) {

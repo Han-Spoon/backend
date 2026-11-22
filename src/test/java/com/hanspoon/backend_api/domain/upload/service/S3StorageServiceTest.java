@@ -29,8 +29,8 @@ class S3StorageServiceTest {
     private static final UUID USER = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID OTHER_USER = UUID.fromString("22222222-2222-2222-2222-222222222222");
 
-    private final S3Properties properties = new S3Properties(
-            BUCKET, "ap-northeast-2", null, Duration.ofMinutes(10), Duration.ofMinutes(15), 10 * 1024 * 1024);
+    private final S3Properties properties =
+            new S3Properties(BUCKET, "ap-northeast-2", null, Duration.ofMinutes(10), 10 * 1024 * 1024);
 
     private final S3StorageService service = new S3StorageService(presigner(), mock(S3Client.class), properties);
 
@@ -165,15 +165,5 @@ class S3StorageServiceTest {
     void objectUriReturnsS3Scheme() {
         assertThat(service.objectUri("scans/" + USER + "/abc.jpg"))
                 .isEqualTo("s3://" + BUCKET + "/scans/" + USER + "/abc.jpg");
-    }
-
-    @Test
-    void createReadUrlPinsFallbackToTheVerifiedVersion() {
-        String key = "scans/" + USER + "/abc.jpg";
-
-        assertThat(service.createReadUrl(key, "version-1"))
-                .contains(key)
-                .contains("versionId=version-1")
-                .contains("X-Amz-Signature=");
     }
 }

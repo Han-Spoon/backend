@@ -1,7 +1,6 @@
 package com.hanspoon.backend_api.domain.scan.dto;
 
 import com.hanspoon.backend_api.domain.ai.dto.common.RiskLevel;
-import com.hanspoon.backend_api.domain.ai.dto.result.OwnerCard;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import java.util.UUID;
@@ -9,38 +8,35 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * 스캔 결과의 메뉴 1건. 사용자 표시용.
- * 메뉴 사진은 스캔 가게의 가게 메뉴 사진만. AI 반환 이미지 URL 미사용.
- *
- * <p>V14 전까지 레거시(룰엔진)·Judge 결과 공존. Judge 전용 필드는 레거시 메뉴에서 null.
+ * 메뉴 사진은 스캔 가게의 가게 메뉴 사진만.
  *
  * @param scanMenuId 스캔 메뉴 id
  * @param displayOrder 표시 순서
- * @param menuNameKo 한국어 메뉴명
- * @param menuNameEn 영어 메뉴명
- * @param descriptionKo 한국어 메뉴 설명
- * @param descriptionEn 영어 메뉴 설명
+ * @param displayName 메뉴판 표기
+ * @param translatedName 정규 메뉴의 사용자 언어 이름, 없거나 한국어 사용자면 null
+ * @param description 메뉴판 설명
+ * @param translatedDescription 설명 번역, 미제공(null)
  * @param priceText 가격 문자열
  * @param imageUrl 가게 메뉴 사진 공개 주소, null 가능
  * @param imageAttribution 사진 출처 표기, imageUrl 과 함께 null
- * @param isSpicy 매움 여부
+ * @param isSpicy 매운맛 감지 시 true, 아니면 null
  * @param riskLevel 위험도 (danger | caution | safe)
- * @param status 판정 상태 (completed | partial_failed | failed), Judge 전용
- * @param evidenceBasis 판정 근거 (confirmed | estimated | unknown), Judge 전용
- * @param informationStatus 재료 정보 충분도 (complete | partial | none), Judge 전용
- * @param staffAnswerStatus 직원 응답 상태 (none | partial | complete), Judge 전용
- * @param riskIngredients 위험 재료, Judge 전용
- * @param hits 위험 태그
- * @param message 레거시 {ko,en,ar} 또는 Judge {verdict,reason,notes}, null 가능
- * @param ownerCard 레거시 사장님 소통 카드, Judge 메뉴는 null
+ * @param status 판정 상태 (completed | partial_failed | failed)
+ * @param evidenceBasis 판정 근거 (confirmed | estimated | unknown)
+ * @param informationStatus 재료 정보 충분도 (complete | partial | none)
+ * @param staffAnswerStatus 직원 응답 상태 (none | partial | complete)
+ * @param riskIngredients 위험 재료, Judge 이전 메뉴는 null
+ * @param matchedTags 내 식단과 겹친 태그
+ * @param message Judge {verdict,reason,notes} 또는 이전 스캔 {ko,en,ar}, null 가능
  */
 @Schema(description = "스캔 결과 메뉴 항목")
 public record MenuResult(
         UUID scanMenuId,
         Integer displayOrder,
-        String menuNameKo,
-        String menuNameEn,
-        String descriptionKo,
-        String descriptionEn,
+        String displayName,
+        String translatedName,
+        String description,
+        String translatedDescription,
         String priceText,
         String imageUrl,
         String imageAttribution,
@@ -51,6 +47,5 @@ public record MenuResult(
         String informationStatus,
         String staffAnswerStatus,
         List<RiskIngredientResult> riskIngredients,
-        List<String> hits,
-        @Schema(description = "레거시 {ko,en,ar} 또는 Judge {verdict,reason,notes}") JsonNode message,
-        OwnerCard ownerCard) {}
+        List<String> matchedTags,
+        @Schema(description = "Judge {verdict,reason,notes} 또는 이전 스캔 {ko,en,ar}") JsonNode message) {}

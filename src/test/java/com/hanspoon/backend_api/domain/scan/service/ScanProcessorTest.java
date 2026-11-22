@@ -3,35 +3,17 @@ package com.hanspoon.backend_api.domain.scan.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.hanspoon.backend_api.domain.ai.client.AiClient;
-import com.hanspoon.backend_api.domain.ai.dto.common.EscalationCase;
-import com.hanspoon.backend_api.domain.ai.dto.common.RiskLevel;
-import com.hanspoon.backend_api.domain.ai.dto.ocr.OcrRequest;
-import com.hanspoon.backend_api.domain.ai.dto.ocr.OcrResponse;
-import com.hanspoon.backend_api.domain.ai.dto.result.FinalMenu;
-import com.hanspoon.backend_api.domain.ai.dto.result.FinalMessage;
-import com.hanspoon.backend_api.domain.ai.dto.result.FinalResultResponse;
-import com.hanspoon.backend_api.domain.ai.dto.result.OwnerCard;
-import com.hanspoon.backend_api.domain.ai.dto.result.OwnerQuestion;
-import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RiskReason;
-import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleEngineRequest;
-import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleEngineResponse;
-import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleMenuAnalysis;
 import com.hanspoon.backend_api.domain.scan.entity.MenuAnalysis;
 import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
-import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
-import com.hanspoon.backend_api.domain.scan.repository.ScanImageRepository;
 import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
 import com.hanspoon.backend_api.domain.store.entity.StoreMatchMethod;
 import com.hanspoon.backend_api.domain.upload.dto.VerifiedUpload;
-import com.hanspoon.backend_api.domain.upload.service.S3StorageService;
 import com.hanspoon.backend_api.domain.user.entity.ReligionType;
 import com.hanspoon.backend_api.domain.user.entity.User;
 import com.hanspoon.backend_api.domain.user.entity.UserProfile;
@@ -45,8 +27,6 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -54,29 +34,15 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class ScanProcessorTest {
 
     private static final String STORAGE_KEY = "scans/11111111-1111-1111-1111-111111111111/abc.jpg";
-    private static final String VERSION_ID = "version-1";
-    private static final String ETAG = "\"etag-1\"";
     private static final Long STORE_ID = 42L;
     private static final VerifiedUpload VERIFIED_UPLOAD =
-            new VerifiedUpload(STORAGE_KEY, VERSION_ID, ETAG, 123L, "image/jpeg");
-
-    @Mock
-    private AiClient aiClient;
-
-    @Mock
-    private S3StorageService s3StorageService;
+            new VerifiedUpload(STORAGE_KEY, "version-1", "\"etag-1\"", 123L, "image/jpeg");
 
     @Mock
     private UserProfileRepository userProfileRepository;
 
     @Mock
     private ScanSessionRepository scanSessionRepository;
-
-    @Mock
-    private ScanImageRepository scanImageRepository;
-
-    @Mock
-    private MenuAnalysisRepository menuAnalysisRepository;
 
     @Mock
     private AnalyzeScanFlow analyzeScanFlow;
@@ -86,386 +52,85 @@ class ScanProcessorTest {
 
     private ScanProcessor scanProcessor;
 
-    // ScanStateWriter 는 실제 객체 사용. 상태 전이 위임 지점까지 함께 검증.
+    // ScanStateWriter 는 실제 객체. 실패 기록까지 함께 검증.
     @BeforeEach
     void setUp() {
-        scanProcessor = processor("legacy");
-    }
-
-    private ScanProcessor processor(String pipeline) {
-        return new ScanProcessor(
-                aiClient,
-                s3StorageService,
+        scanProcessor = new ScanProcessor(
                 userProfileRepository,
                 scanSessionRepository,
-                new ScanStateWriter(scanSessionRepository, scanImageRepository, menuAnalysisRepository),
+                new ScanStateWriter(scanSessionRepository),
                 analyzeScanFlow,
-                userRepository,
-                false,
-                pipeline);
-    }
-
-    private static com.hanspoon.backend_api.domain.ai.dto.ocr.MenuAnalysis ocrMenu(
-            String name, String price, boolean spicy, int order, String imageUrl) {
-        return new com.hanspoon.backend_api.domain.ai.dto.ocr.MenuAnalysis(
-                name, null, "", null, price, null, spicy, imageUrl, order);
-    }
-
-    private OcrResponse usableOcr() {
-        return new OcrResponse(
-                new com.hanspoon.backend_api.domain.ai.dto.ocr.ScanSession(
-                        STORE_ID, "menu.jpg", 2, null, "completed", "2026-06-05T00:00:00Z"),
-                new com.hanspoon.backend_api.domain.ai.dto.ocr.MenuImage(
-                        "upload", STORAGE_KEY, "https://s3/presigned", "image/png", 999L),
-                new com.hanspoon.backend_api.domain.ai.dto.ocr.ScanQuality(
-                        "usable",
-                        80,
-                        20,
-                        2,
-                        1.0,
-                        2,
-                        1.0,
-                        0.91,
-                        0.88,
-                        1280,
-                        960,
-                        null,
-                        List.of(),
-                        List.of(),
-                        false,
-                        false,
-                        "original",
-                        1,
-                        null,
-                        100L,
-                        16_000L,
-                        "s3_iam",
-                        0L),
-                List.of(
-                        ocrMenu("samgyeopsal", "9000", false, 1, "https://ai.invalid/crop.jpg"),
-                        ocrMenu("doenjang", "8000", true, 2, null)),
-                null);
-    }
-
-    private ScanSession processingSession(UUID userId) {
-        return ScanSession.start(userId, STORAGE_KEY, STORE_ID, "한스푼", StoreMatchMethod.GPS_CANDIDATE);
+                userRepository);
     }
 
     @Test
-    void completesScanAndMergesOcrWithRuleEngine() {
+    void runsPrepareThenJudge() {
         UUID userId = UUID.randomUUID();
         ScanSession session = processingSession(userId);
         UUID scanId = session.getId();
-        OcrResponse ocr = usableOcr();
-
-        when(scanSessionRepository.findById(scanId)).thenReturn(Optional.of(session));
-        when(s3StorageService.objectUri(STORAGE_KEY)).thenReturn("s3://test-bucket/" + STORAGE_KEY);
-        when(aiClient.requestOcr(any())).thenReturn(ocr);
-        UserProfile profile =
-                UserProfile.create(userId, "KR", false, false, null, ReligionType.HALAL, true, true, List.of());
-        when(userProfileRepository.findByUserId(userId)).thenReturn(Optional.of(profile));
-        RuleEngineResponse judged = new RuleEngineResponse(
-                new com.hanspoon.backend_api.domain.ai.dto.ocr.ScanSession(
-                        STORE_ID, "menu.jpg", 2, 1, "completed", null),
-                ocr.menuImage(),
-                ocr.scanQuality(),
-                List.of(
-                        new RuleMenuAnalysis(
-                                "samgyeopsal",
-                                false,
-                                RiskLevel.DANGER,
-                                List.of("is_pork"),
-                                List.of(),
-                                List.of("is_pork"),
-                                false,
-                                List.of(),
-                                null,
-                                List.of(new RiskReason("halal", "pork included"))),
-                        new RuleMenuAnalysis(
-                                "doenjang",
-                                true,
-                                RiskLevel.CAUTION,
-                                List.of(),
-                                List.of("has_unclear_broth"),
-                                List.of("is_pork"),
-                                true,
-                                List.of(EscalationCase.AMBIGUITY),
-                                null,
-                                null)));
-        when(aiClient.judge(any())).thenReturn(judged);
-        FinalResultResponse finalResult = new FinalResultResponse(
-                judged.scanSession(),
-                List.of(
-                        new FinalMenu(
-                                "samgyeopsal",
-                                RiskLevel.DANGER,
-                                List.of("is_pork"),
-                                new FinalMessage("pork included", null, null),
-                                null),
-                        new FinalMenu(
-                                "doenjang",
-                                RiskLevel.CAUTION,
-                                List.of(),
-                                new FinalMessage("broth unclear", null, null),
-                                new OwnerCard(
-                                        "doenjang",
-                                        "has_unclear_broth",
-                                        new OwnerQuestion("use anchovy?", null, null)))));
-        when(aiClient.result(any())).thenReturn(finalResult);
-
-        scanProcessor.process(scanId, userId, VERIFIED_UPLOAD, "upload");
-
-        ArgumentCaptor<OcrRequest> requestCaptor = ArgumentCaptor.forClass(OcrRequest.class);
-        verify(aiClient).requestOcr(requestCaptor.capture());
-        assertThat(requestCaptor.getValue().storageKey()).isEqualTo(STORAGE_KEY);
-        assertThat(requestCaptor.getValue().storeId()).isEqualTo(STORE_ID);
-        assertThat(requestCaptor.getValue().imageUrl()).isNull();
-        assertThat(requestCaptor.getValue().versionId()).isEqualTo(VERSION_ID);
-        assertThat(requestCaptor.getValue().expectedEtag()).isEqualTo(ETAG);
-        ArgumentCaptor<RuleEngineRequest> ruleRequestCaptor = ArgumentCaptor.forClass(RuleEngineRequest.class);
-        verify(aiClient).judge(ruleRequestCaptor.capture());
-        assertThat(ruleRequestCaptor.getValue().storeId()).isEqualTo(STORE_ID);
-        assertThat(ruleRequestCaptor.getValue().ocrResult().scanSession().storeId())
-                .isEqualTo(STORE_ID);
-
-        assertThat(session.getScanStatus()).isEqualTo(ScanStatus.COMPLETED);
-        assertThat(session.getMenuCount()).isEqualTo(2);
-        assertThat(session.getRiskyMenuCount()).isEqualTo(1);
-        ArgumentCaptor<com.hanspoon.backend_api.domain.scan.entity.ScanImage> imageCaptor =
-                ArgumentCaptor.forClass(com.hanspoon.backend_api.domain.scan.entity.ScanImage.class);
-        verify(scanImageRepository).save(imageCaptor.capture());
-        var savedImage = imageCaptor.getValue();
-        assertThat(savedImage.getStorageKey()).isEqualTo(STORAGE_KEY);
-        assertThat(savedImage.getImageUrl()).isEqualTo("s3://test-bucket/" + STORAGE_KEY);
-        assertThat(savedImage.getMimeType()).isEqualTo(VERIFIED_UPLOAD.contentType());
-        assertThat(savedImage.getFileSize()).isEqualTo(VERIFIED_UPLOAD.contentLength());
-        assertThat(savedImage.getObjectVersionId()).isEqualTo(VERSION_ID);
-        assertThat(savedImage.getETag()).isEqualTo(ETAG);
-
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<MenuAnalysis>> captor = ArgumentCaptor.forClass(List.class);
-        verify(menuAnalysisRepository).saveAll(captor.capture());
-        List<MenuAnalysis> saved = captor.getValue();
-        assertThat(saved).hasSize(2);
-        // OCR 가격 + FinalOutput 위험도·태그의 동일 행 머지 확인
-        assertThat(saved.get(0).getMenuNameKo()).isEqualTo("samgyeopsal");
-        assertThat(saved.get(0).getPriceText()).isEqualTo("9000");
-        assertThat(saved.get(0).getImageUrl()).isNull();
-        assertThat(saved.get(0).getRiskLevel()).isEqualTo(RiskLevel.DANGER);
-        assertThat(saved.get(0).getHitTags()).containsExactly("is_pork");
-        assertThat(saved.get(0).getDisplayOrder()).isEqualTo(1);
-        assertThat(saved.get(1).getRiskLevel()).isEqualTo(RiskLevel.CAUTION);
-        // ai_result 최종 표시 필드 머지 확인
-        assertThat(saved.get(0).getMessage()).contains("\"ko\":\"pork included\"");
-        assertThat(saved.get(1).getOwnerCard()).contains("\"ko\":\"use anchovy?\"");
-    }
-
-    @Test
-    void sendsNullStoreContextToAiWhenUserSkippedStoreSelection() {
-        UUID userId = UUID.randomUUID();
-        ScanSession session = ScanSession.startWithoutStore(userId, STORAGE_KEY);
-        when(scanSessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
-        when(aiClient.requestOcr(any())).thenReturn(null);
-
-        scanProcessor.process(session.getId(), userId, VERIFIED_UPLOAD, "upload");
-
-        ArgumentCaptor<OcrRequest> requestCaptor = ArgumentCaptor.forClass(OcrRequest.class);
-        verify(aiClient).requestOcr(requestCaptor.capture());
-        assertThat(requestCaptor.getValue().storeId()).isNull();
-        assertThat(session.getScanStatus()).isEqualTo(ScanStatus.FAILED);
-        assertThat(session.getFailureCode()).isEqualTo(ErrorCode.OCR_SERVICE_ERROR.getCode());
-    }
-
-    @Test
-    void persistsOcrStateBeforeCallingRuleEngine() {
-        UUID userId = UUID.randomUUID();
-        ScanSession session = processingSession(userId);
-        UUID scanId = session.getId();
-        OcrResponse ocr = usableOcr();
-
-        when(scanSessionRepository.findById(scanId)).thenReturn(Optional.of(session));
-        when(s3StorageService.objectUri(STORAGE_KEY)).thenReturn("s3://test-bucket/" + STORAGE_KEY);
-        when(aiClient.requestOcr(any())).thenReturn(ocr);
-        UserProfile profile =
-                UserProfile.create(userId, "KR", false, false, null, ReligionType.HALAL, true, true, List.of());
-        when(userProfileRepository.findByUserId(userId)).thenReturn(Optional.of(profile));
-        when(aiClient.judge(any())).thenThrow(new BusinessException(ErrorCode.RULE_ENGINE_ERROR, "boom"));
-
-        scanProcessor.process(scanId, userId, VERIFIED_UPLOAD, "upload");
-
-        // OCR 결과는 룰엔진 호출 전 커밋. 뒤 단계 실패해도 menu_image · menu_count 잔존.
-        InOrder order = inOrder(aiClient, scanImageRepository);
-        order.verify(aiClient).requestOcr(any());
-        order.verify(scanImageRepository).save(any());
-        order.verify(aiClient).judge(any());
-
-        assertThat(session.getMenuCount()).isEqualTo(2);
-        assertThat(session.getScanStatus()).isEqualTo(ScanStatus.FAILED);
-    }
-
-    @Test
-    void marksNeedsRetakeAndSkipsRuleEngine() {
-        UUID userId = UUID.randomUUID();
-        ScanSession session = processingSession(userId);
-        UUID scanId = session.getId();
-        OcrResponse ocr = new OcrResponse(
-                new com.hanspoon.backend_api.domain.ai.dto.ocr.ScanSession(
-                        STORE_ID, "menu.jpg", 0, null, "completed", null),
-                new com.hanspoon.backend_api.domain.ai.dto.ocr.MenuImage("upload", STORAGE_KEY, "u", "image/jpeg", 1L),
-                new com.hanspoon.backend_api.domain.ai.dto.ocr.ScanQuality(
-                        "needs_retake",
-                        20,
-                        1,
-                        0,
-                        0.0,
-                        1,
-                        0.0,
-                        0.42,
-                        null,
-                        100,
-                        100,
-                        null,
-                        List.of("카메라의 초점을 맞춰 다시 촬영해 주세요."),
-                        List.of("too blurry"),
-                        true,
-                        true,
-                        "preprocessed",
-                        2,
-                        null,
-                        200L,
-                        16_000L,
-                        "s3_iam",
-                        0L),
-                List.of(),
-                null);
-
-        when(scanSessionRepository.findById(scanId)).thenReturn(Optional.of(session));
-        when(s3StorageService.objectUri(STORAGE_KEY)).thenReturn("s3://test-bucket/" + STORAGE_KEY);
-        when(aiClient.requestOcr(any())).thenReturn(ocr);
-
-        scanProcessor.process(scanId, userId, VERIFIED_UPLOAD, "upload");
-
-        assertThat(session.getScanStatus()).isEqualTo(ScanStatus.NEEDS_RETAKE);
-        assertThat(session.getRetakeReasons()).containsExactly("too blurry");
-        assertThat(session.getRetakeSuggestions()).containsExactly("카메라의 초점을 맞춰 다시 촬영해 주세요.");
-        verify(aiClient, never()).judge(any());
-        verify(menuAnalysisRepository, never()).saveAll(any());
-    }
-
-    @Test
-    void marksFailedWhenOcrThrows() {
-        UUID userId = UUID.randomUUID();
-        ScanSession session = processingSession(userId);
-        UUID scanId = session.getId();
-
-        when(scanSessionRepository.findById(scanId)).thenReturn(Optional.of(session));
-        when(aiClient.requestOcr(any())).thenThrow(new BusinessException(ErrorCode.OCR_SERVICE_ERROR, "boom"));
-
-        scanProcessor.process(scanId, userId, VERIFIED_UPLOAD, "upload");
-
-        assertThat(session.getScanStatus()).isEqualTo(ScanStatus.FAILED);
-        verify(menuAnalysisRepository, never()).saveAll(any());
-    }
-
-    @Test
-    void marksFailedBeforePersistenceWhenOcrChangesStoreContext() {
-        UUID userId = UUID.randomUUID();
-        ScanSession session = processingSession(userId);
-        UUID scanId = session.getId();
-        OcrResponse original = usableOcr();
-        OcrResponse mismatched = new OcrResponse(
-                new com.hanspoon.backend_api.domain.ai.dto.ocr.ScanSession(99L, "menu.jpg", 2, null, "completed", null),
-                original.menuImage(),
-                original.scanQuality(),
-                original.menuAnalyses(),
-                original.gptQualityJudgment());
-
-        when(scanSessionRepository.findById(scanId)).thenReturn(Optional.of(session));
-        when(aiClient.requestOcr(any())).thenReturn(mismatched);
-
-        scanProcessor.process(scanId, userId, VERIFIED_UPLOAD, "upload");
-
-        assertThat(session.getScanStatus()).isEqualTo(ScanStatus.FAILED);
-        assertThat(session.getFailureCode()).isEqualTo(ErrorCode.AI_RESULT_MISMATCH.getCode());
-        verify(scanImageRepository, never()).save(any());
-        verify(aiClient, never()).judge(any());
-    }
-
-    @Test
-    void marksFailedWithoutSavingWhenFinalMenuCountDoesNotMatchOcr() {
-        UUID userId = UUID.randomUUID();
-        ScanSession session = processingSession(userId);
-        UUID scanId = session.getId();
-
-        when(scanSessionRepository.findById(scanId)).thenReturn(Optional.of(session));
-        when(s3StorageService.objectUri(STORAGE_KEY)).thenReturn("s3://test-bucket/" + STORAGE_KEY);
-        when(aiClient.requestOcr(any())).thenReturn(usableOcr());
-        UserProfile profile =
-                UserProfile.create(userId, "KR", false, false, null, ReligionType.HALAL, true, true, List.of());
-        when(userProfileRepository.findByUserId(userId)).thenReturn(Optional.of(profile));
-        var aiSession = new com.hanspoon.backend_api.domain.ai.dto.ocr.ScanSession(
-                STORE_ID, "menu.jpg", 2, 1, "completed", null);
-        when(aiClient.judge(any())).thenReturn(new RuleEngineResponse(aiSession, null, null, List.of()));
-        when(aiClient.result(any()))
-                .thenReturn(new FinalResultResponse(
-                        aiSession, List.of(new FinalMenu("samgyeopsal", RiskLevel.DANGER, List.of(), null, null))));
-
-        scanProcessor.process(scanId, userId, VERIFIED_UPLOAD, "upload");
-
-        assertThat(session.getScanStatus()).isEqualTo(ScanStatus.FAILED);
-        assertThat(session.getFailureCode()).isEqualTo(ErrorCode.AI_RESULT_MISMATCH.getCode());
-        verify(menuAnalysisRepository, never()).saveAll(any());
-    }
-
-    @Test
-    void analyzePipelineRunsPrepareThenJudgeWithoutLegacyCalls() {
-        UUID userId = UUID.randomUUID();
-        ScanSession session = processingSession(userId);
-        UUID scanId = session.getId();
-        when(scanSessionRepository.findById(scanId)).thenReturn(Optional.of(session));
-        when(userProfileRepository.findByUserId(userId))
-                .thenReturn(Optional.of(UserProfile.create(
-                        userId, "KR", false, false, null, ReligionType.HALAL, true, true, List.of())));
-        when(userRepository.findById(userId)).thenReturn(Optional.of(User.create("a@example.com", "a", "ja")));
+        givenUser(userId, session, "ja");
         var prepared = new AnalyzeScanFlow.PreparedScan(
                 null, List.of(), List.of(MenuAnalysis.prepared(scanId, 0, "김치찌개", null, null, null, null, null, null)));
         when(analyzeScanFlow.prepare(scanId, VERIFIED_UPLOAD, "camera", "ja")).thenReturn(Optional.of(prepared));
 
-        processor("analyze").process(scanId, userId, VERIFIED_UPLOAD, "camera");
+        scanProcessor.process(scanId, userId, VERIFIED_UPLOAD, "camera");
 
         verify(analyzeScanFlow).judge(eq(scanId), eq(STORE_ID), eq(prepared), any(), eq("ja"));
-        verifyNoInteractions(aiClient);
     }
 
     @Test
-    void analyzePipelineSkipsJudgeWhenRetakeIsNeeded() {
+    void skipsJudgeWhenRetakeIsNeeded() {
         UUID userId = UUID.randomUUID();
         ScanSession session = processingSession(userId);
         UUID scanId = session.getId();
-        when(scanSessionRepository.findById(scanId)).thenReturn(Optional.of(session));
-        when(userProfileRepository.findByUserId(userId))
-                .thenReturn(Optional.of(UserProfile.create(
-                        userId, "KR", false, false, null, ReligionType.HALAL, true, true, List.of())));
-        when(userRepository.findById(userId)).thenReturn(Optional.of(User.create("a@example.com", "a", "ko")));
+        givenUser(userId, session, "ko");
         when(analyzeScanFlow.prepare(any(), any(), any(), any())).thenReturn(Optional.empty());
 
-        processor("analyze").process(scanId, userId, VERIFIED_UPLOAD, null);
+        scanProcessor.process(scanId, userId, VERIFIED_UPLOAD, null);
 
         verify(analyzeScanFlow, never()).judge(any(), any(), any(), any(), any());
     }
 
     @Test
-    void analyzePipelineFailsBeforeAiCallWithoutProfile() {
+    void failsBeforeAiCallWithoutProfile() {
         UUID userId = UUID.randomUUID();
         ScanSession session = processingSession(userId);
         UUID scanId = session.getId();
         when(scanSessionRepository.findById(scanId)).thenReturn(Optional.of(session));
         when(userProfileRepository.findByUserId(userId)).thenReturn(Optional.empty());
 
-        processor("analyze").process(scanId, userId, VERIFIED_UPLOAD, null);
+        scanProcessor.process(scanId, userId, VERIFIED_UPLOAD, null);
 
         assertThat(session.getScanStatus()).isEqualTo(ScanStatus.FAILED);
         assertThat(session.getFailureCode()).isEqualTo(ErrorCode.PROFILE_NOT_FOUND.getCode());
         verifyNoInteractions(analyzeScanFlow);
+    }
+
+    @Test
+    void marksFailedWithAiErrorCode() {
+        UUID userId = UUID.randomUUID();
+        ScanSession session = processingSession(userId);
+        UUID scanId = session.getId();
+        givenUser(userId, session, "ko");
+        when(analyzeScanFlow.prepare(any(), any(), any(), any()))
+                .thenThrow(new BusinessException(ErrorCode.PREPARE_SERVICE_ERROR, "boom"));
+
+        scanProcessor.process(scanId, userId, VERIFIED_UPLOAD, "upload");
+
+        assertThat(session.getScanStatus()).isEqualTo(ScanStatus.FAILED);
+        assertThat(session.getFailureCode()).isEqualTo(ErrorCode.PREPARE_SERVICE_ERROR.getCode());
+        verify(analyzeScanFlow, never()).judge(any(), any(), any(), any(), any());
+    }
+
+    private void givenUser(UUID userId, ScanSession session, String languageCode) {
+        when(scanSessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
+        when(userProfileRepository.findByUserId(userId))
+                .thenReturn(Optional.of(UserProfile.create(
+                        userId, "KR", false, false, null, ReligionType.HALAL, true, true, List.of())));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(User.create("a@example.com", "a", languageCode)));
+    }
+
+    private static ScanSession processingSession(UUID userId) {
+        return ScanSession.start(userId, STORAGE_KEY, STORE_ID, "한스푼", StoreMatchMethod.GPS_CANDIDATE);
     }
 }

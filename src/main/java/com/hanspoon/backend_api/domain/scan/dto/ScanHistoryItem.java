@@ -17,7 +17,6 @@ import java.util.UUID;
  * @param menuCount 추출 메뉴 수
  * @param dangerCount 위험 메뉴 수
  * @param cautionCount 주의 메뉴 수
- * @param riskyMenuCount dangerCount + cautionCount. 기존 화면 호환용
  * @param scannedAt 스캔 시각
  */
 @Schema(description = "스캔 이력 항목")
@@ -29,21 +28,17 @@ public record ScanHistoryItem(
         Integer menuCount,
         Integer dangerCount,
         Integer cautionCount,
-        Integer riskyMenuCount,
         Instant scannedAt) {
 
     public static ScanHistoryItem of(ScanSession session, ScanRecord record) {
-        Integer danger = session.getDangerCount();
-        Integer caution = session.getCautionCount();
         return new ScanHistoryItem(
                 session.getId(),
                 session.getTitle(),
                 toStoreSummary(session, record),
                 session.getScanStatus(),
                 session.getMenuCount(),
-                danger,
-                caution,
-                danger == null && caution == null ? null : zeroIfNull(danger) + zeroIfNull(caution),
+                session.getDangerCount(),
+                session.getCautionCount(),
                 session.getScannedAt());
     }
 
@@ -55,9 +50,5 @@ public record ScanHistoryItem(
             return new ScanStoreSummary(record.getAttachedStoreId(), record.getAttachedStoreNameSnapshot());
         }
         return null;
-    }
-
-    private static int zeroIfNull(Integer value) {
-        return value == null ? 0 : value;
     }
 }

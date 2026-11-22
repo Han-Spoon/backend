@@ -12,6 +12,7 @@ import com.hanspoon.backend_api.domain.scan.entity.ScanRecord;
 import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
+import com.hanspoon.backend_api.domain.scan.repository.MenuTranslationProjection;
 import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
 import com.hanspoon.backend_api.domain.scan.service.MenuPhotoResolver.MenuPhoto;
 import com.hanspoon.backend_api.domain.store.entity.Store;
@@ -25,6 +26,7 @@ import com.hanspoon.backend_api.global.exception.ErrorCode;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.task.TaskRejectedException;
@@ -38,6 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ScanService {
 
     private static final Logger log = LoggerFactory.getLogger(ScanService.class);
+    private static final String KOREAN = "ko";
 
     private final S3StorageService s3StorageService;
     private final ScanSessionRepository scanSessionRepository;
@@ -123,9 +126,12 @@ public class ScanService {
         ScanSession session = scanSessionRepository
                 .findByIdAndUserId(scanId, userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SCAN_NOT_FOUND));
+        String locale = session.getLocale();
         Map<UUID, MenuPhoto> photos = menuPhotoResolver.find(scanId, session.getStoreId());
+        Map<UUID, String> translatedNames = translatedNames(scanId, locale);
         List<MenuResult> menus = menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(scanId).stream()
-                .map(m -> MenuResultMapper.toMenuResult(m, photos.get(m.getId()), session.getLocale()))
+                .map(m ->
+                        MenuResultMapper.toMenuResult(m, photos.get(m.getId()), translatedNames.get(m.getId()), locale))
                 .toList();
         // title 은 유저 수정본(없으면 null). 기본 제목(스캔 시각) 현지화는 scannedAt 으로 FE 가 로케일 포맷.
         return new ScanResultResponse(
@@ -134,13 +140,12 @@ public class ScanService {
                 session.getTitle(),
                 toStoreSummary(session),
                 scanRecordService.findResponse(session),
-                session.getLocale(),
+                locale,
                 MenuResultMapper.dietSnapshot(session.getDietSnapshot()),
                 session.getMenuCount(),
                 session.getDangerCount(),
                 session.getCautionCount(),
                 session.getSafeCount(),
-                session.getRiskyMenuCount(),
                 session.getScannedAt(),
                 menus,
                 session.getRetakeReasons(),
@@ -176,6 +181,16 @@ public class ScanService {
                 .findByIdAndUserId(scanId, userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SCAN_NOT_FOUND));
         scanSessionRepository.delete(session);
+    }
+
+    /** 한국어·언어 미기록 스캔은 번역명 없음. */
+    private Map<UUID, String> translatedNames(UUID scanId, String locale) {
+        if (locale == null || KOREAN.equals(locale)) {
+            return Map.of();
+        }
+        return menuAnalysisRepository.findTranslatedNames(scanId, locale).stream()
+                .collect(Collectors.toMap(
+                        MenuTranslationProjection::getMenuAnalysisId, MenuTranslationProjection::getTranslatedName));
     }
 
     private static ScanCreatedResponse toCreatedResponse(ScanSession session) {
