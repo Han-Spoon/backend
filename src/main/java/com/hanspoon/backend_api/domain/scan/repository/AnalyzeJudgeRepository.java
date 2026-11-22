@@ -1,5 +1,7 @@
 package com.hanspoon.backend_api.domain.scan.repository;
 
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -106,6 +108,13 @@ public class AnalyzeJudgeRepository {
                 WHERE action = :action AND idempotency_key = :key
                 """,
                 Map.of("action", action, "key", idempotencyKey, "result", result));
+    }
+
+    /** 적용 완료 명령 중 cutoff 이전 수신분 삭제. 부분 인덱스 idx_ai_command_inbox_purge 사용. */
+    public int deleteAppliedCommandsBefore(Instant cutoff) {
+        return jdbc.update(
+                "DELETE FROM ai_command_inbox WHERE status = 'applied' AND created_at < :cutoff",
+                Map.of("cutoff", Timestamp.from(cutoff)));
     }
 
     /** 같은 스캔·가게 메뉴·대상 질문이 있으면 false. */
