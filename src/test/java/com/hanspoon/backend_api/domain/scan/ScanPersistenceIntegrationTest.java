@@ -155,9 +155,15 @@ class ScanPersistenceIntegrationTest {
         MenuAnalysis analysis = analyses.get(0);
         assertThat(analysis.getRiskLevel()).isEqualTo(RiskLevel.CAUTION);
         assertThat(analysis.getHitTags()).containsExactly("has_unclear_broth", "has_unclear_jeotgal");
-        assertThat(analysis.getMessage().ko()).isEqualTo("pork possible");
-        assertThat(analysis.getOwnerCard().flag()).isEqualTo("has_unclear_jeotgal");
-        assertThat(analysis.getOwnerCard().question().ko()).isEqualTo("use jeotgal?");
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT message ->> 'ko' FROM menu_analyses WHERE id = ?", String.class, analysis.getId()))
+                .isEqualTo("pork possible");
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT owner_card ->> 'menuName' || '/' || (owner_card -> 'question' ->> 'ko')"
+                                + " FROM menu_analyses WHERE id = ?",
+                        String.class,
+                        analysis.getId()))
+                .isEqualTo("sundubu/use jeotgal?");
     }
 
     @Test

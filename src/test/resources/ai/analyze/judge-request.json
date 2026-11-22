@@ -1,0 +1,195 @@
+{
+  "schema_version": "3.0",
+  "trace_id": "0199a2f0-0000-7000-8000-000000000001",
+  "prepare_id": "0199a2f0-0000-7000-8000-000000000101",
+  "scan_session_id": "scan-123",
+  "store_id": 123456,
+  "prepared_items_hash": "sha256:8d4f000000000000000000000000000000000000000000000000000000000001",
+  "knowledge_revision": "2026-10-12T03:00:00Z",
+  "prepare_signals": {
+    "scan_quality_status": "usable",
+    "warnings": []
+  },
+  "prepared_items": [
+    {
+      "item_id": "scan-123:0",
+      "source_index": 0,
+      "raw_menu_name": "■ 김치 찌개 2인",
+      "origin_text": null,
+      "foreign_text_segments": [],
+      "normalized_menu_name": "김치찌개",
+      "display_name": "김치 찌개",
+      "description": null,
+      "price_text": "8,000원",
+      "price_options": [],
+      "locale_hint": "ko",
+      "options": [
+        "2인"
+      ],
+      "residual_tokens": [],
+      "risk_tag_observations": []
+    }
+  ],
+  "knowledge_bundle": {
+    "bundle_schema_version": "3.0",
+    "ingredient_graph": {
+      "status": "ok",
+      "ingredients": [
+        {
+          "ingredient_id": 109,
+          "canonical_name": "김치",
+          "name_normalized": "김치",
+          "localized_name": "김치",
+          "taxonomy_category": "fermented"
+        },
+        {
+          "ingredient_id": 110,
+          "canonical_name": "액젓",
+          "name_normalized": "액젓",
+          "localized_name": "액젓",
+          "taxonomy_category": "fermented"
+        }
+      ],
+      "aliases": [],
+      "tags": [
+        {
+          "ingredient_id": 110,
+          "tag_code": "is_fish"
+        }
+      ],
+      "compositions": [
+        {
+          "parent_ingredient_id": 109,
+          "child_ingredient_id": 110,
+          "ambiguity_flag": "has_unclear_jeotgal"
+        }
+      ],
+      "composition_tags": []
+    },
+    "items": [
+      {
+        "item_id": "scan-123:0",
+        "candidate_lookup": {
+          "status": "ok",
+          "candidates": [
+            {
+              "menu_id": 1001,
+              "menu_category_id": 11,
+              "canonical_name": "김치찌개",
+              "score": 1.0,
+              "match_type": "canonical"
+            }
+          ]
+        },
+        "candidate_knowledge": [
+          {
+            "menu_id": 1001,
+            "exact_feedback": {
+              "status": "ok",
+              "exact": {
+                "menu_id": 1001,
+                "confirmations": [],
+                "flag_confirmations": []
+              }
+            },
+            "ontology": {
+              "status": "ok",
+              "menu": {
+                "menu_id": 1001,
+                "base_menu_id": null,
+                "remain_token": null,
+                "menu_category_id": 11,
+                "source": "curated",
+                "ambiguity_flags": [
+                  "has_unclear_jeotgal"
+                ],
+                "knowledge_revision": 7
+              },
+              "recipe_ingredients": [
+                {
+                  "ingredient_id": 109
+                }
+              ],
+              "menu_recipe_corpora": [
+                {
+                  "corpus": "10000recipe",
+                  "n_total": 57
+                }
+              ],
+              "menu_ingredient_priors": [
+                {
+                  "corpus": "10000recipe",
+                  "ingredient_id": 109,
+                  "k_count": 41
+                }
+              ],
+              "cache": null
+            },
+            "priors": {
+              "status": "ok",
+              "store": [
+                {
+                  "ingredient_id": 101,
+                  "alpha": 8.0,
+                  "beta": 2.0,
+                  "evidence_refs": [
+                    "evidence-prior-001"
+                  ]
+                }
+              ],
+              "evidence": [
+                {
+                  "evidence_id": "evidence-prior-001",
+                  "evidence_class": "soft",
+                  "source_type": "ocr_variant_tag",
+                  "source_ref": "ingredient_evidence_log:9001",
+                  "verification_status": "approved",
+                  "reliability_weight": 0.5,
+                  "observed_at": "2026-10-12T03:00:00Z"
+                }
+              ]
+            }
+          }
+        ],
+        "fallback_ontology": {
+          "status": "not_found",
+          "menu": null,
+          "recipe_ingredients": [],
+          "menu_recipe_corpora": [],
+          "menu_ingredient_priors": [],
+          "cache": null
+        },
+        "web_search_cache": {
+          "status": "not_found",
+          "cached_sources": []
+        }
+      }
+    ],
+    "source_reliability": {
+      "status": "ok",
+      "weights": [
+        {
+          "source_key": "corpus:10000recipe",
+          "weight": 0.8
+        },
+        {
+          "source_key": "web_search",
+          "weight": 0.5
+        },
+        {
+          "source_key": "curated",
+          "weight": 1.0
+        }
+      ]
+    }
+  },
+  "user_profile": {
+    "religion_type": "halal",
+    "is_vegetarian": false,
+    "vegetarian_type": null,
+    "no_alcohol": false,
+    "allergies": [],
+    "no_spicy": false
+  },
+  "locale": "ko"
+}

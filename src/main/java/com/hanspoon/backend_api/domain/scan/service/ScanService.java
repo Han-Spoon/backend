@@ -8,7 +8,6 @@ import com.hanspoon.backend_api.domain.scan.dto.ScanResultResponse;
 import com.hanspoon.backend_api.domain.scan.dto.ScanStoreSummary;
 import com.hanspoon.backend_api.domain.scan.dto.StartScanRequest;
 import com.hanspoon.backend_api.domain.scan.dto.UpdateScanTitleRequest;
-import com.hanspoon.backend_api.domain.scan.entity.MenuAnalysis;
 import com.hanspoon.backend_api.domain.scan.entity.ScanRecord;
 import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
@@ -126,7 +125,7 @@ public class ScanService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.SCAN_NOT_FOUND));
         Map<UUID, MenuPhoto> photos = menuPhotoResolver.find(scanId, session.getStoreId());
         List<MenuResult> menus = menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(scanId).stream()
-                .map(m -> toMenuResult(m, photos.get(m.getId())))
+                .map(m -> MenuResultMapper.toMenuResult(m, photos.get(m.getId()), session.getLocale()))
                 .toList();
         // title 은 유저 수정본(없으면 null). 기본 제목(스캔 시각) 현지화는 scannedAt 으로 FE 가 로케일 포맷.
         return new ScanResultResponse(
@@ -135,7 +134,12 @@ public class ScanService {
                 session.getTitle(),
                 toStoreSummary(session),
                 scanRecordService.findResponse(session),
+                session.getLocale(),
+                MenuResultMapper.dietSnapshot(session.getDietSnapshot()),
                 session.getMenuCount(),
+                session.getDangerCount(),
+                session.getCautionCount(),
+                session.getSafeCount(),
                 session.getRiskyMenuCount(),
                 session.getScannedAt(),
                 menus,
@@ -172,23 +176,6 @@ public class ScanService {
                 .findByIdAndUserId(scanId, userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SCAN_NOT_FOUND));
         scanSessionRepository.delete(session);
-    }
-
-    private static MenuResult toMenuResult(MenuAnalysis m, MenuPhoto photo) {
-        return new MenuResult(
-                m.getDisplayOrder(),
-                m.getMenuNameKo(),
-                m.getMenuNameEn(),
-                m.getDescriptionKo(),
-                m.getDescriptionEn(),
-                m.getPriceText(),
-                photo == null ? null : photo.url(),
-                photo == null ? null : photo.attribution(),
-                m.getIsSpicy(),
-                m.getRiskLevel(),
-                m.getHitTags(),
-                m.getMessage(),
-                m.getOwnerCard());
     }
 
     private static ScanCreatedResponse toCreatedResponse(ScanSession session) {

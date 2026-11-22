@@ -64,6 +64,9 @@ public enum ErrorCode {
     AI_SERVICE_OVERLOADED(
             HttpStatus.SERVICE_UNAVAILABLE, "AI_SERVICE_OVERLOADED", "AI service is temporarily overloaded."),
     AI_RESULT_MISMATCH(HttpStatus.BAD_GATEWAY, "AI_RESULT_MISMATCH", "AI menu results are inconsistent."),
+    PREPARE_SERVICE_ERROR(HttpStatus.BAD_GATEWAY, "PREPARE_SERVICE_ERROR", "AI prepare failed."),
+    JUDGE_SERVICE_ERROR(HttpStatus.BAD_GATEWAY, "JUDGE_SERVICE_ERROR", "AI judge failed."),
+    AI_CONTRACT_REJECTED(HttpStatus.BAD_GATEWAY, "AI_CONTRACT_REJECTED", "AI rejected the request contract."),
     ;
 
     private final HttpStatus status;

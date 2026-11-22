@@ -44,6 +44,24 @@ public class RestClientConfig {
         return aiClient(builder, aiServiceBaseUrl, connectTimeout, readTimeout);
     }
 
+    @Bean("aiPrepareRestClient")
+    public RestClient aiPrepareRestClient(
+            RestClient.Builder builder,
+            @Value("${app.ai-service.base-url:http://localhost:8000}") String aiServiceBaseUrl,
+            @Value("${app.ai-service.connect-timeout:500ms}") Duration connectTimeout,
+            @Value("${app.ai-service.prepare-read-timeout:20s}") Duration readTimeout) {
+        return aiClient(builder, aiServiceBaseUrl, connectTimeout, readTimeout);
+    }
+
+    @Bean("aiJudgeRestClient")
+    public RestClient aiJudgeRestClient(
+            RestClient.Builder builder,
+            @Value("${app.ai-service.base-url:http://localhost:8000}") String aiServiceBaseUrl,
+            @Value("${app.ai-service.connect-timeout:500ms}") Duration connectTimeout,
+            @Value("${app.ai-service.judge-read-timeout:30s}") Duration readTimeout) {
+        return aiClient(builder, aiServiceBaseUrl, connectTimeout, readTimeout);
+    }
+
     private RestClient aiClient(
             RestClient.Builder builder, String baseUrl, Duration connectTimeout, Duration readTimeout) {
         return builder.clone()

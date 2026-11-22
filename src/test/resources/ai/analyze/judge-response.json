@@ -1,0 +1,83 @@
+{
+  "schema_version": "3.0",
+  "trace_id": "0199a2f0-0000-7000-8000-000000000001",
+  "prepare_id": "0199a2f0-0000-7000-8000-000000000101",
+  "scan_session_id": "scan-123",
+  "store_id": 123456,
+  "prepared_items_hash": "sha256:8d4f000000000000000000000000000000000000000000000000000000000001",
+  "bundle_hash": "sha256:74ab000000000000000000000000000000000000000000000000000000000002",
+  "knowledge_revision": "2026-10-12T03:00:00Z",
+  "items": [
+    {
+      "item_id": "scan-123:0",
+      "source_index": 0,
+      "menu_id": 1001,
+      "menu_category_id": 11,
+      "normalization_status": "normalized",
+      "match_type": "canonical",
+      "selection_method": "deterministic",
+      "status": "completed",
+      "route": "exact_only",
+      "risk_level": "danger",
+      "evidence_basis": "confirmed",
+      "information_status": "complete",
+      "owner_answer_status": "complete",
+      "risk_ingredients": [
+        {
+          "ingredient": {
+            "ingredient_id": 101,
+            "canonical_name": "돼지고기",
+            "localized_name": "돼지고기"
+          },
+          "constraint_tags": [
+            "is_pork"
+          ],
+          "matched_tags": [
+            "is_pork"
+          ],
+          "role": "identity",
+          "status": "present",
+          "posterior_mean": null,
+          "confidence": null,
+          "prior_source": null,
+          "evidence_refs": [
+            "evidence-001"
+          ]
+        }
+      ],
+      "matched_tags": [
+        "is_pork"
+      ],
+      "evidence_refs": [
+        "evidence-001"
+      ],
+      "message": {
+        "verdict": "돼지고기가 들어 있어요.",
+        "reason": null,
+        "notes": [
+          {
+            "code": "hard_to_remove",
+            "text": "돼지고기는 이 메뉴의 주재료라 빼기 어려울 수 있어요."
+          }
+        ]
+      },
+      "owner_cards": [],
+      "warnings": [],
+      "errors": []
+    }
+  ],
+  "evidence": [
+    {
+      "evidence_id": "evidence-001",
+      "evidence_class": "hard",
+      "source_type": "owner_feedback",
+      "source_ref": "ingredient_confirmations:confirmation-001",
+      "verification_status": "owner_confirmed",
+      "reliability_weight": 1.0,
+      "observed_at": "2026-10-08T03:00:00Z"
+    }
+  ],
+  "persistence_commands": [],
+  "warnings": [],
+  "errors": []
+}
