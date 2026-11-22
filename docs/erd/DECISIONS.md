@@ -1,8 +1,8 @@
 # 스키마 v2 결정 문서
 
-- **스키마의 원본은 Flyway 파일이다.** `src/main/resources/db/migration/V1~V13` + 보류 [`pending/V14__menu_analyses_contract.sql`](pending/V14__menu_analyses_contract.sql). 테이블·컬럼·제약 목록은 [`ERD.md`](ERD.md), 그림은 [`ERD.svg`](ERD.svg).
-- Flyway 번호: V1~V6 = MVP(스키마 v1), V7 = 약관 동의(2026-11-14 배포), **V8~V13 = 스키마 v2 확장 단계**, V13.1 = LOCALDATA 가게 식별자(2026-11-20), V14 = 축소 단계(Prepare/Judge 연동과 함께). V14 전 추가 변경은 V13.x 소수 버전으로 넣는다.
-- 상태: 2026-11-15 설계 확정, 미배포.
+- **스키마의 원본은 Flyway 파일이다.** `src/main/resources/db/migration/V1~V14`. 테이블·컬럼·제약 목록은 [`ERD.md`](ERD.md), 그림은 [`ERD.svg`](ERD.svg).
+- Flyway 번호: V1~V6 = MVP(스키마 v1), V7 = 약관 동의(2026-11-14 배포), **V8~V13 = 스키마 v2 확장 단계**, V13.1 = LOCALDATA 가게 식별자(2026-11-20), V14 = 축소 단계(Prepare/Judge 단일 경로, 2026-11-22). 이후 변경은 V15 부터.
+- 상태: 2026-11-15 설계 확정. V8~V13.1 운영 적용, V14 는 Prepare/Judge PR 2 배포 때 적용.
 - 기준: 프론트 화면(`frontend-webapp-demo`), Notion **API 명세서_V2 (AWS)**, AI 설계 문서 hanspoon-ai `docs/`(schema_version 3.0). 사장님 페이지는 만들지 않는다(11-01).
 
 | 규모 | 테이블 51 (+ VIEW 1) · 컬럼 475 · FK 80 · UNIQUE 45 · CHECK 183 · 인덱스 154 (V14 적용 후) |
@@ -14,10 +14,9 @@
 
 | 시점 | 방법 |
 |---|---|
-| V8~V13 을 운영에 올리기 전 | 해당 V 파일을 직접 고친다. 아직 적용된 곳이 없어 체크섬 문제가 없다 |
-| 올린 뒤 | 새 파일을 추가한다(V14 전은 `V13_x__…sql`, 후는 `V15__…sql`). 이미 적용된 파일은 고치지 않는다 |
+| 변경 | 새 파일을 추가한다(`V15__…sql` 부터). 이미 적용된 파일은 고치지 않는다 |
 | 코멘트 | 같은 마이그레이션 안에 `COMMENT ON` 으로 단다. 형식 `'논리명 \| 비고'` |
-| 확인 | `./gradlew test` (Testcontainers 로 V1~V13 적용 + JPA `validate` + `SchemaV2MigrationIntegrationTest`) |
+| 확인 | `./gradlew test` (Testcontainers 로 V1~V14 적용 + JPA `validate` + `SchemaV2MigrationIntegrationTest`) |
 
 `ERD.md`·`ERD.svg` 는 2026-11-15 카탈로그에서 만든 스냅샷이다. 스키마를 바꾸면 `ERD.md` 의 해당 테이블 부분만 손으로 고친다. 설계 단계의 생성 도구·전체 무결성 시나리오(303건)·성능 스크립트는 2026-11-16 에 저장소에서 뺐다. 필요하면 백엔드 담당의 로컬 백업에서 꺼낸다.
 
@@ -159,7 +158,7 @@
 | 직원 응답 | 한 트랜잭션: 질문 행 → present/absent 면 확정값 upsert + 링크, unknown 이면 링크 해제 + `invalidated_at` → `present` + 식단 겹침이면 `risk_level = danger` + 카운터. `present` 를 고쳤고 남은 `present` 가 없으면 `risk_level = ai_risk_level` |
 | 직원 응답 충돌 | 다른 스캔의 "없어요"는 "있어요" 확정값을 덮지 않는다 (R-04, 미구현) |
 | 직원 질문 생성 | 후보 메뉴가 없는 메뉴와 ID 없는 재료에는 질문을 만들지 않는다 (R-06·R-07) |
-| 정리 작업 | `judge_raw` 90일 NULL 처리, `applied` 명령 90일 삭제 (부분 인덱스 있음) |
+| 정리 작업 | `judge_raw` 90일 NULL 처리(`JudgeRawCleanup`, 매일 04:30 KST), `applied` 명령 90일 삭제(미구현). 둘 다 부분 인덱스 있음 |
 | 로그 조회 | 관리자 화면 없이 읽기 전용 DB 계정으로 본다. 쓰기 권한 직접 접속 금지 |
 | 큐레이션 저장 | `ko` + 6개 언어를 한 트랜잭션, 원문 수정 시 전부 재번역 |
 | 약관 | 새 원문은 새 `legal/{버전}.json`. 게시한 파일은 고치지 않는다. 현재 버전의 최신 결정만 유효 |
@@ -174,7 +173,7 @@
 
 ## 5. 배포 (expand–contract)
 
-운영 파이프라인(OCR + 룰엔진)은 아직 `menu_name_en`·단수 `owner_card`·`is_spicy = false`·`risky_menu_count` 를 쓴다. 그래서 둘로 나눴다.
+기존 파이프라인(OCR + 룰엔진)이 `menu_name_en`·단수 `owner_card`·`is_spicy = false`·`risky_menu_count` 를 써서 확장(V8~V13)과 축소(V14)로 나눴다.
 
 | 파일 | 내용 |
 |---|---|
@@ -185,23 +184,21 @@
 | `V12__store_menus_and_content.sql` | 스캔 AI 원본, `menu_analyses` 새 컬럼, 저장 카드, 찜, 이미지 · 큐레이션 · 번역 캐시 · 후기 · 신고 · 동네 |
 | `V13__comments.sql` | 코멘트 (확장 단계 기준) |
 | `V13_1__store_localdata_identity.sql` | `stores.localdata_mgmt_no`(LOCALDATA 관리번호) UNIQUE·형식·출처 CHECK |
-| `erd/pending/V14__menu_analyses_contract.sql` | `menu_analyses` 이름 변경·삭제·카드 배열 전환·CHECK, `risky_menu_count` 삭제, 제목 30자 CHECK |
+| `V14__menu_analyses_contract.sql` | `menu_analyses` 이름 변경·삭제·카드 배열 전환·CHECK, `risky_menu_count` 삭제, 제목 30자 CHECK |
 
 **배포 절차**: 배포 직전 RDS 수동 스냅샷을 만든다. 되돌릴 때는 스냅샷 복구로 한다(R-08).
 
 **Prepare/Judge 연동은 PR 두 개** (2026-11-22):
 
-- PR 1 (전환): `app.ai-service.pipeline`(`AI_PIPELINE`, 기본 `legacy`)로 경로 선택. V14 없이 레거시 컬럼(`message`·`owner_card`)에 새 형식 저장, 결과 API 는 두 형식을 함께 읽는다. `riskyMenuCount` 는 V14 전까지 `danger + caution`
-- PR 2 (축소): 운영에서 PR 1 확인 뒤 V14 를 Flyway 로 옮기고 레거시 경로 제거
+- PR 1 (전환, PR #91·#92): `AI_PIPELINE` 토글로 경로 선택, V14 없이 기존 컬럼에 새 형식 저장
+- PR 2 (축소, 이슈 #90): V14 Flyway 적용, 기존 AI 연동·토글 제거, 결과 API V2 필드, `judge_raw` 90일 정리
 
-**V14 를 Flyway 로 옮기는 조건** (PR 2):
+**PR 2 배포 전 확인**:
 
-1. Judge 결과를 `source_index`·`staff_cards`(배열)·판정 컬럼으로 저장하고 첫 판정을 `ai_risk_level` 에도 기록한다 (PR 1 완료). `MenuAnalysis` 엔티티를 새 이름으로 바꾼다
-2. 영어 메뉴명 응답을 `menus.name_i18n` 과 번역 캐시로 대체한다
-3. `is_spicy` 를 "감지 시 true, 아니면 NULL" 로 기록한다 (PR 1 완료, 새 경로)
-4. `riskyMenuCount` 를 `dangerCount + cautionCount` 로 바꾼다 (API 변경이면 프론트 공지)
-5. `judge_raw` 90일 정리 스케줄러를 넣는다
-6. 기록 제목 검증을 30자로 줄인다(지금 255자). 31자 이상 제목이 있으면 먼저 정리
+1. 운영에서 PR 1 의 Prepare/Judge 경로 확인 (PR 2 뒤에는 되돌릴 토글 없음)
+2. 제목 위반 행 0건 (`btrim(title) = ''` 또는 30자 초과)
+3. ECS 환경 변수 `AI_PREPARE_READ_TIMEOUT`·`AI_JUDGE_READ_TIMEOUT` 반영(Terraform apply), 기존 단계 변수 삭제
+4. 프론트 결과 화면 매핑 변경과 같은 배포
 
 ---
 
@@ -209,6 +206,7 @@
 
 | 분류 | 할 일 |
 |---|---|
+| 프론트 (PR 2) | 결과 메뉴 V2 필드(`displayName`·`translatedName`·`description`·`matchedTags`, `menuNameKo/En`·`descriptionKo/En`·`hits`·`ownerCard` 삭제), 이력·결과 `riskyMenuCount` 삭제 → `dangerCount`·`cautionCount`. 실패 코드 `PREPARE_SERVICE_ERROR`·`JUDGE_SERVICE_ERROR` 처리 |
 | PM·프론트 | 직원 응답 규칙(있어요 → 위험, 없어요·모름 → 표시만) 공유. 프론트 문구는 지금 "판정은 자동으로 바뀌지 않는다"로 되어 있다. Notion No 16·23 수정(사용자 확인 후) |
 | 화면 쪽 정리 | 환율 "매일 00:00 갱신" 문구(지금은 고정 환율), 출처 간 불일치 표시(AI 값 없음), 주문·빼기·덜 맵게 응답(저장 안 함), 파트너 식당·등록 레시피(시연 전용) |
 | AI 팀 | ① Prepare/Judge 타임아웃·Judge 재시도(백엔드 20초·30초, 웹서치로 30초 초과 가능) ② `persistence_commands` 적용 시점·실패 명령 재처리 ③ `recipe_probability` 코드에서 제거 요청(문서는 10/27 철회, 백엔드는 무시) ④ 확정값을 `store_menu_id` 기준으로 후보 메뉴 전부에 넣는 방식 확인 ⑤ ⑦ §8 "백엔드 반영 대기" 항목이 V11 에 반영됐다고 알림 |
@@ -242,7 +240,7 @@
 |---|---|
 | 설계본과 Flyway V1~V14 | `pg_dump` 스키마 일치 |
 | 무결성 시나리오 | 303/303 (FK·CHECK·부분 UNIQUE·CASCADE, 복합 FK, 직원 응답, 후기·신고, 찜) |
-| `./gradlew test` | 210/210 (11-16, 원격 dev 합친 뒤) |
+| `./gradlew test` | 210/210 (11-16, 원격 dev 합친 뒤), 267/267 (11-22, V14 Flyway 적용) |
 | 성능 (3년 가정 합성 데이터: 스캔 30만·메뉴 300만·후기 18만) | 대부분 1ms 미만. 가장 느린 것은 인기 가게 1곳(후기 줄 1.2만)의 후기 칩 집계 40~110ms, 동네 목록 51ms |
 
 ---
@@ -262,4 +260,4 @@
 | 11-15 | 프론트 화면을 데이터 항목 근거로 사용. 약관은 V7 테이블 사용. 후기는 화면대로(스캔 선택·메뉴 직접 입력·후기 단위 신고). `scan_records` 유지. 식단 코드는 화면 ID |
 | 11-16 | 원격 V8~V10(보호자 승인·찜·후기) 되돌리고 운영 DB 정리. 스키마 원본을 Flyway 로 하고 설계 도구·중간 문서 정리 |
 | 11-20 | 시연 가게 표시명 = 시트 식당명(회사명 상호 미표시), `verified_at` 기록. 같은 식당 중복 행은 비활성 |
-| 11-22 | Prepare/Judge 연동을 PR 두 개로(전환 → V14 축소). Bundle 확정값은 후보 메뉴 전부에. `recommendation` 보류. AI 문서로 확인: 확정 "있음" + 금지 태그 = DANGER, 가게 prior·출처 신뢰도 `not_found` 허용, fuzzy 라이브러리는 백엔드가 정함, 출처 신뢰도 = `(맞춘 수+1)/(비교한 수+2)` |
+| 11-22 | Prepare/Judge 연동을 PR 두 개로(전환 → V14 축소). Bundle 확정값은 후보 메뉴 전부에. `recommendation` 보류. AI 문서로 확인: 확정 "있음" + 금지 태그 = DANGER, 가게 prior·출처 신뢰도 `not_found` 허용, fuzzy 라이브러리는 백엔드가 정함, 출처 신뢰도 = `(맞춘 수+1)/(비교한 수+2)`. PR 2: V14 Flyway 적용, 판정 컬럼은 JDBC 전용(엔티티 읽기만), 번역명은 `menus.name_i18n` 만(설명 번역 없음), 사진은 `store_menu_id` 우선 |
