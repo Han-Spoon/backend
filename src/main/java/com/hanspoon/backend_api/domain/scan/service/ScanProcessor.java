@@ -15,8 +15,10 @@ import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
 import com.hanspoon.backend_api.domain.upload.dto.VerifiedUpload;
 import com.hanspoon.backend_api.domain.upload.service.S3StorageService;
+import com.hanspoon.backend_api.domain.user.entity.User;
 import com.hanspoon.backend_api.domain.user.entity.UserProfile;
 import com.hanspoon.backend_api.domain.user.repository.UserProfileRepository;
+import com.hanspoon.backend_api.domain.user.repository.UserRepository;
 import com.hanspoon.backend_api.global.exception.BusinessException;
 import com.hanspoon.backend_api.global.exception.ErrorCode;
 import java.time.Instant;
@@ -39,19 +41,25 @@ import org.springframework.stereotype.Component;
  * <p> @Transactional 추가 금지.
  * DB 커넥션이 점유되어 비동기 워커 수만큼 커넥션 풀이 고갈되는 것 방지하기 위함.
  * 상태 전이는 {@link ScanStateWriter} 담당.
+ *
+ * <p>app.ai-service.pipeline: legacy(OCR → 룰엔진 → 결과, 기본) | analyze(Prepare → Judge, {@link AnalyzeScanFlow}).
  */
 @Component
 public class ScanProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(ScanProcessor.class);
     private static final String NEEDS_RETAKE = "needs_retake";
+    static final String ANALYZE_PIPELINE = "analyze";
 
     private final AiClient aiClient;
     private final S3StorageService s3StorageService;
     private final UserProfileRepository userProfileRepository;
     private final ScanSessionRepository scanSessionRepository;
     private final ScanStateWriter scanStateWriter;
+    private final AnalyzeScanFlow analyzeScanFlow;
+    private final UserRepository userRepository;
     private final boolean presignedFallbackEnabled;
+    private final boolean analyzePipeline;
 
     public ScanProcessor(
             AiClient aiClient,
@@ -59,13 +67,19 @@ public class ScanProcessor {
             UserProfileRepository userProfileRepository,
             ScanSessionRepository scanSessionRepository,
             ScanStateWriter scanStateWriter,
-            @Value("${app.ai-service.presigned-url-fallback-enabled:true}") boolean presignedFallbackEnabled) {
+            AnalyzeScanFlow analyzeScanFlow,
+            UserRepository userRepository,
+            @Value("${app.ai-service.presigned-url-fallback-enabled:true}") boolean presignedFallbackEnabled,
+            @Value("${app.ai-service.pipeline:legacy}") String pipeline) {
         this.aiClient = aiClient;
         this.s3StorageService = s3StorageService;
         this.userProfileRepository = userProfileRepository;
         this.scanSessionRepository = scanSessionRepository;
         this.scanStateWriter = scanStateWriter;
+        this.analyzeScanFlow = analyzeScanFlow;
+        this.userRepository = userRepository;
         this.presignedFallbackEnabled = presignedFallbackEnabled;
+        this.analyzePipeline = ANALYZE_PIPELINE.equals(pipeline);
     }
 
     @Async("scanTaskExecutor")
@@ -78,6 +92,14 @@ public class ScanProcessor {
                 return;
             }
             Long storeId = session.getStoreId();
+            if (analyzePipeline) {
+                processAnalyze(scanId, userId, storeId, upload, source);
+                log.info(
+                        "Scan completed: {} (pipeline=analyze, totalMs={})",
+                        scanId,
+                        elapsedMillis(processingStartedAt));
+                return;
+            }
 
             String storageKey = upload.storageKey();
             String fallbackImageUrl =
@@ -135,6 +157,25 @@ public class ScanProcessor {
                     exception);
             markFailedQuietly(scanId, exception);
         }
+    }
+
+    /** 프로필·언어를 먼저 읽어 AI 호출 전에 실패. 재촬영·세션 삭제면 Judge 생략. */
+    private void processAnalyze(UUID scanId, UUID userId, Long storeId, VerifiedUpload upload, String source) {
+        RuleProfile ruleProfile = loadRuleProfile(userId);
+        String locale = userRepository
+                .findById(userId)
+                .map(User::getLanguageCode)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        long prepareStartedAt = System.nanoTime();
+        var prepared = analyzeScanFlow.prepare(scanId, upload, source, locale);
+        logStageCompleted(scanId, "prepare", prepareStartedAt);
+        if (prepared.isEmpty() || prepared.get().analyses().isEmpty()) {
+            log.info("Scan stopped after prepare: {} (retake={})", scanId, prepared.isEmpty());
+            return;
+        }
+        long judgeStartedAt = System.nanoTime();
+        analyzeScanFlow.judge(scanId, storeId, prepared.get(), ruleProfile, locale);
+        logStageCompleted(scanId, "judge", judgeStartedAt);
     }
 
     /** 단건 읽기 2회. */

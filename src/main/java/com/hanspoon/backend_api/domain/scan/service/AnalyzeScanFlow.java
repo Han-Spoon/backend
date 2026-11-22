@@ -1,9 +1,17 @@
 package com.hanspoon.backend_api.domain.scan.service;
 
 import com.hanspoon.backend_api.domain.ai.client.AiAnalyzeClient;
+import com.hanspoon.backend_api.domain.ai.dto.analyze.JudgeRequest;
+import com.hanspoon.backend_api.domain.ai.dto.analyze.JudgeResponse;
+import com.hanspoon.backend_api.domain.ai.dto.analyze.JudgeResponse.ItemResult;
+import com.hanspoon.backend_api.domain.ai.dto.analyze.JudgeResult;
 import com.hanspoon.backend_api.domain.ai.dto.analyze.PrepareRequest;
 import com.hanspoon.backend_api.domain.ai.dto.analyze.PrepareResponse;
 import com.hanspoon.backend_api.domain.ai.dto.analyze.PreparedItem;
+import com.hanspoon.backend_api.domain.ai.dto.ruleengine.RuleProfile;
+import com.hanspoon.backend_api.domain.ai.knowledge.KnowledgeBundleBuilder;
+import com.hanspoon.backend_api.domain.ai.knowledge.KnowledgeBundleBuilder.BuiltBundle;
+import com.hanspoon.backend_api.domain.ai.knowledge.KnowledgeBundleBuilder.BundleItem;
 import com.hanspoon.backend_api.domain.scan.entity.MenuAnalysis;
 import com.hanspoon.backend_api.domain.scan.entity.ScanAiResult;
 import com.hanspoon.backend_api.domain.scan.entity.ScanImage;
@@ -15,9 +23,11 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -29,21 +39,102 @@ import tools.jackson.databind.json.JsonMapper;
 public class AnalyzeScanFlow {
 
     private static final String DEFAULT_SOURCE = "upload";
+    private static final Pattern HASH = Pattern.compile("^sha256:[0-9a-f]{64}$");
+    private static final Pattern IDEMPOTENCY_KEY = Pattern.compile("^[A-Za-z0-9:_-]{16,128}$");
 
     private final AiAnalyzeClient aiAnalyzeClient;
     private final AnalyzeStateWriter analyzeStateWriter;
+    private final KnowledgeBundleBuilder knowledgeBundleBuilder;
     private final S3StorageService s3StorageService;
     private final JsonMapper jsonMapper;
 
     public AnalyzeScanFlow(
             AiAnalyzeClient aiAnalyzeClient,
             AnalyzeStateWriter analyzeStateWriter,
+            KnowledgeBundleBuilder knowledgeBundleBuilder,
             S3StorageService s3StorageService,
             JsonMapper jsonMapper) {
         this.aiAnalyzeClient = aiAnalyzeClient;
         this.analyzeStateWriter = analyzeStateWriter;
+        this.knowledgeBundleBuilder = knowledgeBundleBuilder;
         this.s3StorageService = s3StorageService;
         this.jsonMapper = jsonMapper;
+    }
+
+    /** Bundle 구성 → Judge 호출·검증 → 저장. */
+    public void judge(UUID scanId, Long storeId, PreparedScan prepared, RuleProfile profile, String locale) {
+        List<BundleItem> bundleItems = new ArrayList<>(prepared.items().size());
+        for (int i = 0; i < prepared.items().size(); i++) {
+            PreparedItem item = prepared.items().get(i);
+            bundleItems.add(new BundleItem(
+                    item.itemId(),
+                    item.normalizedMenuName(),
+                    prepared.analyses().get(i).getStoreMenuId()));
+        }
+        BuiltBundle built = knowledgeBundleBuilder.build(storeId, locale, bundleItems);
+        PrepareResponse prepare = prepared.response();
+        JudgeRequest request = new JudgeRequest(
+                PrepareRequest.SCHEMA_VERSION,
+                prepare.traceId(),
+                prepare.prepareId(),
+                prepare.scanSessionId(),
+                storeId,
+                prepare.preparedItemsHash(),
+                built.knowledgeRevision(),
+                prepare.prepareSignals(),
+                prepare.preparedItems(),
+                built.bundle(),
+                profile,
+                locale);
+        JudgeResult result = aiAnalyzeClient.judge(request);
+        validateJudge(request, prepared.items(), result);
+        analyzeStateWriter.applyJudgeResult(
+                scanId, prepared.analyses(), result, jsonMapper.writeValueAsString(profile));
+    }
+
+    private void validateJudge(JudgeRequest request, List<PreparedItem> items, JudgeResult result) {
+        JudgeResponse response = result == null ? null : result.response();
+        if (response == null || result.raw() == null) {
+            throw new BusinessException(ErrorCode.JUDGE_SERVICE_ERROR, "Judge returned an empty response.");
+        }
+        if (!Objects.equals(request.prepareId(), response.prepareId())
+                || !Objects.equals(request.scanSessionId(), response.scanSessionId())
+                || !Objects.equals(request.storeId(), response.storeId())
+                || !Objects.equals(request.preparedItemsHash(), response.preparedItemsHash())
+                || !Objects.equals(request.knowledgeRevision(), response.knowledgeRevision())) {
+            throw judgeMismatch("request context");
+        }
+        if (response.bundleHash() == null
+                || !HASH.matcher(response.bundleHash()).matches()) {
+            throw judgeMismatch("bundle_hash");
+        }
+        List<ItemResult> results = response.items() == null ? List.of() : response.items();
+        if (results.size() != items.size() || result.raw().path("items").size() != items.size()) {
+            throw judgeMismatch("item count");
+        }
+        for (int i = 0; i < items.size(); i++) {
+            ItemResult item = results.get(i);
+            if (!items.get(i).itemId().equals(item.itemId())
+                    || items.get(i).sourceIndex() != item.sourceIndex()
+                    || item.riskLevel() == null) {
+                throw judgeMismatch("item " + item.itemId());
+            }
+        }
+        var commands = response.persistenceCommands() == null
+                ? List.<JudgeResponse.PersistenceCommand>of()
+                : response.persistenceCommands();
+        if (commands.size() != result.raw().path("persistence_commands").size()
+                || commands.stream()
+                        .anyMatch(command -> command.idempotencyKey() == null
+                                || !IDEMPOTENCY_KEY
+                                        .matcher(command.idempotencyKey())
+                                        .matches())) {
+            throw judgeMismatch("persistence_commands");
+        }
+    }
+
+    private BusinessException judgeMismatch(String detail) {
+        return new BusinessException(ErrorCode.AI_RESULT_MISMATCH, "Judge result mismatch: " + detail + ".");
     }
 
     /** Prepare 호출·저장. 재촬영이면 empty. */

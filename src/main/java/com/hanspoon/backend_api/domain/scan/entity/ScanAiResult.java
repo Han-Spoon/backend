@@ -48,6 +48,28 @@ public class ScanAiResult extends BaseEntity {
     @Column(name = "prepared_at", nullable = false)
     private Instant preparedAt;
 
+    @Column(name = "knowledge_revision", length = 64)
+    private String knowledgeRevision;
+
+    @Column(name = "bundle_hash", length = 71)
+    private String bundleHash;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "judge_evidence", columnDefinition = "jsonb")
+    private String judgeEvidence;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "judge_warnings", columnDefinition = "jsonb")
+    private String judgeWarnings;
+
+    /** Judge 응답 원본. 90일 보관. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "judge_raw", columnDefinition = "jsonb")
+    private String judgeRaw;
+
+    @Column(name = "judged_at")
+    private Instant judgedAt;
+
     private ScanAiResult(
             UUID scanSessionId,
             UUID prepareId,
@@ -75,5 +97,21 @@ public class ScanAiResult extends BaseEntity {
             Instant preparedAt) {
         return new ScanAiResult(
                 scanSessionId, prepareId, schemaVersion, preparedItemsHash, preparedItems, prepareSignals, preparedAt);
+    }
+
+    /** Judge 메타 4개와 원본을 함께 기록. */
+    public void applyJudge(
+            String knowledgeRevision,
+            String bundleHash,
+            String judgeEvidence,
+            String judgeWarnings,
+            String judgeRaw,
+            Instant judgedAt) {
+        this.knowledgeRevision = knowledgeRevision;
+        this.bundleHash = bundleHash;
+        this.judgeEvidence = judgeEvidence;
+        this.judgeWarnings = judgeWarnings;
+        this.judgeRaw = judgeRaw;
+        this.judgedAt = judgedAt;
     }
 }

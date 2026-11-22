@@ -72,6 +72,11 @@ public class ScanSession extends BaseEntity {
     @Column(name = "locale", length = 5)
     private String locale;
 
+    /** Judge 요청 user_profile 스냅샷. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "diet_snapshot", columnDefinition = "jsonb")
+    private String dietSnapshot;
+
     @Column(name = "scan_status", length = 20, nullable = false)
     private ScanStatus scanStatus;
 
@@ -169,6 +174,13 @@ public class ScanSession extends BaseEntity {
     public void applyPrepareResult(Integer menuCount, Instant scannedAt, String locale) {
         applyOcrResult(menuCount, scannedAt);
         this.locale = locale;
+    }
+
+    /** Judge 저장 후 카운터·식단 스냅샷·완료. riskyMenuCount 는 V14 전까지 danger + caution. */
+    public void applyJudgeResult(List<RiskLevel> riskLevels, String dietSnapshot) {
+        applyRiskCounts(riskLevels);
+        this.dietSnapshot = dietSnapshot;
+        applyRuleEngineResult(dangerCount + cautionCount, ScanStatus.COMPLETED);
     }
 
     /** 룰엔진 판정 후 위험 메뉴 수/상태 갱신. */
