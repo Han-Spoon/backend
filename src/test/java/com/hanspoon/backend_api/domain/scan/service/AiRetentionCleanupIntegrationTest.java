@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.hanspoon.backend_api.TestcontainersConfiguration;
 import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
+import com.hanspoon.backend_api.domain.scan.repository.AnalyzeJudgeRepository;
 import com.hanspoon.backend_api.domain.scan.repository.ScanAiResultRepository;
 import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
 import com.hanspoon.backend_api.domain.user.entity.User;
@@ -13,6 +14,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,12 +26,15 @@ import org.springframework.transaction.annotation.Transactional;
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
 @Transactional
-class JudgeRawCleanupIntegrationTest {
+class AiRetentionCleanupIntegrationTest {
 
     private static final Instant NOW = Instant.parse("2026-11-22T00:00:00Z");
 
     @Autowired
     private ScanAiResultRepository scanAiResultRepository;
+
+    @Autowired
+    private AnalyzeJudgeRepository analyzeJudgeRepository;
 
     @Autowired
     private ScanSessionRepository scanSessionRepository;
@@ -46,10 +51,28 @@ class JudgeRawCleanupIntegrationTest {
         UUID expired = judgedScan(user.getId(), NOW.minus(Duration.ofDays(91)));
         UUID kept = judgedScan(user.getId(), NOW.minus(Duration.ofDays(89)));
 
-        new JudgeRawCleanup(scanAiResultRepository, Clock.fixed(NOW, ZoneOffset.UTC)).clean();
+        cleanup().clean();
 
         assertThat(rawAndEvidence(expired)).isEqualTo("null/array");
         assertThat(rawAndEvidence(kept)).isEqualTo("object/array");
+    }
+
+    @Test
+    void deletesOnlyAppliedCommandsPastRetention() {
+        command("applied-expired-0001", "applied", NOW.minus(Duration.ofDays(91)));
+        command("applied-kept-000001", "applied", NOW.minus(Duration.ofDays(89)));
+        command("failed-expired-00001", "failed", NOW.minus(Duration.ofDays(91)));
+        command("received-expired-001", "received", NOW.minus(Duration.ofDays(91)));
+
+        cleanup().clean();
+
+        assertThat(jdbcTemplate.queryForList(
+                        "select idempotency_key from ai_command_inbox order by idempotency_key", String.class))
+                .isEqualTo(List.of("applied-kept-000001", "failed-expired-00001", "received-expired-001"));
+    }
+
+    private AiRetentionCleanup cleanup() {
+        return new AiRetentionCleanup(scanAiResultRepository, analyzeJudgeRepository, Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
     private UUID judgedScan(UUID userId, Instant judgedAt) {
@@ -68,6 +91,21 @@ class JudgeRawCleanupIntegrationTest {
                 "sha256:" + "b".repeat(64),
                 Timestamp.from(judgedAt));
         return session.getId();
+    }
+
+    private void command(String idempotencyKey, String status, Instant createdAt) {
+        jdbcTemplate.update(
+                """
+                insert into ai_command_inbox (action, idempotency_key, store_id, request_hash, payload,
+                                              status, result, created_at)
+                values ('create_owner_verification_request', ?, 1, ?, '{}', ?,
+                        case when ? = 'applied' then '{}'::jsonb end, ?)
+                """,
+                idempotencyKey,
+                "c".repeat(64),
+                status,
+                status,
+                Timestamp.from(createdAt));
     }
 
     private String rawAndEvidence(UUID scanId) {
