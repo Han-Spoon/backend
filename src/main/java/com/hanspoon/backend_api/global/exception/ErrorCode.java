@@ -61,6 +61,7 @@ public enum ErrorCode {
     SAVED_MENU_NOT_FOUND(HttpStatus.NOT_FOUND, "SAVED_MENU_NOT_FOUND", "Saved menu not found."),
 
     // ── 식사 후기 ───────────────────────────────────────────────────────
+    REVIEW_NOT_FOUND(HttpStatus.NOT_FOUND, "REVIEW_NOT_FOUND", "Review not found."),
     REVIEW_ALREADY_EXISTS(HttpStatus.CONFLICT, "REVIEW_ALREADY_EXISTS", "A review for this scan already exists."),
     REVIEW_STORE_MISMATCH(
             HttpStatus.CONFLICT, "REVIEW_STORE_MISMATCH", "The scan store does not match the review store."),

@@ -3,16 +3,20 @@ package com.hanspoon.backend_api.domain.review.controller;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.hanspoon.backend_api.domain.review.dto.ReviewRequest;
 import com.hanspoon.backend_api.domain.review.dto.ReviewResponse;
+import com.hanspoon.backend_api.domain.review.dto.ReviewUpdateRequest;
 import com.hanspoon.backend_api.domain.review.service.ReviewService;
 import com.hanspoon.backend_api.global.exception.BusinessException;
 import com.hanspoon.backend_api.global.exception.ErrorCode;
@@ -111,5 +115,45 @@ class ReviewControllerTest {
         mockMvc.perform(post(CREATE).contentType("application/json").content("{\"menus\":[" + LINE + "]}"))
                 .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.code").value("REVIEW_SCAN_STORE_REQUIRED"));
+    }
+
+    @Test
+    void updateReturns200() throws Exception {
+        UUID reviewId = UUID.randomUUID();
+        when(reviewService.update(eq(USER_ID), eq(reviewId), any(ReviewUpdateRequest.class)))
+                .thenReturn(new ReviewResponse(
+                        reviewId,
+                        12345L,
+                        "한스푼",
+                        null,
+                        List.of(),
+                        true,
+                        false,
+                        Instant.parse("2026-11-23T00:00:00Z"),
+                        Instant.parse("2026-11-23T01:00:00Z")));
+
+        mockMvc.perform(patch("/api/v1/reviews/" + reviewId)
+                        .contentType("application/json")
+                        .content("{\"menus\":[" + LINE + "]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.updatedAt").value("2026-11-23T01:00:00Z"));
+        mockMvc.perform(patch("/api/v1/reviews/" + reviewId)
+                        .contentType("application/json")
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void deleteReturns204Or404() throws Exception {
+        UUID reviewId = UUID.randomUUID();
+        mockMvc.perform(delete("/api/v1/reviews/" + reviewId)).andExpect(status().isNoContent());
+        verify(reviewService).delete(USER_ID, reviewId);
+
+        doThrow(new BusinessException(ErrorCode.REVIEW_NOT_FOUND))
+                .when(reviewService)
+                .delete(any(), any());
+        mockMvc.perform(delete("/api/v1/reviews/" + reviewId))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("REVIEW_NOT_FOUND"));
     }
 }

@@ -8,6 +8,7 @@ import com.hanspoon.backend_api.domain.ai.dto.common.RiskLevel;
 import com.hanspoon.backend_api.domain.review.dto.ReviewMenuRequest;
 import com.hanspoon.backend_api.domain.review.dto.ReviewRequest;
 import com.hanspoon.backend_api.domain.review.dto.ReviewResponse;
+import com.hanspoon.backend_api.domain.review.dto.ReviewUpdateRequest;
 import com.hanspoon.backend_api.domain.scan.entity.MenuAnalysis;
 import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
@@ -21,6 +22,7 @@ import com.hanspoon.backend_api.domain.user.repository.UserProfileRepository;
 import com.hanspoon.backend_api.domain.user.repository.UserRepository;
 import com.hanspoon.backend_api.global.exception.BusinessException;
 import com.hanspoon.backend_api.global.exception.ErrorCode;
+import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -58,6 +60,9 @@ class ReviewServiceIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private EntityManager entityManager;
 
     private UUID userId;
     private long storeId;
@@ -188,6 +193,101 @@ class ReviewServiceIntegrationTest {
                 .isZero();
     }
 
+    @Test
+    void updateReplacesLinesInRequestOrder() {
+        UUID reviewId = reviewService
+                .create(
+                        userId,
+                        storeId,
+                        request(
+                                scanId,
+                                new ReviewMenuRequest("김치찌개", scanMenuId, Map.of(HALAL, "present"), "Big pork"),
+                                line("계란말이")))
+                .reviewId();
+        UUID kimchiLine = itemId(reviewId, "김치찌개");
+        jdbcTemplate.update("update users set language_code = 'ko' where id = ?", userId);
+        entityManager.clear();
+
+        ReviewResponse updated = reviewService.update(
+                userId,
+                reviewId,
+                new ReviewUpdateRequest(List.of(
+                        new ReviewMenuRequest("잡채", null, null, "맛있어요"),
+                        new ReviewMenuRequest("김치 찌개", scanMenuId, Map.of(SHRIMP, "absent"), "Big pork"))));
+
+        assertThat(updated.menus())
+                .containsExactly(
+                        new ReviewResponse.Menu("잡채", null, Map.of(), "맛있어요", "ko"),
+                        new ReviewResponse.Menu("김치 찌개", scanMenuId, Map.of(SHRIMP, "absent"), "Big pork", "en"));
+        assertThat(itemId(reviewId, "김치찌개")).isEqualTo(kimchiLine);
+        assertThat(jdbcTemplate.queryForObject(
+                        "select count(*) from meal_review_items where review_id = ?", Integer.class, reviewId))
+                .isEqualTo(2);
+        assertThat(updated.scanId()).isEqualTo(scanId);
+    }
+
+    @Test
+    void updateKeepsHidden() {
+        UUID reviewId =
+                reviewService.create(userId, storeId, request(null, line("잡채"))).reviewId();
+        jdbcTemplate.update("update meal_reviews set hidden_at = now() where id = ?", reviewId);
+
+        ReviewResponse updated = reviewService.update(userId, reviewId, new ReviewUpdateRequest(List.of(line("제육"))));
+
+        assertThat(updated.hidden()).isTrue();
+        assertThat(updated.menus()).extracting(ReviewResponse.Menu::name).containsExactly("제육");
+    }
+
+    @Test
+    void updateRejectsOthersReviewAndScanMenuWithoutScan() {
+        UUID reviewId =
+                reviewService.create(userId, storeId, request(null, line("잡채"))).reviewId();
+
+        assertError(
+                () -> reviewService.update(user("other"), reviewId, new ReviewUpdateRequest(List.of(line("제육")))),
+                ErrorCode.REVIEW_NOT_FOUND);
+        assertError(
+                () -> reviewService.update(
+                        userId,
+                        reviewId,
+                        new ReviewUpdateRequest(
+                                List.of(new ReviewMenuRequest("김치찌개", scanMenuId, Map.of(HALAL, "present"), null)))),
+                ErrorCode.INVALID_REQUEST);
+    }
+
+    @Test
+    void deleteRemovesReviewAndReportsButKeepsScan() {
+        UUID reviewId = reviewService
+                .create(userId, storeId, request(scanId, line("김치찌개")))
+                .reviewId();
+        jdbcTemplate.update(
+                "insert into meal_review_reports (id, review_id, reporter_user_id, reason) values (?, ?, ?, 'spam')",
+                UUID.randomUUID(),
+                reviewId,
+                user("reporter"));
+
+        assertError(() -> reviewService.delete(user("other"), reviewId), ErrorCode.REVIEW_NOT_FOUND);
+        reviewService.delete(userId, reviewId);
+
+        assertThat(jdbcTemplate.queryForObject(
+                        """
+                        select (select count(*) from meal_reviews) + (select count(*) from meal_review_items)
+                             + (select count(*) from meal_review_answers) + (select count(*) from meal_review_reports)
+                        """,
+                        Integer.class))
+                .isZero();
+        assertThat(scanSessionRepository.existsById(scanId)).isTrue();
+        assertError(() -> reviewService.delete(userId, reviewId), ErrorCode.REVIEW_NOT_FOUND);
+    }
+
+    private UUID itemId(UUID reviewId, String normalizedName) {
+        return jdbcTemplate.queryForObject(
+                "select id from meal_review_items where review_id = ? and menu_name_normalized = normalize_food_name(?)",
+                UUID.class,
+                reviewId,
+                normalizedName);
+    }
+
     private void assertInvalid(ReviewRequest request) {
         assertError(() -> reviewService.create(userId, storeId, request), ErrorCode.INVALID_REQUEST);
     }
@@ -209,7 +309,7 @@ class ReviewServiceIntegrationTest {
 
     private UUID user(String nickname) {
         return userRepository
-                .save(User.create(nickname + "+" + UUID.randomUUID() + "@example.com", nickname, "en"))
+                .saveAndFlush(User.create(nickname + "+" + UUID.randomUUID() + "@example.com", nickname, "en"))
                 .getId();
     }
 

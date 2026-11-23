@@ -3,8 +3,11 @@ package com.hanspoon.backend_api.domain.review.service;
 import com.hanspoon.backend_api.domain.review.dto.ReviewMenuRequest;
 import com.hanspoon.backend_api.domain.review.dto.ReviewRequest;
 import com.hanspoon.backend_api.domain.review.dto.ReviewResponse;
+import com.hanspoon.backend_api.domain.review.dto.ReviewUpdateRequest;
 import com.hanspoon.backend_api.domain.review.repository.ReviewRepository;
+import com.hanspoon.backend_api.domain.review.repository.ReviewRepository.ExistingItem;
 import com.hanspoon.backend_api.domain.review.repository.ReviewRepository.ItemRow;
+import com.hanspoon.backend_api.domain.review.repository.ReviewRepository.OwnedReview;
 import com.hanspoon.backend_api.domain.scan.entity.ScanRecord;
 import com.hanspoon.backend_api.domain.scan.entity.ScanSession;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
@@ -18,6 +21,7 @@ import com.hanspoon.backend_api.domain.user.repository.UserRepository;
 import com.hanspoon.backend_api.global.exception.BusinessException;
 import com.hanspoon.backend_api.global.exception.ErrorCode;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -78,6 +82,58 @@ public class ReviewService {
         return reviewRepository.findOne(reviewId, userId).orElseThrow();
     }
 
+    /** 메뉴 줄 전체 교체. 정규화 이름이 같은 줄은 id 유지, 빠진 줄 삭제. 가게·스캔·숨김은 그대로. */
+    @Transactional
+    public ReviewResponse update(UUID userId, UUID reviewId, ReviewUpdateRequest request) {
+        OwnedReview review = reviewRepository
+                .lockOwned(reviewId, userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.REVIEW_NOT_FOUND));
+        List<ItemRow> items = items(userId, review.scanSessionId(), request.menus());
+        Map<String, ExistingItem> existing = new HashMap<>();
+        reviewRepository.findItemKeys(reviewId).forEach(item -> existing.put(item.normalizedName(), item));
+
+        List<ItemRow> rows = items.stream()
+                .map(item -> retain(item, existing.get(item.normalizedName())))
+                .toList();
+        Set<UUID> retained = new HashSet<>();
+        existing.values().forEach(item -> retained.add(item.id()));
+        retained.retainAll(rows.stream().map(ItemRow::id).toList());
+
+        reviewRepository.deleteItemsExcept(reviewId, retained);
+        for (ItemRow row : rows) {
+            if (retained.contains(row.id())) {
+                reviewRepository.updateItem(row);
+            } else {
+                reviewRepository.insertItem(reviewId, row);
+            }
+        }
+        reviewRepository.touch(reviewId);
+        return reviewRepository.findOne(reviewId, userId).orElseThrow();
+    }
+
+    @Transactional
+    public void delete(UUID userId, UUID reviewId) {
+        if (reviewRepository.delete(reviewId, userId) == 0) {
+            throw new BusinessException(ErrorCode.REVIEW_NOT_FOUND);
+        }
+    }
+
+    /** 같은 줄이면 기존 id, 메모가 그대로면 기존 언어. */
+    private static ItemRow retain(ItemRow item, ExistingItem old) {
+        if (old == null) {
+            return item;
+        }
+        String locale = Objects.equals(old.comment(), item.comment()) ? old.commentLocale() : item.commentLocale();
+        return new ItemRow(
+                old.id(),
+                item.name(),
+                item.normalizedName(),
+                item.menuAnalysisId(),
+                item.comment(),
+                locale,
+                item.answers());
+    }
+
     private void checkScan(UUID userId, long storeId, UUID scanId) {
         ScanSession session = scanSessionRepository
                 .findByIdAndUserId(scanId, userId)
@@ -132,6 +188,7 @@ public class ReviewService {
             items.add(new ItemRow(
                     UUID.randomUUID(),
                     names.get(i),
+                    normalized.get(i),
                     menu.scanMenuId(),
                     comment,
                     comment == null ? null : locale,
