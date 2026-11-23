@@ -28,6 +28,7 @@ import tools.jackson.databind.JsonNode;
  * @param riskIngredients 위험 재료, Judge 이전 메뉴는 null
  * @param matchedTags 내 식단과 겹친 태그
  * @param message Judge {verdict,reason,notes} 또는 이전 스캔 {ko,en,ar}, null 가능
+ * @param staffQuestions 직원 질문, 가게 없는 스캔은 빈 배열
  */
 @Schema(description = "스캔 결과 메뉴 항목")
 public record MenuResult(
@@ -48,4 +49,5 @@ public record MenuResult(
         String staffAnswerStatus,
         List<RiskIngredientResult> riskIngredients,
         List<String> matchedTags,
-        @Schema(description = "Judge {verdict,reason,notes} 또는 이전 스캔 {ko,en,ar}") JsonNode message) {}
+        @Schema(description = "Judge {verdict,reason,notes} 또는 이전 스캔 {ko,en,ar}") JsonNode message,
+        List<StaffQuestionResult> staffQuestions) {}

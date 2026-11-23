@@ -17,6 +17,7 @@ import com.hanspoon.backend_api.domain.scan.dto.ScanCreatedResponse;
 import com.hanspoon.backend_api.domain.scan.dto.ScanHistoryItem;
 import com.hanspoon.backend_api.domain.scan.dto.ScanRecordResponse;
 import com.hanspoon.backend_api.domain.scan.dto.ScanStoreSummary;
+import com.hanspoon.backend_api.domain.scan.dto.StaffQuestionResult;
 import com.hanspoon.backend_api.domain.scan.dto.StartScanRequest;
 import com.hanspoon.backend_api.domain.scan.dto.UpdateScanTitleRequest;
 import com.hanspoon.backend_api.domain.scan.entity.MenuAnalysis;
@@ -26,6 +27,8 @@ import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
 import com.hanspoon.backend_api.domain.scan.repository.MenuTranslationProjection;
 import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
+import com.hanspoon.backend_api.domain.scan.repository.StaffQuestionRepository;
+import com.hanspoon.backend_api.domain.scan.repository.StaffQuestionRepository.MenuStaffQuestion;
 import com.hanspoon.backend_api.domain.scan.service.MenuPhotoResolver.MenuPhoto;
 import com.hanspoon.backend_api.domain.store.entity.Store;
 import com.hanspoon.backend_api.domain.store.entity.StoreMatchMethod;
@@ -81,6 +84,9 @@ class ScanServiceTest {
 
     @Mock
     private MenuPhotoResolver menuPhotoResolver;
+
+    @Mock
+    private StaffQuestionRepository staffQuestionRepository;
 
     @InjectMocks
     private ScanService scanService;
@@ -310,6 +316,52 @@ class ScanServiceTest {
             assertThat(result.description()).isEqualTo("파돈불고기 200g과 된장찌개");
             assertThat(result.translatedDescription()).isNull();
         });
+    }
+
+    @Test
+    void getScanGroupsStaffQuestionsByMenu() {
+        UUID userId = UUID.randomUUID();
+        ScanSession session = ScanSession.start(userId, "scans/q.jpg", 10L, "기와", StoreMatchMethod.NAME_SEARCH);
+        UUID scanId = session.getId();
+        MenuAnalysis asked = MenuAnalysis.prepared(scanId, 0, "김치찌개", null, null, null, null, 10L, 1L);
+        MenuAnalysis notAsked = MenuAnalysis.prepared(scanId, 1, "공기밥", null, null, null, null, 10L, 2L);
+        StaffQuestionResult question = new StaffQuestionResult(
+                UUID.randomUUID(),
+                "card-1",
+                "flag",
+                null,
+                "has_unclear_jeotgal",
+                List.of("is_shrimp"),
+                Map.of("ko", "질문"),
+                "pending",
+                null,
+                null);
+        when(scanSessionRepository.findByIdAndUserId(scanId, userId)).thenReturn(Optional.of(session));
+        when(menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(scanId))
+                .thenReturn(List.of(asked, notAsked));
+        when(staffQuestionRepository.findByScan(scanId, null))
+                .thenReturn(List.of(new MenuStaffQuestion(asked.getId(), question)));
+
+        var response = scanService.getScan(userId, scanId);
+
+        assertThat(response.menus().get(0).staffQuestions()).containsExactly(question);
+        assertThat(response.menus().get(1).staffQuestions()).isEmpty();
+    }
+
+    @Test
+    void getScanSkipsStaffQuestionsWithoutStore() {
+        UUID userId = UUID.randomUUID();
+        ScanSession session = ScanSession.create(userId, null, null, ScanStatus.PROCESSING, null);
+        UUID scanId = session.getId();
+        MenuAnalysis menu = MenuAnalysis.prepared(scanId, 0, "김치찌개", null, null, null, null, null, null);
+        when(scanSessionRepository.findByIdAndUserId(scanId, userId)).thenReturn(Optional.of(session));
+        when(menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(scanId))
+                .thenReturn(List.of(menu));
+
+        var response = scanService.getScan(userId, scanId);
+
+        assertThat(response.menus().get(0).staffQuestions()).isEmpty();
+        verify(staffQuestionRepository, never()).findByScan(any(), any());
     }
 
     private static MenuTranslationProjection translation(UUID menuAnalysisId) {
