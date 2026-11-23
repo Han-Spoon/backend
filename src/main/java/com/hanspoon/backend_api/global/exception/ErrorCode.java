@@ -56,6 +56,10 @@ public enum ErrorCode {
     STAFF_QUESTION_REQUIRES_STORE(
             HttpStatus.CONFLICT, "STAFF_QUESTION_REQUIRES_STORE", "Staff questions require a scan with a store."),
 
+    // ── 메뉴 찜 ─────────────────────────────────────────────────────────
+    SCAN_MENU_NOT_FOUND(HttpStatus.NOT_FOUND, "SCAN_MENU_NOT_FOUND", "Scan menu not found."),
+    SAVED_MENU_NOT_FOUND(HttpStatus.NOT_FOUND, "SAVED_MENU_NOT_FOUND", "Saved menu not found."),
+
     // ── 가게 ────────────────────────────────────────────────────────────
     STORE_NOT_FOUND(HttpStatus.NOT_FOUND, "STORE_NOT_FOUND", "Active store not found."),
 
