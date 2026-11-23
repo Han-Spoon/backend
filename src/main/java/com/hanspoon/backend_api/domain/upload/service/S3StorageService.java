@@ -1,5 +1,6 @@
 package com.hanspoon.backend_api.domain.upload.service;
 
+import com.hanspoon.backend_api.domain.upload.dto.ReadUrl;
 import com.hanspoon.backend_api.domain.upload.dto.UploadTicketResponse;
 import com.hanspoon.backend_api.domain.upload.dto.VerifiedUpload;
 import com.hanspoon.backend_api.global.config.S3Properties;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
 
 @Service
@@ -122,6 +124,22 @@ public class S3StorageService {
                 throw new BusinessException(ErrorCode.UPLOAD_NOT_FOUND, "Object not found: " + key, exception);
             }
             throw new BusinessException(ErrorCode.STORAGE_PRESIGN_ERROR, "Failed to read object metadata.", exception);
+        }
+    }
+
+    /** 객체 읽기 URL. 버전이 있으면 그 버전 고정. */
+    public ReadUrl createReadUrl(String key, String versionId) {
+        GetObjectRequest getRequest = GetObjectRequest.builder()
+                .bucket(properties.bucket())
+                .key(key)
+                .versionId(versionId)
+                .build();
+        try {
+            PresignedGetObjectRequest signedRequest = presigner.presignGetObject(builder ->
+                    builder.signatureDuration(properties.readUrlTtl()).getObjectRequest(getRequest));
+            return new ReadUrl(signedRequest.url().toString(), signedRequest.expiration());
+        } catch (RuntimeException exception) {
+            throw new BusinessException(ErrorCode.STORAGE_PRESIGN_ERROR, "Failed to presign read URL.", exception);
         }
     }
 

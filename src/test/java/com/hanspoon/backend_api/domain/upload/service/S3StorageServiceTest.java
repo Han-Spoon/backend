@@ -6,12 +6,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.hanspoon.backend_api.domain.upload.dto.ReadUrl;
 import com.hanspoon.backend_api.domain.upload.dto.UploadTicketResponse;
 import com.hanspoon.backend_api.domain.upload.dto.VerifiedUpload;
 import com.hanspoon.backend_api.global.config.S3Properties;
 import com.hanspoon.backend_api.global.exception.BusinessException;
 import com.hanspoon.backend_api.global.exception.ErrorCode;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -29,8 +31,8 @@ class S3StorageServiceTest {
     private static final UUID USER = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID OTHER_USER = UUID.fromString("22222222-2222-2222-2222-222222222222");
 
-    private final S3Properties properties =
-            new S3Properties(BUCKET, "ap-northeast-2", null, Duration.ofMinutes(10), 10 * 1024 * 1024);
+    private final S3Properties properties = new S3Properties(
+            BUCKET, "ap-northeast-2", null, Duration.ofMinutes(10), Duration.ofMinutes(15), 10 * 1024 * 1024);
 
     private final S3StorageService service = new S3StorageService(presigner(), mock(S3Client.class), properties);
 
@@ -159,6 +161,28 @@ class S3StorageServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(error -> ((BusinessException) error).getErrorCode())
                 .isEqualTo(ErrorCode.UPLOAD_NOT_FOUND);
+    }
+
+    @Test
+    void createReadUrlIssuesPresignedGetForVersion() {
+        Instant before = Instant.now();
+
+        ReadUrl readUrl = service.createReadUrl("scans/" + USER + "/abc.jpg", "version-1");
+
+        assertThat(readUrl.url())
+                .contains(BUCKET)
+                .contains("scans/" + USER + "/abc.jpg")
+                .contains("versionId=version-1")
+                .contains("X-Amz-Expires=900");
+        assertThat(readUrl.expiresAt())
+                .isBetween(before.plusSeconds(899), Instant.now().plusSeconds(901));
+    }
+
+    @Test
+    void createReadUrlWithoutVersionOmitsVersionId() {
+        ReadUrl readUrl = service.createReadUrl("scans/" + USER + "/abc.jpg", null);
+
+        assertThat(readUrl.url()).doesNotContain("versionId");
     }
 
     @Test

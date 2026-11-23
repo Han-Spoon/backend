@@ -52,6 +52,7 @@ app:
     region: ${AWS_REGION:ap-northeast-2}
     endpoint: ${S3_ENDPOINT:}
     upload-url-ttl: ${S3_UPLOAD_URL_TTL:10m}
+    read-url-ttl: ${S3_READ_URL_TTL:15m}
     max-file-size: ${S3_MAX_FILE_SIZE:10485760} # 10MB
   cdn:
     base-url: ${CDN_BASE_URL:https://api.han-spoon.site}
