@@ -1,6 +1,7 @@
 package com.hanspoon.backend_api.domain.review.service;
 
 import com.hanspoon.backend_api.domain.review.dto.ReviewMenuRequest;
+import com.hanspoon.backend_api.domain.review.dto.ReviewReportRequest;
 import com.hanspoon.backend_api.domain.review.dto.ReviewRequest;
 import com.hanspoon.backend_api.domain.review.dto.ReviewResponse;
 import com.hanspoon.backend_api.domain.review.dto.ReviewUpdateRequest;
@@ -130,6 +131,23 @@ public class ReviewService {
     public void delete(UUID userId, UUID reviewId) {
         if (reviewRepository.delete(reviewId, userId) == 0) {
             throw new BusinessException(ErrorCode.REVIEW_NOT_FOUND);
+        }
+    }
+
+    /** 남의 공개 후기 신고. 저장만, 숨기지 않음. */
+    @Transactional
+    public void report(UUID userId, UUID reviewId, ReviewReportRequest request) {
+        UUID authorId = reviewRepository
+                .findVisibleAuthor(reviewId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.REVIEW_NOT_FOUND));
+        if (authorId.equals(userId)) {
+            throw new BusinessException(ErrorCode.CANNOT_REPORT_OWN_REVIEW);
+        }
+        String detail = request.detail() == null || request.detail().isBlank() ? null : request.detail();
+        try {
+            reviewRepository.insertReport(reviewId, userId, request.reason(), detail);
+        } catch (DuplicateKeyException e) {
+            throw new BusinessException(ErrorCode.REVIEW_ALREADY_REPORTED, e);
         }
     }
 

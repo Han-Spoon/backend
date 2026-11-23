@@ -62,6 +62,8 @@ public enum ErrorCode {
 
     // ── 식사 후기 ───────────────────────────────────────────────────────
     REVIEW_NOT_FOUND(HttpStatus.NOT_FOUND, "REVIEW_NOT_FOUND", "Review not found."),
+    CANNOT_REPORT_OWN_REVIEW(HttpStatus.BAD_REQUEST, "CANNOT_REPORT_OWN_REVIEW", "You cannot report your own review."),
+    REVIEW_ALREADY_REPORTED(HttpStatus.CONFLICT, "REVIEW_ALREADY_REPORTED", "You already reported this review."),
     REVIEW_ALREADY_EXISTS(HttpStatus.CONFLICT, "REVIEW_ALREADY_EXISTS", "A review for this scan already exists."),
     REVIEW_STORE_MISMATCH(
             HttpStatus.CONFLICT, "REVIEW_STORE_MISMATCH", "The scan store does not match the review store."),

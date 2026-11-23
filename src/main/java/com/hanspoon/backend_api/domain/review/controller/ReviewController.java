@@ -1,5 +1,6 @@
 package com.hanspoon.backend_api.domain.review.controller;
 
+import com.hanspoon.backend_api.domain.review.dto.ReviewReportRequest;
 import com.hanspoon.backend_api.domain.review.dto.ReviewRequest;
 import com.hanspoon.backend_api.domain.review.dto.ReviewResponse;
 import com.hanspoon.backend_api.domain.review.dto.ReviewUpdateRequest;
@@ -62,5 +63,13 @@ public class ReviewController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@CurrentUser String userId, @PathVariable UUID reviewId) {
         reviewService.delete(UUID.fromString(userId), reviewId);
+    }
+
+    @Operation(summary = "남의 후기 신고. 저장만, 내 후기 400, 재신고 409")
+    @PostMapping("/api/v1/reviews/{reviewId}/reports")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void report(
+            @CurrentUser String userId, @PathVariable UUID reviewId, @Valid @RequestBody ReviewReportRequest request) {
+        reviewService.report(UUID.fromString(userId), reviewId, request);
     }
 }

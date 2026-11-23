@@ -166,6 +166,31 @@ public class ReviewRepository {
         return find("WHERE r.user_id = :userId", Map.of("userId", userId), userId);
     }
 
+    /** 신고 대상(숨김 제외)의 작성자. */
+    public Optional<UUID> findVisibleAuthor(UUID reviewId) {
+        return jdbc
+                .queryForList(
+                        "SELECT user_id FROM meal_reviews WHERE id = :id AND hidden_at IS NULL",
+                        Map.of("id", reviewId),
+                        UUID.class)
+                .stream()
+                .findFirst();
+    }
+
+    public void insertReport(UUID reviewId, UUID reporterId, String reason, String detail) {
+        jdbc.update(
+                """
+                INSERT INTO meal_review_reports (id, review_id, reporter_user_id, reason, detail)
+                VALUES (:id, :reviewId, :reporterId, :reason, :detail)
+                """,
+                new MapSqlParameterSource()
+                        .addValue("id", UUID.randomUUID())
+                        .addValue("reviewId", reviewId)
+                        .addValue("reporterId", reporterId)
+                        .addValue("reason", reason)
+                        .addValue("detail", detail));
+    }
+
     private static MapSqlParameterSource itemParams(ItemRow item) {
         return new MapSqlParameterSource()
                 .addValue("id", item.id())

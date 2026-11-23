@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.hanspoon.backend_api.TestcontainersConfiguration;
 import com.hanspoon.backend_api.domain.ai.dto.common.RiskLevel;
 import com.hanspoon.backend_api.domain.review.dto.ReviewMenuRequest;
+import com.hanspoon.backend_api.domain.review.dto.ReviewReportRequest;
 import com.hanspoon.backend_api.domain.review.dto.ReviewRequest;
 import com.hanspoon.backend_api.domain.review.dto.ReviewResponse;
 import com.hanspoon.backend_api.domain.review.dto.ReviewUpdateRequest;
@@ -337,6 +338,43 @@ class ReviewServiceIntegrationTest {
         assertThat(mine).extracting(ReviewResponse::reviewId).containsExactly(newer, older);
         assertThat(mine).extracting(ReviewResponse::hidden).containsExactly(false, true);
         assertThat(mine).allMatch(ReviewResponse::mine);
+    }
+
+    @Test
+    void reportSavesOnceAndKeepsReviewVisible() {
+        UUID reviewId =
+                reviewService.create(userId, storeId, request(null, line("잡채"))).reviewId();
+        UUID reporter = user("reporter");
+
+        reviewService.report(reporter, reviewId, new ReviewReportRequest("false_info", "  "));
+
+        assertThat(jdbcTemplate.queryForMap(
+                        "select reason, detail from meal_review_reports where review_id = ? and reporter_user_id = ?",
+                        reviewId,
+                        reporter))
+                .containsEntry("reason", "false_info")
+                .containsEntry("detail", null);
+        assertThat(reviewService.listByStore(reporter, storeId)).hasSize(1);
+        assertError(
+                () -> reviewService.report(reporter, reviewId, new ReviewReportRequest("spam", null)),
+                ErrorCode.REVIEW_ALREADY_REPORTED);
+    }
+
+    @Test
+    void reportRejectsOwnHiddenAndMissingReviews() {
+        UUID reviewId =
+                reviewService.create(userId, storeId, request(null, line("잡채"))).reviewId();
+
+        assertError(
+                () -> reviewService.report(userId, reviewId, new ReviewReportRequest("spam", null)),
+                ErrorCode.CANNOT_REPORT_OWN_REVIEW);
+        jdbcTemplate.update("update meal_reviews set hidden_at = now() where id = ?", reviewId);
+        assertError(
+                () -> reviewService.report(user("reporter"), reviewId, new ReviewReportRequest("spam", null)),
+                ErrorCode.REVIEW_NOT_FOUND);
+        assertError(
+                () -> reviewService.report(userId, UUID.randomUUID(), new ReviewReportRequest("spam", null)),
+                ErrorCode.REVIEW_NOT_FOUND);
     }
 
     private UUID itemId(UUID reviewId, String normalizedName) {

@@ -181,4 +181,33 @@ class ReviewControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isEmpty());
     }
+
+    @Test
+    void reportReturns204AndValidatesReason() throws Exception {
+        UUID reviewId = UUID.randomUUID();
+        String path = "/api/v1/reviews/" + reviewId + "/reports";
+
+        mockMvc.perform(post(path).contentType("application/json").content("{\"reason\":\"spam\",\"detail\":null}"))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(post(path).contentType("application/json").content("{\"reason\":\"SPAM\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        String longDetail = "{\"reason\":\"other\",\"detail\":\"" + "a".repeat(501) + "\"}";
+        mockMvc.perform(post(path).contentType("application/json").content(longDetail))
+                .andExpect(status().isBadRequest());
+        verify(reviewService).report(eq(USER_ID), eq(reviewId), any());
+    }
+
+    @Test
+    void reportOwnReviewReturns400() throws Exception {
+        doThrow(new BusinessException(ErrorCode.CANNOT_REPORT_OWN_REVIEW))
+                .when(reviewService)
+                .report(any(), any(), any());
+
+        mockMvc.perform(post("/api/v1/reviews/" + UUID.randomUUID() + "/reports")
+                        .contentType("application/json")
+                        .content("{\"reason\":\"spam\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("CANNOT_REPORT_OWN_REVIEW"));
+    }
 }
