@@ -60,6 +60,15 @@ public enum ErrorCode {
     SCAN_MENU_NOT_FOUND(HttpStatus.NOT_FOUND, "SCAN_MENU_NOT_FOUND", "Scan menu not found."),
     SAVED_MENU_NOT_FOUND(HttpStatus.NOT_FOUND, "SAVED_MENU_NOT_FOUND", "Saved menu not found."),
 
+    // ── 식사 후기 ───────────────────────────────────────────────────────
+    REVIEW_ALREADY_EXISTS(HttpStatus.CONFLICT, "REVIEW_ALREADY_EXISTS", "A review for this scan already exists."),
+    REVIEW_STORE_MISMATCH(
+            HttpStatus.CONFLICT, "REVIEW_STORE_MISMATCH", "The scan store does not match the review store."),
+    REVIEW_SCAN_STORE_REQUIRED(
+            HttpStatus.UNPROCESSABLE_CONTENT,
+            "REVIEW_SCAN_STORE_REQUIRED",
+            "Attach a store to the scan record before writing a review."),
+
     // ── 가게 ────────────────────────────────────────────────────────────
     STORE_NOT_FOUND(HttpStatus.NOT_FOUND, "STORE_NOT_FOUND", "Active store not found."),
 
