@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -21,6 +22,7 @@ import com.hanspoon.backend_api.global.exception.ErrorCode;
 import com.hanspoon.backend_api.global.exception.GlobalExceptionHandler;
 import com.hanspoon.backend_api.global.security.CurrentUser;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -86,6 +88,25 @@ class SavedMenuControllerTest {
                 .andExpect(jsonPath("$.riskLevel").value("danger"))
                 .andExpect(jsonPath("$.store.storeId").value(12345))
                 .andExpect(jsonPath("$.savedAt").value("2026-11-23T00:00:00Z"));
+    }
+
+    @Test
+    void listReturnsArray() throws Exception {
+        when(savedMenuService.list(USER_ID))
+                .thenReturn(List.of(new SavedMenuResponse(
+                        MENU_ID,
+                        UUID.randomUUID(),
+                        "잡채",
+                        null,
+                        RiskLevel.CAUTION,
+                        null,
+                        Instant.parse("2026-11-22T00:00:00Z"))));
+
+        mockMvc.perform(get(PATH))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].scanMenuId").value(MENU_ID.toString()))
+                .andExpect(jsonPath("$[0].riskLevel").value("caution"))
+                .andExpect(jsonPath("$[0].store").isEmpty());
     }
 
     @Test

@@ -4,6 +4,7 @@ import com.hanspoon.backend_api.domain.favorite.dto.SavedMenuResponse;
 import com.hanspoon.backend_api.domain.favorite.repository.SavedMenuRepository;
 import com.hanspoon.backend_api.global.exception.BusinessException;
 import com.hanspoon.backend_api.global.exception.ErrorCode;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,6 +17,11 @@ public class SavedMenuService {
 
     public SavedMenuService(SavedMenuRepository savedMenuRepository) {
         this.savedMenuRepository = savedMenuRepository;
+    }
+
+    @Transactional(readOnly = true)
+    public List<SavedMenuResponse> list(UUID userId) {
+        return savedMenuRepository.findAll(userId);
     }
 
     /** 멱등. 이미 찜이면 같은 항목. */

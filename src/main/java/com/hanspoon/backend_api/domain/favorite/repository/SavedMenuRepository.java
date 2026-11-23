@@ -6,6 +6,7 @@ import com.hanspoon.backend_api.domain.scan.dto.ScanStoreSummary;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -62,6 +63,14 @@ public class SavedMenuRepository {
                         (rs, rowNum) -> toResponse(rs))
                 .stream()
                 .findFirst();
+    }
+
+    /** 찜한 최신순 전체. */
+    public List<SavedMenuResponse> findAll(UUID userId) {
+        return jdbc.query(
+                SELECT_SAVED + "ORDER BY fm.created_at DESC, fm.menu_analysis_id DESC",
+                Map.of("userId", userId),
+                (rs, rowNum) -> toResponse(rs));
     }
 
     /** 삭제 행 수. */

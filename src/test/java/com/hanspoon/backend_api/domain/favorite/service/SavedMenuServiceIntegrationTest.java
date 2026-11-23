@@ -118,6 +118,24 @@ class SavedMenuServiceIntegrationTest {
     }
 
     @Test
+    void listIsNewestFirstAndOnlyMine() {
+        assertThat(savedMenuService.list(userId)).isEmpty();
+        ScanSession session = ScanSession.startWithoutStore(userId, "scans/" + userId + "/second.jpg");
+        session.applyPrepareResult(1, Instant.now(), "ko");
+        session.applyJudgeResult(List.of(RiskLevel.DANGER), null);
+        UUID newer = judgedMenu(scanSessionRepository.saveAndFlush(session).getId(), "제육", "danger");
+        savedMenuService.save(userId, menuId);
+        savedMenuService.save(userId, newer);
+        jdbcTemplate.update(
+                "update favorite_menus set created_at = now() - interval '1 day' where menu_analysis_id = ?", menuId);
+
+        assertThat(savedMenuService.list(userId))
+                .extracting(SavedMenuResponse::scanMenuId)
+                .containsExactly(newer, menuId);
+        assertThat(savedMenuService.list(user("other"))).isEmpty();
+    }
+
+    @Test
     void otherUsersMenuIsNotFound() {
         assertThatThrownBy(() -> savedMenuService.save(user("other"), menuId))
                 .isInstanceOf(BusinessException.class)
