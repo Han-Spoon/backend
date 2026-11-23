@@ -49,6 +49,7 @@ public enum ErrorCode {
             HttpStatus.CONFLICT,
             "SCAN_STORE_CONTEXT_LOCKED",
             "The store selected when the scan started cannot be changed."),
+    SCAN_IMAGE_EXPIRED(HttpStatus.GONE, "SCAN_IMAGE_EXPIRED", "The scan image is past its retention period."),
 
     // ── 직원 응답 ───────────────────────────────────────────────────────
     STAFF_QUESTION_NOT_FOUND(HttpStatus.NOT_FOUND, "STAFF_QUESTION_NOT_FOUND", "Staff question not found."),

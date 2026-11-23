@@ -116,6 +116,8 @@ locals {
     "openai_api_key",
     "clova_ocr_secret",
     "clova_ocr_url",
+    "naver_search_client_id",
+    "naver_search_client_secret",
   ]
 }
 

@@ -3,10 +3,12 @@ package com.hanspoon.backend_api.domain.scan.controller;
 import com.hanspoon.backend_api.domain.scan.dto.SaveScanRecordRequest;
 import com.hanspoon.backend_api.domain.scan.dto.ScanCreatedResponse;
 import com.hanspoon.backend_api.domain.scan.dto.ScanHistoryItem;
+import com.hanspoon.backend_api.domain.scan.dto.ScanImageResponse;
 import com.hanspoon.backend_api.domain.scan.dto.ScanRecordResponse;
 import com.hanspoon.backend_api.domain.scan.dto.ScanResultResponse;
 import com.hanspoon.backend_api.domain.scan.dto.StartScanRequest;
 import com.hanspoon.backend_api.domain.scan.dto.UpdateScanTitleRequest;
+import com.hanspoon.backend_api.domain.scan.service.ScanImageService;
 import com.hanspoon.backend_api.domain.scan.service.ScanRecordService;
 import com.hanspoon.backend_api.domain.scan.service.ScanService;
 import com.hanspoon.backend_api.global.common.PageResponse;
@@ -38,10 +40,13 @@ public class ScanController {
 
     private final ScanService scanService;
     private final ScanRecordService scanRecordService;
+    private final ScanImageService scanImageService;
 
-    public ScanController(ScanService scanService, ScanRecordService scanRecordService) {
+    public ScanController(
+            ScanService scanService, ScanRecordService scanRecordService, ScanImageService scanImageService) {
         this.scanService = scanService;
         this.scanRecordService = scanRecordService;
+        this.scanImageService = scanImageService;
     }
 
     @Operation(summary = "스캔 시작(비동기). 202 로 scanId 반환 후 OCR/판정은 백그라운드 처리")
@@ -65,6 +70,12 @@ public class ScanController {
     @GetMapping("/{scanId}")
     public ScanResultResponse getScan(@CurrentUser String userId, @PathVariable UUID scanId) {
         return scanService.getScan(UUID.fromString(userId), scanId);
+    }
+
+    @Operation(summary = "원본 메뉴판 사진 읽기 URL(15분). 본인 스캔만, 업로드 90일 뒤 410")
+    @GetMapping("/{scanId}/image")
+    public ScanImageResponse getImage(@CurrentUser String userId, @PathVariable UUID scanId) {
+        return scanImageService.getImage(UUID.fromString(userId), scanId);
     }
 
     @Operation(summary = "완료된 스캔을 기록으로 저장/갱신. 스캔 시점 가게는 고정, 미지정 스캔만 사후 연결 가능")
