@@ -21,7 +21,7 @@ class MenuResultMapperTest {
         ReflectionTestUtils.setField(previous, "message", "{\"ko\":\"젓갈 확인\",\"en\":\"check jeotgal\",\"ar\":null}");
         ReflectionTestUtils.setField(previous, "matchedTags", List.of("has_unclear_jeotgal"));
 
-        MenuResult result = MenuResultMapper.toMenuResult(previous, null, null, null);
+        MenuResult result = MenuResultMapper.toMenuResult(previous, null, null, null, List.of());
 
         assertThat(result.scanMenuId()).isEqualTo(previous.getId());
         assertThat(result.displayName()).isEqualTo("순두부");
@@ -49,7 +49,7 @@ class MenuResultMapperTest {
                   "constraint_tags":[],"matched_tags":[],"role":null,"status":"unknown",
                   "posterior_mean":null,"confidence":null,"prior_source":null,"evidence_refs":[]}]""");
 
-        MenuResult result = MenuResultMapper.toMenuResult(judged, null, "Jeyuk bokkeum", "en");
+        MenuResult result = MenuResultMapper.toMenuResult(judged, null, "Jeyuk bokkeum", "en", List.of());
 
         assertThat(result.translatedName()).isEqualTo("Jeyuk bokkeum");
         assertThat(result.message().get("verdict").asString()).isEqualTo("먹지 마세요");

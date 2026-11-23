@@ -155,8 +155,10 @@
 | 표시 순서 | SAFE → CAUTION+estimated → CAUTION+unknown → DANGER, 같은 칸은 `source_index` |
 | 스캔 내 추천 | `safe` + `complete` 만. 콘텐츠 태그가 금지 태그와 겹치면 추천 제외 (보류) |
 | Bundle 확정값 | 스캔 메뉴의 `store_menu_id` 로 확정값(무효화 제외)을 읽어 후보 메뉴 전부에 붙인다 |
-| 직원 응답 | 한 트랜잭션: 질문 행 → present/absent 면 확정값 upsert + 링크, unknown 이면 링크 해제 + `invalidated_at` → `present` + 식단 겹침이면 `risk_level = danger` + 카운터. `present` 를 고쳤고 남은 `present` 가 없으면 `risk_level = ai_risk_level` |
-| 직원 응답 충돌 | 다른 스캔의 "없어요"는 "있어요" 확정값을 덮지 않는다 (R-04, 미구현) |
+| 직원 응답 | `PUT /scans/{scanId}/staff-questions/{questionId}/answer`(11-23 구현). 한 트랜잭션: 질문·스캔 메뉴·스캔 행 잠금 → present/absent 면 확정값 upsert + 링크, unknown 이면 링크 해제 + 기존 확정값 `invalidated_at` → 메뉴 `risk_level` = 식단과 겹친 `present` 가 있으면 danger, 없으면 `ai_risk_level` → `staff_answer_status`(질문 전부 present/absent 면 complete, 아니면 partial) → 카운터 재계산(`lock_version` 증가). 겹침 대상 태그: 재료 질문 `ingredients.tag_codes`, 플래그 질문 `asked_tags`. 금지 태그는 `diet_snapshot` 으로 AI `profile.py` 표 이식(`DietForbiddenTags`) |
+| 직원 응답 예외 | `ai_risk_level = safe` 인데 응답이 complete 가 아니면 caution(SAFE CHECK). `display_order`·`matched_tags` 는 그대로(답하는 중 목록 안 움직임). 오류: 남의 스캔 404 `SCAN_NOT_FOUND`, 없는 질문 404 `STAFF_QUESTION_NOT_FOUND`, 기한 종료 409 `STAFF_QUESTION_EXPIRED`, 가게 없는 스캔 409 `STAFF_QUESTION_REQUIRES_STORE` |
+| 직원 응답 충돌 | 다른 스캔의 "없어요"는 "있어요" 확정값을 덮지 않는다 (R-04, 미구현. 지금은 마지막 답이 확정값) |
+| 결과의 직원 질문 | 메뉴별 `staffQuestions`: 같은 스캔·같은 `store_menu_id` 질문, 생성 순. 문구·재료명은 ko + 스캔 locale. 가게 없는 스캔은 빈 배열 |
 | 직원 질문 생성 | 후보 메뉴가 없는 메뉴와 ID 없는 재료에는 질문을 만들지 않는다 (R-06·R-07) |
 | 정리 작업 | `AiRetentionCleanup`(매일 04:30 KST): `judge_raw` 판정 90일 뒤 NULL, `applied` 명령 수신 90일 뒤 삭제. 둘 다 부분 인덱스 사용 |
 | 로그 조회 | 관리자 화면 없이 읽기 전용 DB 계정으로 본다. 쓰기 권한 직접 접속 금지 |
@@ -209,8 +211,8 @@
 | 프론트 | V2 필드 호환 확인(11-23). 남은 정리: 예전 필드 대체 코드(`menuNameKo/En`·`descriptionKo/En`·`hits`·`ownerCard`·`riskyMenuCount`) 삭제, 실패 코드 `PREPARE_SERVICE_ERROR`·`JUDGE_SERVICE_ERROR` 문구(지금 기본 문구) |
 | PM·프론트 | 직원 응답 규칙(있어요 → 위험, 없어요·모름 → 표시만) 공유. 프론트 문구는 지금 "판정은 자동으로 바뀌지 않는다"로 되어 있다. Notion No 16·23 수정(사용자 확인 후) |
 | 화면 쪽 정리 | 환율 "매일 00:00 갱신" 문구(지금은 고정 환율), 출처 간 불일치 표시(AI 값 없음), 주문·빼기·덜 맵게 응답(저장 안 함), 파트너 식당·등록 레시피(시연 전용) |
-| AI 팀 | ① Prepare/Judge 타임아웃·Judge 재시도(백엔드 20초·30초, 웹서치로 30초 초과 가능) ② `persistence_commands` 적용 시점·실패 명령 재처리 ③ `recipe_probability` 코드에서 제거 요청(문서는 10/27 철회, 백엔드는 무시) ④ 확정값을 `store_menu_id` 기준으로 후보 메뉴 전부에 넣는 방식 확인 ⑤ ⑦ §8 "백엔드 반영 대기" 항목이 V11 에 반영됐다고 알림 ⑥ 사진 품질 판정: 이미지 지표 사유 하나만 있어도 `low_confidence` → 재촬영, 흰 배경을 빛 반사로 셈 → 실사진 대부분 재촬영(11-23 운영) ⑦ 게이트웨이(`OPENAI_BASE_URL`)의 Responses API·모델 이름 확인. LLM 실패는 규칙 판정으로 대체돼 AI 로그로만 보인다 |
-| 운영 설정 | `OPENAI_BASE_URL`·`NORMALIZATION_OPENAI_MODEL` 은 태스크 정의에만 있음 → Terraform·AI 배포 워크플로 반영. 쓰지 않는 백엔드 변수(`AI_PIPELINE`·`AI_OCR_READ_TIMEOUT`·`AI_OCR_PRESIGNED_FALLBACK_ENABLED`·`AI_RULE_ENGINE_READ_TIMEOUT`·`AI_RESULT_READ_TIMEOUT`) 삭제. Naver 웹 검색 키 미설정(사진 품질 판정 수정 뒤 결정, 없으면 모르는 메뉴는 `no_information`) |
+| AI 팀 | ① Prepare/Judge 타임아웃·Judge 재시도(백엔드 20초·30초, 웹서치로 30초 초과 가능) ② `persistence_commands` 적용 시점·실패 명령 재처리 ③ `recipe_probability` 코드에서 제거 요청(문서는 10/27 철회, 백엔드는 무시) ④ 확정값을 `store_menu_id` 기준으로 후보 메뉴 전부에 넣는 방식 확인 ⑤ ⑦ §8 "백엔드 반영 대기" 항목이 V11 에 반영됐다고 알림 ⑥ 사진 품질 판정: OCR 구조가 좋으면 이미지 경고 무시로 수정, 11-23 운영 반영(AI `19d4222`). 실사진 스캔 재확인 남음 ⑦ 게이트웨이(`OPENAI_BASE_URL`)의 Responses API·모델 이름 확인. LLM 실패는 규칙 판정으로 대체돼 AI 로그로만 보인다 ⑧ AI `deploy-prod.yml` 에 `OPENAI_BASE_URL`·`NORMALIZATION_OPENAI_MODEL` 추가(지금은 태스크 정의·Terraform 에만 있음) |
+| 운영 설정 | Naver 웹 검색 키 미설정(실사진 스캔 확인 뒤 결정, 없으면 모르는 메뉴는 `no_information`). 게이트웨이 변수 Terraform 반영·쓰지 않는 백엔드 변수 삭제는 11-23 완료(`:132`) |
 | 백엔드 (후속) | `save_web_search_cache`·`update_source_reliability`·`menu_ingredient_cache` 명령 실행과 Bundle 웹 캐시 조회(지금은 저장 안 하고 `not_found`, 모르는 메뉴는 매번 재검색). 한국어 fuzzy 점수 개선(AI 기준 0.65 는 v1 고정) |
 | 법률·약관 | 원문의 14세 미만 조항 정리(보호자 절차 없음) + 버전 올림, 위치정보 약관 필요 여부(필요하면 문서 ID CHECK 에 추가), 탈퇴 후 동의 기록 보존 여부(지금 CASCADE, R-17) |
 | 인증 | `user_auth_identities` 의 `email_verified` 규칙, `provider` 기본값·CHECK |
@@ -241,7 +243,7 @@
 |---|---|
 | 설계본과 Flyway V1~V14 | `pg_dump` 스키마 일치 |
 | 무결성 시나리오 | 303/303 (FK·CHECK·부분 UNIQUE·CASCADE, 복합 FK, 직원 응답, 후기·신고, 찜) |
-| `./gradlew test` | 210/210 (11-16, 원격 dev 합친 뒤), 267/267 (11-22, V14 Flyway 적용), 268/268 (11-23, 명령 정리 추가) |
+| `./gradlew test` | 210/210 (11-16, 원격 dev 합친 뒤), 267/267 (11-22, V14 Flyway 적용), 268/268 (11-23, 명령 정리 추가), 286/286 (11-23, 직원 질문 노출·응답 API) |
 | 운영 배포 (11-23) | V14 적용, 기존 행 변환 확인, Prepare → Judge 1회 완료 |
 | 성능 (3년 가정 합성 데이터: 스캔 30만·메뉴 300만·후기 18만) | 대부분 1ms 미만. 가장 느린 것은 인기 가게 1곳(후기 줄 1.2만)의 후기 칩 집계 40~110ms, 동네 목록 51ms |
 
@@ -263,4 +265,4 @@
 | 11-16 | 원격 V8~V10(보호자 승인·찜·후기) 되돌리고 운영 DB 정리. 스키마 원본을 Flyway 로 하고 설계 도구·중간 문서 정리 |
 | 11-20 | 시연 가게 표시명 = 시트 식당명(회사명 상호 미표시), `verified_at` 기록. 같은 식당 중복 행은 비활성 |
 | 11-22 | Prepare/Judge 연동을 PR 두 개로(전환 → V14 축소). Bundle 확정값은 후보 메뉴 전부에. `recommendation` 보류. AI 문서로 확인: 확정 "있음" + 금지 태그 = DANGER, 가게 prior·출처 신뢰도 `not_found` 허용, fuzzy 라이브러리는 백엔드가 정함, 출처 신뢰도 = `(맞춘 수+1)/(비교한 수+2)`. PR 2: V14 Flyway 적용, 판정 컬럼은 JDBC 전용(엔티티 읽기만), 번역명은 `menus.name_i18n` 만(설명 번역 없음), 사진은 `store_menu_id` 우선 |
-| 11-23 | PR 2 운영 배포(V14). 되돌리기는 스냅샷 복구만. 프론트는 V2 필드 우선 읽기로 같이 배포하지 않음. 사진 품질 판정 수정은 AI 레포에서, Naver 웹 검색 키는 그 뒤로 미룸 |
+| 11-23 | PR 2 운영 배포(V14). 되돌리기는 스냅샷 복구만. 프론트는 V2 필드 우선 읽기로 같이 배포하지 않음. 사진 품질 판정 수정은 AI 레포에서, Naver 웹 검색 키는 그 뒤로 미룸. 직원 응답 API 구현: 메뉴 위험도 = 겹친 present 있으면 danger 아니면 `ai_risk_level`, 응답 미완이면 SAFE 대신 caution, 표시 순서 유지 |

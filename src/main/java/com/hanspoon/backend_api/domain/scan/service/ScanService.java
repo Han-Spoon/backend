@@ -6,6 +6,7 @@ import com.hanspoon.backend_api.domain.scan.dto.ScanCreatedResponse;
 import com.hanspoon.backend_api.domain.scan.dto.ScanHistoryItem;
 import com.hanspoon.backend_api.domain.scan.dto.ScanResultResponse;
 import com.hanspoon.backend_api.domain.scan.dto.ScanStoreSummary;
+import com.hanspoon.backend_api.domain.scan.dto.StaffQuestionResult;
 import com.hanspoon.backend_api.domain.scan.dto.StartScanRequest;
 import com.hanspoon.backend_api.domain.scan.dto.UpdateScanTitleRequest;
 import com.hanspoon.backend_api.domain.scan.entity.ScanRecord;
@@ -14,6 +15,8 @@ import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
 import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
 import com.hanspoon.backend_api.domain.scan.repository.MenuTranslationProjection;
 import com.hanspoon.backend_api.domain.scan.repository.ScanSessionRepository;
+import com.hanspoon.backend_api.domain.scan.repository.StaffQuestionRepository;
+import com.hanspoon.backend_api.domain.scan.repository.StaffQuestionRepository.MenuStaffQuestion;
 import com.hanspoon.backend_api.domain.scan.service.MenuPhotoResolver.MenuPhoto;
 import com.hanspoon.backend_api.domain.store.entity.Store;
 import com.hanspoon.backend_api.domain.store.entity.StoreStatus;
@@ -51,6 +54,7 @@ public class ScanService {
     private final ScanStateWriter scanStateWriter;
     private final ConsentService consentService;
     private final MenuPhotoResolver menuPhotoResolver;
+    private final StaffQuestionRepository staffQuestionRepository;
 
     public ScanService(
             S3StorageService s3StorageService,
@@ -61,7 +65,8 @@ public class ScanService {
             ScanProcessor scanProcessor,
             ScanStateWriter scanStateWriter,
             ConsentService consentService,
-            MenuPhotoResolver menuPhotoResolver) {
+            MenuPhotoResolver menuPhotoResolver,
+            StaffQuestionRepository staffQuestionRepository) {
         this.s3StorageService = s3StorageService;
         this.scanSessionRepository = scanSessionRepository;
         this.menuAnalysisRepository = menuAnalysisRepository;
@@ -71,6 +76,7 @@ public class ScanService {
         this.scanStateWriter = scanStateWriter;
         this.consentService = consentService;
         this.menuPhotoResolver = menuPhotoResolver;
+        this.staffQuestionRepository = staffQuestionRepository;
     }
 
     public ScanCreatedResponse startScan(UUID userId, StartScanRequest request) {
@@ -129,9 +135,14 @@ public class ScanService {
         String locale = session.getLocale();
         Map<UUID, MenuPhoto> photos = menuPhotoResolver.find(scanId, session.getStoreId());
         Map<UUID, String> translatedNames = translatedNames(scanId, locale);
+        Map<UUID, List<StaffQuestionResult>> staffQuestions = staffQuestions(session);
         List<MenuResult> menus = menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(scanId).stream()
-                .map(m ->
-                        MenuResultMapper.toMenuResult(m, photos.get(m.getId()), translatedNames.get(m.getId()), locale))
+                .map(m -> MenuResultMapper.toMenuResult(
+                        m,
+                        photos.get(m.getId()),
+                        translatedNames.get(m.getId()),
+                        locale,
+                        staffQuestions.getOrDefault(m.getId(), List.of())))
                 .toList();
         // title 은 유저 수정본(없으면 null). 기본 제목(스캔 시각) 현지화는 scannedAt 으로 FE 가 로케일 포맷.
         return new ScanResultResponse(
@@ -191,6 +202,17 @@ public class ScanService {
         return menuAnalysisRepository.findTranslatedNames(scanId, locale).stream()
                 .collect(Collectors.toMap(
                         MenuTranslationProjection::getMenuAnalysisId, MenuTranslationProjection::getTranslatedName));
+    }
+
+    /** 가게 없는 스캔은 질문 없음. 메뉴 id 별, 생성 순. */
+    private Map<UUID, List<StaffQuestionResult>> staffQuestions(ScanSession session) {
+        if (session.getStoreId() == null) {
+            return Map.of();
+        }
+        return staffQuestionRepository.findByScan(session.getId(), session.getLocale()).stream()
+                .collect(Collectors.groupingBy(
+                        MenuStaffQuestion::menuAnalysisId,
+                        Collectors.mapping(MenuStaffQuestion::question, Collectors.toList())));
     }
 
     private static ScanCreatedResponse toCreatedResponse(ScanSession session) {

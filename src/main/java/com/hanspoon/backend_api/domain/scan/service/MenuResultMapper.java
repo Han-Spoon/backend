@@ -3,6 +3,7 @@ package com.hanspoon.backend_api.domain.scan.service;
 import com.hanspoon.backend_api.domain.scan.dto.MenuResult;
 import com.hanspoon.backend_api.domain.scan.dto.RiskIngredientResult;
 import com.hanspoon.backend_api.domain.scan.dto.ScanDietSnapshot;
+import com.hanspoon.backend_api.domain.scan.dto.StaffQuestionResult;
 import com.hanspoon.backend_api.domain.scan.entity.MenuAnalysis;
 import com.hanspoon.backend_api.domain.scan.service.MenuPhotoResolver.MenuPhoto;
 import java.util.ArrayList;
@@ -21,7 +22,12 @@ final class MenuResultMapper {
 
     private MenuResultMapper() {}
 
-    static MenuResult toMenuResult(MenuAnalysis m, MenuPhoto photo, String translatedName, String locale) {
+    static MenuResult toMenuResult(
+            MenuAnalysis m,
+            MenuPhoto photo,
+            String translatedName,
+            String locale,
+            List<StaffQuestionResult> staffQuestions) {
         return new MenuResult(
                 m.getId(),
                 m.getDisplayOrder(),
@@ -40,7 +46,8 @@ final class MenuResultMapper {
                 m.getStaffAnswerStatus(),
                 riskIngredients(m.getRiskIngredients(), locale),
                 m.getMatchedTags(),
-                object(m.getMessage()));
+                object(m.getMessage()),
+                staffQuestions);
     }
 
     /** DietProfile(snake_case, is_* 알레르기) → 유저 프로필 코드값. */

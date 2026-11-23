@@ -50,6 +50,12 @@ public enum ErrorCode {
             "SCAN_STORE_CONTEXT_LOCKED",
             "The store selected when the scan started cannot be changed."),
 
+    // ── 직원 응답 ───────────────────────────────────────────────────────
+    STAFF_QUESTION_NOT_FOUND(HttpStatus.NOT_FOUND, "STAFF_QUESTION_NOT_FOUND", "Staff question not found."),
+    STAFF_QUESTION_EXPIRED(HttpStatus.CONFLICT, "STAFF_QUESTION_EXPIRED", "Staff question has expired."),
+    STAFF_QUESTION_REQUIRES_STORE(
+            HttpStatus.CONFLICT, "STAFF_QUESTION_REQUIRES_STORE", "Staff questions require a scan with a store."),
+
     // ── 가게 ────────────────────────────────────────────────────────────
     STORE_NOT_FOUND(HttpStatus.NOT_FOUND, "STORE_NOT_FOUND", "Active store not found."),
 
