@@ -17,10 +17,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.hanspoon.backend_api.domain.scan.dto.ScanCreatedResponse;
 import com.hanspoon.backend_api.domain.scan.dto.ScanHistoryItem;
+import com.hanspoon.backend_api.domain.scan.dto.ScanImageResponse;
 import com.hanspoon.backend_api.domain.scan.dto.ScanRecordResponse;
 import com.hanspoon.backend_api.domain.scan.dto.ScanResultResponse;
 import com.hanspoon.backend_api.domain.scan.dto.ScanStoreSummary;
 import com.hanspoon.backend_api.domain.scan.entity.ScanStatus;
+import com.hanspoon.backend_api.domain.scan.service.ScanImageService;
 import com.hanspoon.backend_api.domain.scan.service.ScanRecordService;
 import com.hanspoon.backend_api.domain.scan.service.ScanService;
 import com.hanspoon.backend_api.domain.store.entity.StoreMatchMethod;
@@ -50,6 +52,7 @@ class ScanControllerTest {
 
     private final ScanService scanService = mock(ScanService.class);
     private final ScanRecordService scanRecordService = mock(ScanRecordService.class);
+    private final ScanImageService scanImageService = mock(ScanImageService.class);
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -69,7 +72,7 @@ class ScanControllerTest {
                 return USER_ID.toString();
             }
         };
-        mockMvc = MockMvcBuilders.standaloneSetup(new ScanController(scanService, scanRecordService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new ScanController(scanService, scanRecordService, scanImageService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setCustomArgumentResolvers(currentUserResolver, new PageableHandlerMethodArgumentResolver())
                 .build();
@@ -337,5 +340,34 @@ class ScanControllerTest {
         mockMvc.perform(delete("/api/v1/scans/{scanId}", scanId)).andExpect(status().isNoContent());
 
         verify(scanService).deleteScan(USER_ID, scanId);
+    }
+
+    @Test
+    void getImageReturnsReadUrl() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        when(scanImageService.getImage(USER_ID, scanId))
+                .thenReturn(new ScanImageResponse(
+                        "https://bucket.s3.amazonaws.com/scans/a.jpg?X-Amz-Signature=x",
+                        "image/jpeg",
+                        Instant.parse("2026-11-23T08:45:00Z"),
+                        Instant.parse("2027-02-21T08:30:00Z")));
+
+        mockMvc.perform(get("/api/v1/scans/{scanId}/image", scanId))
+                .andExpect(status().isOk())
+                .andExpect(
+                        jsonPath("$.imageUrl").value("https://bucket.s3.amazonaws.com/scans/a.jpg?X-Amz-Signature=x"))
+                .andExpect(jsonPath("$.contentType").value("image/jpeg"))
+                .andExpect(jsonPath("$.expiresAt").value("2026-11-23T08:45:00Z"))
+                .andExpect(jsonPath("$.availableUntil").value("2027-02-21T08:30:00Z"));
+    }
+
+    @Test
+    void getImageReturns410WhenExpired() throws Exception {
+        UUID scanId = UUID.randomUUID();
+        when(scanImageService.getImage(USER_ID, scanId)).thenThrow(new BusinessException(ErrorCode.SCAN_IMAGE_EXPIRED));
+
+        mockMvc.perform(get("/api/v1/scans/{scanId}/image", scanId))
+                .andExpect(status().isGone())
+                .andExpect(jsonPath("$.code").value("SCAN_IMAGE_EXPIRED"));
     }
 }
