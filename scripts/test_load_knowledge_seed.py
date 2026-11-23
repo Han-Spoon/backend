@@ -47,10 +47,27 @@ class LoadKnowledgeSeedTest(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "비어 있음"):
             lks.read_seed(self.dir, self.translations)
 
-    def sql(self, dry_run):
+    def sql(self, dry_run, reload=False):
         buf = io.StringIO()
-        lks.emit(buf, lks.read_seed(self.dir, self.translations), dry_run=dry_run)
+        lks.emit(buf, lks.read_seed(self.dir, self.translations), dry_run=dry_run, reload=reload)
         return buf.getvalue()
+
+    def test_reload_requires_loaded_knowledge_and_matching_rows(self):
+        sql = self.sql(dry_run=True, reload=True)
+
+        self.assertNotIn("최초 적재 전용", sql)
+        self.assertLess(sql.index("최초 적재는 --reload 없이 실행"), sql.index("CREATE TEMP TABLE s_menus"))
+        self.assertLess(sql.index("기존 메뉴 id·속성 불일치"), sql.index("INSERT INTO menus"))
+        self.assertLess(sql.index("이미 적재된 시드 버전"), sql.index("INSERT INTO knowledge_import_batches"))
+
+    def test_reload_replaces_seed_menus_and_bumps_changed_revisions(self):
+        sql = self.sql(dry_run=False, reload=True)
+
+        self.assertLess(sql.index("CREATE TEMP TABLE t_changed_menus"),
+                        sql.index("DELETE FROM menu_recipe_corpora WHERE menu_id IN (SELECT id FROM t_menus)"))
+        self.assertIn("JOIN t_knowledge_import_batches b ON b.seed_id = c.import_batch_id", sql)
+        self.assertIn("knowledge_revision = knowledge_revision + 1", sql)
+        self.assertIn("c.menu_revision <> m.knowledge_revision", sql)
 
     def test_sql_guards_first_load_and_keeps_seed_ids(self):
         sql = self.sql(dry_run=True)
