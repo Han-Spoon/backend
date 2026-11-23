@@ -156,6 +156,16 @@ public class ReviewRepository {
                 .findFirst();
     }
 
+    /** 가게 공개 후기(숨김 제외), 최신순. */
+    public List<ReviewResponse> findByStore(long storeId, UUID viewerId) {
+        return find("WHERE r.store_id = :storeId AND r.hidden_at IS NULL", Map.of("storeId", storeId), viewerId);
+    }
+
+    /** 내 후기 전체(숨김 포함), 최신순. */
+    public List<ReviewResponse> findByUser(UUID userId) {
+        return find("WHERE r.user_id = :userId", Map.of("userId", userId), userId);
+    }
+
     private static MapSqlParameterSource itemParams(ItemRow item) {
         return new MapSqlParameterSource()
                 .addValue("id", item.id())

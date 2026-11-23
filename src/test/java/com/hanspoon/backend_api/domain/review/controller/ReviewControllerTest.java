@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -155,5 +156,29 @@ class ReviewControllerTest {
         mockMvc.perform(delete("/api/v1/reviews/" + reviewId))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("REVIEW_NOT_FOUND"));
+    }
+
+    @Test
+    void listsReturnArrays() throws Exception {
+        ReviewResponse review = new ReviewResponse(
+                UUID.randomUUID(),
+                12345L,
+                "한스푼",
+                null,
+                List.of(),
+                false,
+                false,
+                Instant.parse("2026-11-23T00:00:00Z"),
+                Instant.parse("2026-11-23T00:00:00Z"));
+        when(reviewService.listByStore(USER_ID, 12345L)).thenReturn(List.of(review));
+        when(reviewService.listMine(USER_ID)).thenReturn(List.of());
+
+        mockMvc.perform(get(CREATE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].reviewId").value(review.reviewId().toString()))
+                .andExpect(jsonPath("$[0].mine").value(false));
+        mockMvc.perform(get("/api/v1/reviews/me"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
     }
 }

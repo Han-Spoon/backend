@@ -280,6 +280,65 @@ class ReviewServiceIntegrationTest {
         assertError(() -> reviewService.delete(userId, reviewId), ErrorCode.REVIEW_NOT_FOUND);
     }
 
+    @Test
+    void storeListHidesOthersScanAndHiddenReviews() {
+        UUID mineId = reviewService
+                .create(
+                        userId,
+                        storeId,
+                        request(scanId, new ReviewMenuRequest("김치찌개", scanMenuId, Map.of(HALAL, "present"), null)))
+                .reviewId();
+        UUID other = user("other");
+        UUID othersId = reviewService
+                .create(other, storeId, request(null, new ReviewMenuRequest("잡채", null, null, "Good")))
+                .reviewId();
+        UUID hiddenId = reviewService
+                .create(other, storeId, request(null, new ReviewMenuRequest("제육", null, null, "Spicy")))
+                .reviewId();
+        jdbcTemplate.update("update meal_reviews set hidden_at = now() where id = ?", hiddenId);
+        jdbcTemplate.update("update meal_reviews set created_at = now() - interval '1 day' where id = ?", mineId);
+
+        List<ReviewResponse> asOther = reviewService.listByStore(other, storeId);
+
+        assertThat(asOther).extracting(ReviewResponse::reviewId).containsExactly(othersId, mineId);
+        assertThat(asOther.get(0).mine()).isTrue();
+        ReviewResponse mineSeenByOther = asOther.get(1);
+        assertThat(mineSeenByOther.mine()).isFalse();
+        assertThat(mineSeenByOther.scanId()).isNull();
+        assertThat(mineSeenByOther.menus()).singleElement().satisfies(menu -> {
+            assertThat(menu.scanMenuId()).isNull();
+            assertThat(menu.answers()).isEqualTo(Map.of(HALAL, "present"));
+        });
+
+        ReviewResponse mineSeenByMe = reviewService.listByStore(userId, storeId).get(1);
+        assertThat(mineSeenByMe.scanId()).isEqualTo(scanId);
+        assertThat(mineSeenByMe.menus().get(0).scanMenuId()).isEqualTo(scanMenuId);
+    }
+
+    @Test
+    void storeListNeedsExistingStore() {
+        assertThat(reviewService.listByStore(userId, insertStore("빈 가게"))).isEmpty();
+        assertError(() -> reviewService.listByStore(userId, Long.MAX_VALUE), ErrorCode.STORE_NOT_FOUND);
+    }
+
+    @Test
+    void myListIncludesHiddenNewestFirst() {
+        UUID older =
+                reviewService.create(userId, storeId, request(null, line("잡채"))).reviewId();
+        UUID newer = reviewService
+                .create(userId, insertStore("두 번째"), request(null, line("제육")))
+                .reviewId();
+        reviewService.create(user("other"), storeId, request(null, new ReviewMenuRequest("국수", null, null, "Hi")));
+        jdbcTemplate.update(
+                "update meal_reviews set created_at = now() - interval '1 day', hidden_at = now() where id = ?", older);
+
+        List<ReviewResponse> mine = reviewService.listMine(userId);
+
+        assertThat(mine).extracting(ReviewResponse::reviewId).containsExactly(newer, older);
+        assertThat(mine).extracting(ReviewResponse::hidden).containsExactly(false, true);
+        assertThat(mine).allMatch(ReviewResponse::mine);
+    }
+
     private UUID itemId(UUID reviewId, String normalizedName) {
         return jdbcTemplate.queryForObject(
                 "select id from meal_review_items where review_id = ? and menu_name_normalized = normalize_food_name(?)",

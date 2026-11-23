@@ -82,6 +82,21 @@ public class ReviewService {
         return reviewRepository.findOne(reviewId, userId).orElseThrow();
     }
 
+    /** 가게 공개 후기. 남의 후기는 scanId·scanMenuId 가림. */
+    @Transactional(readOnly = true)
+    public List<ReviewResponse> listByStore(UUID userId, long storeId) {
+        if (!storeRepository.existsById(storeId)) {
+            throw new BusinessException(ErrorCode.STORE_NOT_FOUND);
+        }
+        return reviewRepository.findByStore(storeId, userId);
+    }
+
+    /** 내 후기, 숨김 포함. */
+    @Transactional(readOnly = true)
+    public List<ReviewResponse> listMine(UUID userId) {
+        return reviewRepository.findByUser(userId);
+    }
+
     /** 메뉴 줄 전체 교체. 정규화 이름이 같은 줄은 id 유지, 빠진 줄 삭제. 가게·스캔·숨김은 그대로. */
     @Transactional
     public ReviewResponse update(UUID userId, UUID reviewId, ReviewUpdateRequest request) {
