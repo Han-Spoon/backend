@@ -398,6 +398,8 @@ resource "aws_ecs_task_definition" "app" {
         { name = "OPENAI_API_KEY", valueFrom = aws_ssm_parameter.app["openai_api_key"].arn },
         { name = "CLOVA_OCR_SECRET", valueFrom = aws_ssm_parameter.app["clova_ocr_secret"].arn },
         { name = "CLOVA_OCR_URL", valueFrom = aws_ssm_parameter.app["clova_ocr_url"].arn },
+        { name = "NAVER_SEARCH_CLIENT_ID", valueFrom = aws_ssm_parameter.app["naver_search_client_id"].arn },
+        { name = "NAVER_SEARCH_CLIENT_SECRET", valueFrom = aws_ssm_parameter.app["naver_search_client_secret"].arn },
       ]
 
       logConfiguration = {
