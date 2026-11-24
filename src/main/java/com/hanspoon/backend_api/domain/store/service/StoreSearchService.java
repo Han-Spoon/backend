@@ -7,6 +7,7 @@ import com.hanspoon.backend_api.domain.store.entity.StoreMatchMethod;
 import com.hanspoon.backend_api.domain.store.repository.StoreCandidateProjection;
 import com.hanspoon.backend_api.domain.store.repository.StoreRepository;
 import java.util.List;
+import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,9 +21,11 @@ public class StoreSearchService {
     private static final int SHORT_QUERY_RADIUS_METERS = 3000;
 
     private final StoreRepository storeRepository;
+    private final StoreThumbnailResolver storeThumbnailResolver;
 
-    public StoreSearchService(StoreRepository storeRepository) {
+    public StoreSearchService(StoreRepository storeRepository, StoreThumbnailResolver storeThumbnailResolver) {
         this.storeRepository = storeRepository;
+        this.storeThumbnailResolver = storeThumbnailResolver;
     }
 
     @Transactional(readOnly = true)
@@ -58,14 +61,17 @@ public class StoreSearchService {
                 request.resolvedLimit());
     }
 
-    private static StoreCandidateListResponse toListResponse(
+    private StoreCandidateListResponse toListResponse(
             List<StoreCandidateProjection> candidates, StoreMatchMethod matchMethod) {
+        Map<Long, String> thumbnails = storeThumbnailResolver.find(
+                candidates.stream().map(StoreCandidateProjection::getStoreId).toList());
         return new StoreCandidateListResponse(candidates.stream()
-                .map(candidate -> toResponse(candidate, matchMethod))
+                .map(candidate -> toResponse(candidate, matchMethod, thumbnails.get(candidate.getStoreId())))
                 .toList());
     }
 
-    private static StoreCandidateResponse toResponse(StoreCandidateProjection candidate, StoreMatchMethod matchMethod) {
+    private static StoreCandidateResponse toResponse(
+            StoreCandidateProjection candidate, StoreMatchMethod matchMethod, String thumbnailUrl) {
         return new StoreCandidateResponse(
                 candidate.getStoreId(),
                 candidate.getName(),
@@ -79,6 +85,7 @@ public class StoreSearchService {
                 candidate.getCategoryName(),
                 candidate.getReviewCount() == null ? 0 : candidate.getReviewCount(),
                 Boolean.TRUE.equals(candidate.getVerified()),
-                matchMethod);
+                matchMethod,
+                thumbnailUrl);
     }
 }

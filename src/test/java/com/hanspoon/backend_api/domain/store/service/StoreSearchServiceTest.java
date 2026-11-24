@@ -12,6 +12,7 @@ import com.hanspoon.backend_api.domain.store.entity.StoreMatchMethod;
 import com.hanspoon.backend_api.domain.store.repository.StoreCandidateProjection;
 import com.hanspoon.backend_api.domain.store.repository.StoreRepository;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -24,6 +25,9 @@ class StoreSearchServiceTest {
     @Mock
     private StoreRepository storeRepository;
 
+    @Mock
+    private StoreThumbnailResolver storeThumbnailResolver;
+
     @InjectMocks
     private StoreSearchService storeSearchService;
 
@@ -32,6 +36,7 @@ class StoreSearchServiceTest {
         StoreCandidateSearchRequest request = new StoreCandidateSearchRequest(37.4979, 127.0276, "   ", null, null);
         StoreCandidateProjection candidate = candidate();
         when(storeRepository.findNearbyCandidates(37.4979, 127.0276, 100, 20)).thenReturn(List.of(candidate));
+        when(storeThumbnailResolver.find(List.of(42L))).thenReturn(Map.of(42L, "https://cdn.test/a.jpg"));
 
         StoreCandidateListResponse response = storeSearchService.findCandidates(request);
 
@@ -42,6 +47,7 @@ class StoreSearchServiceTest {
         assertThat(response.items().getFirst().verified()).isTrue();
         assertThat(response.items().getFirst().reviewCount()).isEqualTo(3);
         assertThat(response.items().getFirst().matchMethod()).isEqualTo(StoreMatchMethod.GPS_CANDIDATE);
+        assertThat(response.items().getFirst().thumbnailUrl()).isEqualTo("https://cdn.test/a.jpg");
         verify(storeRepository).findNearbyCandidates(37.4979, 127.0276, 100, 20);
         verifyNoMoreInteractions(storeRepository);
     }

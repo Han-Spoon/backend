@@ -2,7 +2,7 @@ package com.hanspoon.backend_api.domain.scan.service;
 
 import com.hanspoon.backend_api.domain.scan.repository.MenuAnalysisRepository;
 import com.hanspoon.backend_api.domain.scan.repository.MenuPhotoProjection;
-import com.hanspoon.backend_api.global.config.CdnProperties;
+import com.hanspoon.backend_api.global.config.CdnUrls;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -13,18 +13,18 @@ import org.springframework.stereotype.Component;
 public class MenuPhotoResolver {
 
     private final MenuAnalysisRepository menuAnalysisRepository;
-    private final String baseUrl;
+    private final CdnUrls cdnUrls;
 
-    public MenuPhotoResolver(MenuAnalysisRepository menuAnalysisRepository, CdnProperties cdnProperties) {
+    public MenuPhotoResolver(MenuAnalysisRepository menuAnalysisRepository, CdnUrls cdnUrls) {
         this.menuAnalysisRepository = menuAnalysisRepository;
-        this.baseUrl = cdnProperties.baseUrl().replaceAll("/+$", "");
+        this.cdnUrls = cdnUrls;
     }
 
     public Map<UUID, MenuPhoto> find(UUID scanSessionId) {
         return menuAnalysisRepository.findPhotosByScanSessionId(scanSessionId).stream()
                 .collect(Collectors.toMap(
                         MenuPhotoProjection::getMenuAnalysisId,
-                        p -> new MenuPhoto(baseUrl + "/" + p.getStorageKey(), p.getAttributionText())));
+                        p -> new MenuPhoto(cdnUrls.of(p.getStorageKey()), p.getAttributionText())));
     }
 
     /** 공개 주소 + 출처 표기. */
