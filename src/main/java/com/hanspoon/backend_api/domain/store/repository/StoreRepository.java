@@ -63,7 +63,15 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
             @Param("radiusMeters") int radiusMeters,
             @Param("limit") int limit);
 
-    /** 정규화된 상호명 trigram 후보를 현재 위치 반경 안에서 조회한다. */
+    /** 검색어 정규형. 매칭 규칙을 DB 함수 하나로 유지. */
+    @Query(value = "select normalize_store_name(:query)", nativeQuery = true)
+    String normalizeStoreName(@Param("query") String query);
+
+    /**
+     * 전국 상호명 검색(정규형 3글자 이상). 포함 매칭 → 유사 매칭 순, 같은 단계는 거리순.
+     *
+     * <p>좌표는 거리 계산·정렬에만 사용. 좌표가 없으면 거리 null, 일치 → 접두 → 포함 → 짧은 이름 순.
+     */
     @Query(
             value =
                     """
@@ -74,11 +82,13 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
                            s.floor_info as "floorInfo",
                            s.lat as "latitude",
                            s.lng as "longitude",
-                           cast(round(earth_distance(
-                               ll_to_earth(:latitude, :longitude),
-                               ll_to_earth(s.lat, s.lng)
-                           )) as integer) as "distanceMeters",
-                           similarity(s.name_normalized, normalize_store_name(:query)) as "nameSimilarity",
+                           case when cast(:latitude as double precision) is null then null
+                                else cast(round(earth_distance(
+                                    ll_to_earth(cast(:latitude as double precision), cast(:longitude as double precision)),
+                                    ll_to_earth(s.lat, s.lng)
+                                )) as integer)
+                           end as "distanceMeters",
+                           similarity(s.name_normalized, :normalizedQuery) as "nameSimilarity",
                            c.code as "categoryCode",
                            c.name as "categoryName",
                            (s.verified_at is not null) as "verified",
@@ -89,38 +99,61 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
                       from stores s
                       left join store_categories c on c.id = s.category_id
                      where s.status = 'active'
-                       and earth_box(
-                               ll_to_earth(:latitude, :longitude),
-                               :radiusMeters
-                           ) @> ll_to_earth(s.lat, s.lng)
-                       and earth_distance(
-                               ll_to_earth(:latitude, :longitude),
-                               ll_to_earth(s.lat, s.lng)
-                           ) <= :radiusMeters
-                       and s.name_normalized % normalize_store_name(:query)
+                       and (s.name_normalized like '%' || :normalizedQuery || '%'
+                            or s.name_normalized % :normalizedQuery)
                      order by "verified" desc,
+                              case when s.name_normalized like '%' || :normalizedQuery || '%' then 0 else 1 end,
+                              case when s.name_normalized like '%' || :normalizedQuery || '%' then null
+                                   else similarity(s.name_normalized, :normalizedQuery)
+                              end desc nulls last,
+                              "distanceMeters" nulls last,
+                              case when s.name_normalized = :normalizedQuery then 0
+                                   when s.name_normalized like :normalizedQuery || '%' then 1
+                                   else 2
+                              end,
+                              char_length(s.name_normalized),
                               case s.origin
                                   when 'sbiz' then 0
                                   when 'localdata' then 1
                                   else 2
                               end,
-                              "nameSimilarity" desc,
-                              "distanceMeters",
                               s.id
                      limit :limit
                     """,
             nativeQuery = true)
-    List<StoreCandidateProjection> findNearbyCandidatesByName(
-            @Param("query") String query,
-            @Param("latitude") double latitude,
-            @Param("longitude") double longitude,
-            @Param("radiusMeters") int radiusMeters,
+    List<StoreCandidateProjection> findCandidatesByName(
+            @Param("normalizedQuery") String normalizedQuery,
+            @Param("latitude") Double latitude,
+            @Param("longitude") Double longitude,
             @Param("limit") int limit);
 
-    /** 좌표 없는 이름 검색. 전체 영업 중 가게 대상, 거리는 null. */
+    /**
+     * 짧은 검색어(정규형 1~2글자) 상호명 검색. trigram 이 없는 포함 매칭은 반경 안으로 한정.
+     *
+     * <p>매칭: 전국 접두 일치 또는 반경 안 포함. 좌표가 없으면 전국 접두 일치만.
+     */
     @Query(
             value =
                     """
+                    with matched as (
+                        select s.id
+                          from stores s
+                         where s.status = 'active'
+                           and s.name_normalized like :normalizedQuery || '%'
+                        union
+                        select s.id
+                          from stores s
+                         where s.status = 'active'
+                           and earth_box(
+                                   ll_to_earth(cast(:latitude as double precision), cast(:longitude as double precision)),
+                                   :radiusMeters
+                               ) @> ll_to_earth(s.lat, s.lng)
+                           and earth_distance(
+                                   ll_to_earth(cast(:latitude as double precision), cast(:longitude as double precision)),
+                                   ll_to_earth(s.lat, s.lng)
+                               ) <= :radiusMeters
+                           and s.name_normalized like '%' || :normalizedQuery || '%'
+                    )
                     select s.id as "storeId",
                            s.name as "name",
                            s.branch_name as "branchName",
@@ -128,8 +161,13 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
                            s.floor_info as "floorInfo",
                            s.lat as "latitude",
                            s.lng as "longitude",
-                           cast(null as integer) as "distanceMeters",
-                           similarity(s.name_normalized, normalize_store_name(:query)) as "nameSimilarity",
+                           case when cast(:latitude as double precision) is null then null
+                                else cast(round(earth_distance(
+                                    ll_to_earth(cast(:latitude as double precision), cast(:longitude as double precision)),
+                                    ll_to_earth(s.lat, s.lng)
+                                )) as integer)
+                           end as "distanceMeters",
+                           similarity(s.name_normalized, :normalizedQuery) as "nameSimilarity",
                            c.code as "categoryCode",
                            c.name as "categoryName",
                            (s.verified_at is not null) as "verified",
@@ -137,20 +175,29 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
                               from meal_reviews r
                              where r.store_id = s.id
                                and r.hidden_at is null) as "reviewCount"
-                      from stores s
+                      from matched m
+                      join stores s on s.id = m.id
                       left join store_categories c on c.id = s.category_id
-                     where s.status = 'active'
-                       and s.name_normalized % normalize_store_name(:query)
                      order by "verified" desc,
+                              "distanceMeters" nulls last,
+                              case when s.name_normalized = :normalizedQuery then 0
+                                   when s.name_normalized like :normalizedQuery || '%' then 1
+                                   else 2
+                              end,
+                              char_length(s.name_normalized),
                               case s.origin
                                   when 'sbiz' then 0
                                   when 'localdata' then 1
                                   else 2
                               end,
-                              "nameSimilarity" desc,
                               s.id
                      limit :limit
                     """,
             nativeQuery = true)
-    List<StoreCandidateProjection> findCandidatesByName(@Param("query") String query, @Param("limit") int limit);
+    List<StoreCandidateProjection> findCandidatesByShortName(
+            @Param("normalizedQuery") String normalizedQuery,
+            @Param("latitude") Double latitude,
+            @Param("longitude") Double longitude,
+            @Param("radiusMeters") int radiusMeters,
+            @Param("limit") int limit);
 }

@@ -13,6 +13,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class StoreSearchService {
 
+    /** 포함 매칭에 trigram 인덱스를 쓸 수 있는 정규형 최소 길이. */
+    private static final int TRIGRAM_MIN_LENGTH = 3;
+
+    /** 짧은 검색어의 포함 매칭 반경(m). */
+    private static final int SHORT_QUERY_RADIUS_METERS = 3000;
+
     private final StoreRepository storeRepository;
 
     public StoreSearchService(StoreRepository storeRepository) {
@@ -22,22 +28,38 @@ public class StoreSearchService {
     @Transactional(readOnly = true)
     public StoreCandidateListResponse findCandidates(StoreCandidateSearchRequest request) {
         String query = request.trimmedQuery();
-        List<StoreCandidateProjection> candidates = !request.hasCoordinates()
-                ? storeRepository.findCandidatesByName(query, request.resolvedLimit())
-                : query == null
-                        ? storeRepository.findNearbyCandidates(
-                                request.latitude(),
-                                request.longitude(),
-                                request.resolvedRadiusMeters(),
-                                request.resolvedLimit())
-                        : storeRepository.findNearbyCandidatesByName(
-                                query,
-                                request.latitude(),
-                                request.longitude(),
-                                request.resolvedRadiusMeters(),
-                                request.resolvedLimit());
+        if (query == null) {
+            return toListResponse(
+                    storeRepository.findNearbyCandidates(
+                            request.latitude(),
+                            request.longitude(),
+                            request.resolvedRadiusMeters(),
+                            request.resolvedLimit()),
+                    StoreMatchMethod.GPS_CANDIDATE);
+        }
+        return toListResponse(findByName(query, request), StoreMatchMethod.NAME_SEARCH);
+    }
 
-        StoreMatchMethod matchMethod = query == null ? StoreMatchMethod.GPS_CANDIDATE : StoreMatchMethod.NAME_SEARCH;
+    /** 전국 이름 검색. 좌표는 거리 계산·정렬에만 사용하고 요청 반경은 무시. */
+    private List<StoreCandidateProjection> findByName(String query, StoreCandidateSearchRequest request) {
+        String normalized = storeRepository.normalizeStoreName(query);
+        if (normalized == null || normalized.isEmpty()) {
+            return List.of();
+        }
+        if (normalized.codePointCount(0, normalized.length()) >= TRIGRAM_MIN_LENGTH) {
+            return storeRepository.findCandidatesByName(
+                    normalized, request.latitude(), request.longitude(), request.resolvedLimit());
+        }
+        return storeRepository.findCandidatesByShortName(
+                normalized,
+                request.latitude(),
+                request.longitude(),
+                SHORT_QUERY_RADIUS_METERS,
+                request.resolvedLimit());
+    }
+
+    private static StoreCandidateListResponse toListResponse(
+            List<StoreCandidateProjection> candidates, StoreMatchMethod matchMethod) {
         return new StoreCandidateListResponse(candidates.stream()
                 .map(candidate -> toResponse(candidate, matchMethod))
                 .toList());
