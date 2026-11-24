@@ -1,0 +1,171 @@
+name: Knowledge seed reload
+
+# AI 지식 시드 → 운영 DB 재적재. 수동 실행 전용
+#  dry-run(prod-data-dryrun): 시드 생성 → S3 → 이미지·태스크 정의 → --reload --dry-run
+#  apply(prod-data, 승인 필요): RDS 스냅샷 → 같은 시드·태스크 정의로 --reload
+on:
+  workflow_dispatch:
+    inputs:
+      ai_sha:
+        description: "AI 레포 커밋 sha (비우면 main)"
+        required: false
+        default: ""
+
+concurrency:
+  group: knowledge-seed
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-northeast-2
+  ECS_CLUSTER: hanspoon-prod-cluster
+  SEED_FAMILY: hanspoon-prod-seed-loader
+  SEED_LOG_GROUP: /ecs/hanspoon-prod-seed-loader
+  SEED_BUCKET: hanspoon-prod-images-917dedbe
+  DEPLOY_LOCK_TABLE: hanspoon-prod-deploy-lock
+  DB_INSTANCE: hanspoon-prod-db
+
+jobs:
+  dry-run:
+    runs-on: ubuntu-24.04-arm
+    environment: prod-data-dryrun
+    outputs:
+      ai_sha: ${{ steps.seed.outputs.ai_sha }}
+      seed_uri: ${{ steps.seed.outputs.uri }}
+      task_def: ${{ steps.task-def.outputs.arn }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Checkout AI
+        uses: actions/checkout@v4
+        with:
+          repository: Han-Spoon/ai
+          ref: ${{ inputs.ai_sha || 'main' }}
+          token: ${{ secrets.AI_REPO_TOKEN || github.token }}
+          path: ai
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build seed bundle
+        id: seed
+        run: |
+          AI_SHA="$(git -C ai rev-parse HEAD)"
+          mkdir -p "$RUNNER_TEMP/bundle"
+          (cd ai && python crawling/db_seed.py --out "$RUNNER_TEMP/bundle/seed")
+          cp ai/crawling/ingredient_translations.csv "$RUNNER_TEMP/bundle/"
+          tar -czf "$RUNNER_TEMP/seed.tar.gz" -C "$RUNNER_TEMP/bundle" seed ingredient_translations.csv
+          echo "ai_sha=$AI_SHA" >> "$GITHUB_OUTPUT"
+          echo "uri=s3://$SEED_BUCKET/knowledge-seeds/$AI_SHA/${{ github.run_id }}-${{ github.run_attempt }}.tar.gz" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_SEED_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload seed bundle
+        run: aws s3 cp "$RUNNER_TEMP/seed.tar.gz" "${{ steps.seed.outputs.uri }}"
+
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push loader image
+        id: image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          TAG="${GITHUB_SHA::12}"
+          IMAGE="$REGISTRY/$SEED_FAMILY:$TAG"
+          if aws ecr describe-images --repository-name "$SEED_FAMILY" \
+               --image-ids imageTag="$TAG" >/dev/null 2>&1; then
+            echo "image already exists — skip build/push"
+          else
+            docker build -f docker/seed-loader.Dockerfile -t "$IMAGE" .
+            docker push "$IMAGE"
+          fi
+          echo "uri=$IMAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Register task definition
+        id: task-def
+        env:
+          IMAGE: ${{ steps.image.outputs.uri }}
+        run: |
+          aws ecs describe-task-definition --task-definition "$SEED_FAMILY" \
+            --query taskDefinition --output json > "$RUNNER_TEMP/td.json"
+          jq --arg image "$IMAGE" '
+            .containerDefinitions[0].image = $image
+            | del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
+                  .compatibilities, .registeredAt, .registeredBy, .deregisteredAt)
+          ' "$RUNNER_TEMP/td.json" > "$RUNNER_TEMP/td-new.json"
+          ARN="$(aws ecs register-task-definition --cli-input-json "file://$RUNNER_TEMP/td-new.json" \
+            --query taskDefinition.taskDefinitionArn --output text)"
+          echo "arn=$ARN" >> "$GITHUB_OUTPUT"
+
+      - name: Acquire ECS deploy lock
+        id: lock
+        run: .github/scripts/deploy-lock.sh acquire "$GITHUB_REPOSITORY:seed:$GITHUB_RUN_ID:$GITHUB_RUN_ATTEMPT"
+
+      - name: Dry-run reload
+        run: |
+          .github/scripts/run-seed-task.sh "${{ steps.task-def.outputs.arn }}" \
+            "${{ steps.seed.outputs.uri }}" --dry-run
+
+      - name: Release ECS deploy lock
+        if: ${{ always() && steps.lock.outcome == 'success' }}
+        run: .github/scripts/deploy-lock.sh release "$GITHUB_REPOSITORY:seed:$GITHUB_RUN_ID:$GITHUB_RUN_ATTEMPT"
+
+  apply:
+    needs: dry-run
+    runs-on: ubuntu-24.04-arm
+    environment: prod-data
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_SEED_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Snapshot database
+        env:
+          AI_SHA: ${{ needs.dry-run.outputs.ai_sha }}
+        run: |
+          SNAPSHOT="hanspoon-prod-seed-${AI_SHA::7}-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          aws rds create-db-snapshot --db-instance-identifier "$DB_INSTANCE" \
+            --db-snapshot-identifier "$SNAPSHOT" >/dev/null
+          aws rds wait db-snapshot-available --db-snapshot-identifier "$SNAPSHOT"
+          echo "- 스냅샷: \`$SNAPSHOT\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Acquire ECS deploy lock
+        id: lock
+        run: .github/scripts/deploy-lock.sh acquire "$GITHUB_REPOSITORY:seed:$GITHUB_RUN_ID:$GITHUB_RUN_ATTEMPT"
+
+      - name: Reload
+        run: |
+          .github/scripts/run-seed-task.sh "${{ needs.dry-run.outputs.task_def }}" \
+            "${{ needs.dry-run.outputs.seed_uri }}"
+
+      - name: Release ECS deploy lock
+        if: ${{ always() && steps.lock.outcome == 'success' }}
+        run: .github/scripts/deploy-lock.sh release "$GITHUB_REPOSITORY:seed:$GITHUB_RUN_ID:$GITHUB_RUN_ATTEMPT"
+
+      # 적재 전 스냅샷은 최근 3개만 보관
+      - name: Prune old seed snapshots
+        if: ${{ success() }}
+        run: |
+          aws rds describe-db-snapshots --db-instance-identifier "$DB_INSTANCE" --snapshot-type manual \
+            --query "sort_by(DBSnapshots[?starts_with(DBSnapshotIdentifier, 'hanspoon-prod-seed-')], &SnapshotCreateTime)[].DBSnapshotIdentifier" \
+            --output text | tr '\t' '\n' | head -n -3 | while read -r OLD; do
+              [ -n "$OLD" ] && aws rds delete-db-snapshot --db-snapshot-identifier "$OLD" >/dev/null && echo "삭제: $OLD"
+            done
