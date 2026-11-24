@@ -45,6 +45,15 @@ resource "aws_s3_bucket_lifecycle_configuration" "images" {
     filter { prefix = "menus/" }
     noncurrent_version_expiration { noncurrent_days = 30 }
   }
+
+  # 지식 시드 적재용 묶음. 30일 후 삭제
+  rule {
+    id     = "expire-knowledge-seeds"
+    status = "Enabled"
+    filter { prefix = local.seed_s3_prefix }
+    expiration { days = 30 }
+    noncurrent_version_expiration { noncurrent_days = 1 }
+  }
 }
 
 # 버킷 CORS.
