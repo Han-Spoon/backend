@@ -8,7 +8,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
-/** 스캔 메뉴 id → 가게 메뉴 공개 사진. */
+/** 스캔 메뉴 id → 공개 사진(가게 메뉴 사진, 없으면 표준 메뉴 이미지). */
 @Component
 public class MenuPhotoResolver {
 
@@ -20,10 +20,7 @@ public class MenuPhotoResolver {
         this.baseUrl = cdnProperties.baseUrl().replaceAll("/+$", "");
     }
 
-    public Map<UUID, MenuPhoto> find(UUID scanSessionId, Long storeId) {
-        if (storeId == null) {
-            return Map.of();
-        }
+    public Map<UUID, MenuPhoto> find(UUID scanSessionId) {
         return menuAnalysisRepository.findPhotosByScanSessionId(scanSessionId).stream()
                 .collect(Collectors.toMap(
                         MenuPhotoProjection::getMenuAnalysisId,

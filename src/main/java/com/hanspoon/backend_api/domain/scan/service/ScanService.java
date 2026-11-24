@@ -133,7 +133,7 @@ public class ScanService {
                 .findByIdAndUserId(scanId, userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SCAN_NOT_FOUND));
         String locale = session.getLocale();
-        Map<UUID, MenuPhoto> photos = menuPhotoResolver.find(scanId, session.getStoreId());
+        Map<UUID, MenuPhoto> photos = menuPhotoResolver.find(scanId);
         Map<UUID, String> translatedNames = translatedNames(scanId, locale);
         Map<UUID, List<StaffQuestionResult>> staffQuestions = staffQuestions(session);
         List<MenuResult> menus = menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(scanId).stream()
