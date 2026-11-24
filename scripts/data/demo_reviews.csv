@@ -1,0 +1,143 @@
+store_no,review_no,menu_name,comment,comment_locale,answers,days_ago
+3020000-101-2014-00181,1,메밀싹 콩국수,店員さんが親切で、메밀싹 콩국수も美味しかった。,ja,allergy:wheat=present;allergy:buckwheat=present;allergy:soybean=present,20.53
+3020000-101-2020-00009,1,도토리사발묵,,,allergy:sulfite=unknown,42.4
+3020000-101-2004-00250,1,흑돼지 김치찌개정식,,,allergy:pork=present,14.21
+3020000-101-2004-00250,1,떡갈비,떡갈비 정말 맛있었어요.,ko,,14.21
+3020000-101-2004-00250,2,매운김치갈비찜 대,Nice local place. 매운김치갈비찜 tasted homemade.,en,allergy:beef=present;preference:no-spicy=present,12.67
+3020000-101-2004-00250,2,흑돼지 김치찌개,,,allergy:pork=present;allergy:wheat=unknown,12.67
+3020000-101-2004-00250,3,목살김치찜정식,목살김치찜정식 꽤 매워요. 매운 거 못 드시면 참고하세요.,ko,allergy:pork=present;preference:no-spicy=present,20.0
+MA0101202210A0079272,1,백합칼국수,백합칼국수很地道，下次还来。,zh-CN,allergy:wheat=present;allergy:shellfish=present,2.51
+MA0101202210A0079272,1,얼큰칼국수,,,allergy:wheat=present;preference:no-spicy=present,2.51
+MA0101202210A0079272,2,미니보쌈,,,allergy:pork=present;allergy:sulfite=unknown,8.62
+MA0101202210A0079272,3,양념새우보쌈 중,"Came here near Yongsan Station, the 양념새우보쌈 was worth it.",en,allergy:pork=present;allergy:shrimp=present,31.53
+MA010120220800319266,1,보쌈,보쌈は量も多くて満足しました。,ja,allergy:pork=present,12.42
+MA010120220800319266,2,보쌈,보쌈がとても美味しかったです。,ja,allergy:pork=present,40.85
+MA010120220800319266,3,어탕수,용산역 근처라 가기 편하고 어탕수 추천해요.,ko,,24.75
+MA0101202406A0543007,1,용산부대찌개,,,allergy:pork=present,26.49
+MA0101202406A0543007,2,(사이드) 계란말이,Really tasty 계란말이. Portions were generous.,en,allergy:egg=present,11.39
+MA0101202505A0054692,1,★메밀왕만둣국★,,,allergy:buckwheat=present,21.78
+MA0101202505A0054692,1,★메밀꽃 만두전골★,El personal fue amable y el 메밀꽃 만두전골 estaba bueno.,es,allergy:wheat=present;allergy:buckwheat=present,21.78
+MA0101202406A0142084,1,곰탕 스페셜,곰탕 스페셜がとても美味しかったです。,ja,allergy:beef=present,26.95
+MA0101202406A0142084,1,투뿔한우육회,,,allergy:beef=present,26.95
+MA0101202503A0060219,1,한우뚝배기불고기,店員さんが親切で、한우뚝배기불고기も美味しかった。,ja,allergy:beef=present,30.11
+MA0101202503A0060219,2,흑돼지 이베리코 꽃목살 (150g),أعجبني 흑돼지 이베리코 꽃목살 كثيرًا.,ar,allergy:pork=present,36.85
+MA0101202503A0060219,2,한우살치살,كان 한우살치살 لذيذًا جدًا.,ar,allergy:beef=present;allergy:sulfite=unknown,36.85
+MA0101202409A0007503,1,돼지막창(180g),돼지막창很道地，會再來。,zh-TW,allergy:pork=present,34.16
+MA0101202409A0007503,2,차돌된장찌개,店员很耐心，차돌된장찌개味道不错。 酱料成分我不确定，建议向店员确认。,zh-CN,allergy:beef=present;allergy:soybean=present;allergy:sulfite=unknown,40.77
+MA0101202409A0007503,3,돼지김치짜글이,"Solid 돼지김치짜글이, quick service even at lunch time. I couldn't confirm every ingredient, so ask the restaurant.",en,allergy:pork=present;preference:no-spicy=present;allergy:soybean=unknown,23.34
+3020000-101-2025-00304,1,생새우회,생새우회は量も多くて満足しました。,ja,allergy:shrimp=present,41.78
+3020000-101-2025-00304,2,구룡포명품과메기,구룡포명품과메기、また食べたいです。 タレの材料は分からなかったので、お店に確認してください。,ja,allergy:sulfite=unknown,1.22
+3020000-101-2025-00304,3,일산대방어사시미,"Nice local place. 일산대방어사시미 tasted homemade. Not sure about the sauce, please double-check with staff.",en,allergy:wheat=unknown,17.84
+MA010120220800283599,1,계란찜,Repetiría el 계란찜 sin duda.,es,allergy:egg=present;allergy:soybean=unknown,4.31
+MA010120220800283599,1,치즈갈비 1인(2인분 이상 주문),,,allergy:milk=present,4.31
+MA010120220800283599,2,날치알 볶음밥,"Loved the 날치알 볶음밥, would come back after the conference.",en,,5.11
+MA010120220800283599,2,치즈갈비 1인(2인분 이상 주문),"Solid 치즈갈비, quick service even at lunch time.",en,allergy:milk=present,5.11
+MA010120220800283599,3,해물 갈비찜 대,,,allergy:beef=present;allergy:wheat=unknown,8.9
+MA0101202507A0030890,1,막회+생새우(6-8미),الموظفون كانوا متعاونين، و막회+생새우 كان جيدًا.,ar,allergy:shrimp=present,30.89
+MA0101202507A0030890,1,특선 모둠회,الموظفون كانوا متعاونين، و특선 모둠회 كان جيدًا.,ar,,30.89
+MA0101202507A0030890,2,여수 돌문어,"El 여수 돌문어 estaba muy rico. No pude confirmar todos los ingredientes, pregunta en el restaurante.",es,allergy:sulfite=unknown,15.59
+3020000-101-2010-00292,1,한우막창구이,Tried the 한우막창구이 with colleagues. Everyone liked it.,en,allergy:beef=present,16.66
+3020000-101-2010-00292,1,한우모듬구이,The 한우모듬구이 was good. I used the app to ask staff about ingredients.,en,allergy:beef=present,16.66
+MA010120220805107394,1,1++ 프리미엄 한우찜,,,allergy:beef=present;allergy:soybean=unknown,4.52
+MA010120220805107394,1,매콤 가리비 비빔 쌀국수 반상,매콤 가리비 비빔 쌀국수 반상は量も多くて満足しました。,ja,allergy:shellfish=present;preference:no-spicy=present,4.52
+MA010120220814141595,1,닭한마리중(3~4인),店員さんが親切で、닭한마리중も美味しかった。,ja,allergy:chicken=present;allergy:soybean=unknown,20.94
+MA010120220814141595,1,김치전,김치전は量も多くて満足しました。,ja,,20.94
+MA010120220814141595,2,닭볶음탕소,"Came here near Yongsan Station, the 닭볶음탕소 was worth it.",en,allergy:chicken=present;preference:no-spicy=present;allergy:soybean=unknown,19.48
+MA010120220814141595,2,감자전,"Solid 감자전, quick service even at lunch time.",en,,19.48
+MA010120220814141595,3,닭한마리중(3~4인),,,allergy:chicken=present,36.73
+MA010120220814141595,3,닭볶음탕소,,,allergy:chicken=present;preference:no-spicy=present,36.73
+MA010120220814073648,1,1++한우 꽃등심(NO.9),和同事一起来的，1++한우 꽃등심大家都喜欢。,zh-CN,allergy:beef=present;allergy:wheat=unknown,16.19
+MA010120220814073648,1,1++한우 알등심(NO.9),1++한우 알등심很地道，下次还来。,zh-CN,allergy:beef=present,16.19
+MA010120220812642010,1,옥돔구이,和同事一起来的，옥돔구이大家都喜欢。,zh-CN,allergy:wheat=unknown,40.27
+MA010120220812642010,2,연포탕,El 연포탕 estaba muy rico.,es,,21.18
+MA010120220812642010,3,한우굴국,한우굴국は量も多くて満足しました。,ja,allergy:beef=present;allergy:shellfish=present,43.23
+3020000-101-2013-00377,1,흑돼지 족발덮밥,Nice local place. 흑돼지 족발덮밥 tasted homemade.,en,allergy:pork=present,33.81
+MA0101202211A0055206,1,메밀콩국수,店员很耐心，메밀콩국수味道不错。,zh-CN,allergy:wheat=present;allergy:buckwheat=present;allergy:soybean=present,15.2
+MA0101202211A0055206,1,만두,,,allergy:wheat=present,15.2
+MA0101202211A0055206,2,모듬전,모듬전は量も多くて満足しました。 タレの材料は分からなかったので、お店に確認してください。,ja,allergy:wheat=unknown,30.91
+MA0101202211A0055206,3,수육,Nice local place. 수육 tasted homemade.,en,,33.89
+MA010120220809966508,1,닭모래집,"Came here near Yongsan Station, the 닭모래집 was worth it.",en,allergy:chicken=present,33.43
+3020000-101-2026-00318,1,바위굴,,,allergy:shellfish=present;allergy:sulfite=unknown,18.24
+MA0101202409A0059096,1,삼겹살,삼겹살は量も多くて満足しました。,ja,allergy:pork=present,21.56
+MA0101202509A0009509,1,한우국밥,한우국밥很好吃，分量也足。,zh-CN,allergy:beef=present,18.16
+MA0101202509A0009509,1,안동국시(한우),,,allergy:beef=present;allergy:wheat=present,18.16
+MA0101202509A0009509,2,콩국수(여름한정),콩국수很好吃，份量也很多。 醬料成分不太確定，請向店家確認。,zh-TW,allergy:wheat=present;allergy:soybean=present;allergy:sulfite=unknown,42.28
+MA0101202509A0009509,3,전(찌짐),"Came here near Yongsan Station, the 전 was worth it.",en,,14.67
+MA0101202409A0145368,1,돌판짜파게티,Really tasty 돌판짜파게티. Portions were generous.,en,allergy:wheat=present,5.2
+MA0101202409A0145368,1,석암볶음밥,"Good 석암볶음밥, staff were patient with my questions.",en,,5.2
+MA0101202409A0145368,2,모둠 (삼겹 + 천겹 +가브리살),Really tasty 모둠. Portions were generous.,en,allergy:pork=present,43.0
+MA0101202409A0145368,2,물냉면,Tried the 물냉면 with colleagues. Everyone liked it.,en,,43.0
+MA0101202409A0145368,3,석암볶음밥,석암볶음밥很好吃，份量也很多。,zh-TW,allergy:wheat=unknown,15.77
+MA010120220800263307,1,(저녁) 간장 등갈비찜 (중),المكان قريب من محطة يونغسان، و간장 등갈비찜 يستحق التجربة.,ar,allergy:pork=present,17.66
+MA010120220800263307,1,(저녁) 매운 소갈비찜 (중),,,allergy:beef=present;preference:no-spicy=present,17.66
+MA010120220800263307,2,명란버터구이,명란버터구이は量も多くて満足しました。 タレの材料は分からなかったので、お店に確認してください。,ja,allergy:milk=present;allergy:wheat=unknown,14.11
+MA010120220800263307,3,생삼겹살,店員さんが親切で、생삼겹살も美味しかった。,ja,allergy:pork=present,12.44
+MA0101202509A0011017,1,[점심]흑돼지 고기국수,المكان قريب من محطة يونغسان، و흑돼지 고기국수 يستحق التجربة.,ar,allergy:pork=present;allergy:wheat=present,33.37
+MA0101202509A0011017,1,[점심]흑돼지 냉국수,,,allergy:pork=present;allergy:wheat=present;allergy:soybean=unknown,33.37
+MA0101202509A0011017,2,숯불 직화 제육,,,allergy:pork=present;preference:no-spicy=present;allergy:sulfite=unknown,33.77
+MA010120220814029449,1,[점심메뉴]해물순두부찌개,해물순두부찌개很好吃，份量也很多。 醬料成分不太確定，請向店家確認。,zh-TW,allergy:soybean=present;allergy:wheat=unknown,3.59
+MA010120220800281856,1,오리지널부대찌개(1인),أعجبني 오리지널부대찌개 كثيرًا.,ar,allergy:pork=present,41.08
+MA010120220800281856,1,우삼겹닭갈비(2인),,,allergy:pork=present;allergy:chicken=present,41.08
+MA010120220800281856,2,우삼겹부대찌개(1인),Really tasty 우삼겹부대찌개. Portions were generous.,en,allergy:beef=present;allergy:pork=present,6.5
+MA010120220800278837,1,낙새한상,낙새한상 양도 넉넉하고 만족스러웠어요.,ko,,3.59
+MA010120220800278837,1,순대국(특),,,allergy:pork=present;allergy:sulfite=unknown,3.59
+MA010120220800278837,2,한판보쌈 정식,한판보쌈 정식がとても美味しかったです。,ja,allergy:pork=present,5.18
+MA010120220800278837,2,낙새한상,,,allergy:sulfite=unknown,5.18
+MA0101202406A0103666,1,한돈생갈비(180g),龍山駅から近くて便利。한돈생갈비おすすめです。,ja,allergy:pork=present,16.54
+MA0101202406A0553975,1,보쌈,店员很耐心，보쌈味道不错。 酱料成分我不确定，建议向店员确认。,zh-CN,allergy:pork=present;allergy:wheat=unknown,30.01
+MA0101202406A0553975,2,숯불 뼈찜 (중),숯불 뼈찜很好吃，份量也很多。 醬料成分不太確定，請向店家確認。,zh-TW,allergy:pork=present;allergy:soybean=unknown,11.97
+3020000-101-2026-00277,1,[가성비 최고!] 관자 크림 파스타,Nice local place. 관자 크림 파스타 tasted homemade.,en,allergy:wheat=present;allergy:milk=present;allergy:shellfish=present,15.14
+3020000-101-2026-00277,1,[크리미+달달] 단새우와 우니,,,allergy:shrimp=present;allergy:soybean=unknown,15.14
+3020000-101-2021-00184,1,해신 샤브샤브 (1인),Tried the 해신 샤브샤브 with colleagues. Everyone liked it.,en,,41.97
+MA0101202512A0001843,1,갈비 깍두기 볶음밥😋,El 갈비 깍두기 볶음밥 estaba muy rico.,es,,6.84
+MA0101202512A0001843,1,호보 에그매쉬🥔,,,allergy:egg=present,6.84
+MA0101202409A0235140,1,매운 떡도리탕,"The 매운 떡도리탕 is quite spicy, ask for less if you can't handle heat.",en,preference:no-spicy=present,10.53
+MA0101202409A0235140,1,양념순살치킨,,,allergy:beef=present;allergy:chicken=present,10.53
+MA0101202409A0235140,2,닭곰탕,店员很耐心，닭곰탕味道不错。,zh-CN,allergy:chicken=present,8.43
+MA010120220800298449,1,보쌈정식,Really tasty 보쌈정식. Portions were generous.,en,allergy:pork=present,40.0
+MA010120220800298449,2,장군보쌈,"Good 장군보쌈, staff were patient with my questions. I couldn't confirm every ingredient, so ask the restaurant.",en,allergy:pork=present;allergy:wheat=unknown,10.55
+MA010120220800277330,1,김치말이,كان 김치말이 لذيذًا جدًا.,ar,,44.47
+MA010120220800277330,2,김치말이,Repetiría el 김치말이 sin duda.,es,,36.37
+MA010120220800277330,3,제육쌈밥,제육쌈밥、また食べたいです。,ja,allergy:pork=present;preference:no-spicy=present,34.41
+MA010120220808985428,1,능이 닭한마리,능이 닭한마리很好吃，份量也很多。,zh-TW,allergy:chicken=present,3.37
+MA010120220808985428,1,감자전,감자전很道地，會再來。,zh-TW,,3.37
+MA010120220808985428,2,김치전,离龙山站很近，김치전值得一试。,zh-CN,,13.77
+MA010120220808985428,2,닭볶음탕,,,allergy:chicken=present;preference:no-spicy=present,13.77
+MA010120220809867027,1,껍데기,الموظفون كانوا متعاونين، و껍데기 كان جيدًا.,ar,allergy:pork=present,36.74
+MA010120220809867027,2,껍데기,离龙山站很近，껍데기值得一试。,zh-CN,allergy:pork=present,40.5
+MA010120220809867027,2,LA갈비 (국내 최고 등급),LA갈비很好吃，分量也足。,zh-CN,allergy:beef=present,40.5
+3020000-101-2026-00376,1,한우생곱창모듬,직원분이 친절했고 한우생곱창모듬도 좋았어요.,ko,allergy:beef=present,23.28
+MA0101202409A0013763,1,불돼지,불돼지はかなり辛いので注意してください。,ja,allergy:pork=present;preference:no-spicy=present,13.03
+MA0101202409A0013763,1,불막창,,,preference:no-spicy=present;allergy:wheat=unknown,13.03
+MA0101202409A0013763,2,낙차새,낙차새 حار نوعًا ما، انتبه إذا كنت لا تحب الطعام الحار.,ar,preference:no-spicy=present,32.07
+MA0101202307A0040184,1,알탕,The 알탕 was good. I used the app to ask staff about ingredients.,en,,24.7
+MA0101202307A0040184,1,제육볶음,"Good 제육볶음, staff were patient with my questions.",en,allergy:pork=present;preference:no-spicy=present,24.7
+MA0101202307A0040184,2,오봉이네 백반 정식,龍山駅から近くて便利。오봉이네 백반 정식おすすめです。,ja,allergy:soybean=unknown,10.0
+MA0101202307A0040184,3,알탕,离龙山站很近，알탕值得一试。,zh-CN,,17.29
+MA0101202307A0040184,3,뚝배기 불고기,뚝배기 불고기很地道，下次还来。,zh-CN,,17.29
+3020000-101-2017-00502,1,계란탕,"Solid 계란탕, quick service even at lunch time.",en,allergy:egg=present,37.93
+3020000-101-2017-00502,1,버터바지락술찜,"Loved the 버터바지락술찜, would come back after the conference.",en,allergy:milk=present;allergy:shellfish=present,37.93
+3020000-101-2017-00502,2,콘치즈감자전,Really tasty 콘치즈감자전. Portions were generous.,en,allergy:milk=present,2.12
+3020000-101-2017-00502,2,꼬치장 꾸덕닭발,,,allergy:chicken=present;preference:no-spicy=present;allergy:wheat=unknown,2.12
+3020000-101-2017-00502,3,불오징어볶음,불오징어볶음 حار نوعًا ما، انتبه إذا كنت لا تحب الطعام الحار. لم أتأكد من جميع المكونات، يرجى السؤال في المطعم.,ar,allergy:squid=present;preference:no-spicy=present;allergy:wheat=unknown,33.96
+3020000-101-2017-00502,3,날계란 주먹볶음밥,المكان قريب من محطة يونغسان، و날계란 주먹볶음밥 يستحق التجربة.,ar,allergy:egg=present,33.96
+MA0101202209A0063538,1,생굴한접시,생굴한접시 양도 넉넉하고 만족스러웠어요.,ko,allergy:shellfish=present;allergy:wheat=unknown,2.92
+MA0101202409A0241163,1,(저녁한정)순대볶음,순대볶음は量も多くて満足しました。 タレの材料は分からなかったので、お店に確認してください。,ja,allergy:pork=present;allergy:wheat=unknown,1.73
+3020000-101-2023-00231,1,열무 물비빔 메밀막국수,,,allergy:wheat=present;allergy:buckwheat=present;allergy:soybean=unknown,22.91
+3020000-101-2023-00231,2,통한치삼겹보쌈,"Came here near Yongsan Station, the 통한치삼겹보쌈 was worth it.",en,allergy:pork=present;allergy:sulfite=unknown,43.9
+MA0101202406A0493715,1,명태무침,명태무침 정말 맛있었어요.,ko,,23.14
+MA0101202406A0493715,1,쌀면곰탕,쌀면곰탕 정말 맛있었어요.,ko,allergy:beef=present,23.14
+MA010120220800286694,1,뼈전골 중,店員さんが親切で、뼈전골も美味しかった。,ja,allergy:pork=present,23.8
+MA010120220800286694,2,뼈전골 중,,,allergy:pork=present,29.3
+MA010120220800286694,2,해장국,Nice local place. 해장국 tasted homemade.,en,,29.3
+MA010120220800286694,3,뼈전골 중,"Really tasty 뼈전골. Portions were generous. Not sure about the sauce, please double-check with staff.",en,allergy:pork=present;allergy:wheat=unknown,42.22
+MA0101202511A0032407,1,"그 시절, 80년대 등갈비🍖🔥",Nice local place. 그 시절 80년대 등갈비 tasted homemade.,en,allergy:pork=present,7.13
+3020000-101-2026-00354,1,한우라면,店員さんが親切で、한우라면も美味しかった。,ja,allergy:beef=present;allergy:wheat=present;allergy:sulfite=unknown,12.71
+3020000-101-2026-00354,2,빨간 쇠고기무국,빨간 쇠고기무국 양도 넉넉하고 만족스러웠어요.,ko,allergy:beef=present;allergy:wheat=unknown,44.38
+MA0101202502A0055700,1,말방곱창전골,"Solid 말방곱창전골, quick service even at lunch time.",en,allergy:beef=present;allergy:sulfite=unknown,24.97
+MA0101202502A0055700,2,한우소고기국밥,"Good 한우소고기국밥, staff were patient with my questions.",en,allergy:beef=present,7.87
+MA010120220813758969,1,옛날불고기1인분,옛날불고기1인분がとても美味しかったです。,ja,,10.95
+MA010120220811803855,1,"소고기(200g,호주산,뉴질랜드산)",소고기很地道，下次还来。,zh-CN,allergy:beef=present;allergy:sulfite=unknown,20.15
+3020000-101-2003-00124,1,골수 뼈구이(2인),Really tasty 골수 뼈구이. Portions were generous.,en,allergy:pork=present,15.67
+3020000-101-2003-00124,1,골수 감자탕(2인),"The 골수 감자탕 is quite spicy, ask for less if you can't handle heat.",en,allergy:pork=present;preference:no-spicy=present,15.67
+3130000-101-1994-00562,1,냉제육 한 접시,용산역 근처라 가기 편하고 냉제육 한 접시 추천해요. 양념 재료는 확실하지 않아서 매장에 확인해 보세요.,ko,allergy:pork=present;preference:no-spicy=present;allergy:wheat=unknown,40.23
