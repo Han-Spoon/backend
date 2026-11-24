@@ -131,6 +131,23 @@ class StoreDetailQueryIntegrationTest {
     }
 
     @Test
+    void ordersMenusAndThumbnailByDisplayOrderThenId() {
+        Long storeId = insertStore("DETAIL-8", "active", null);
+        Long unordered = insertStoreMenu(storeId, "김치찌개", insertImage("d", "active"), null, "active");
+        Long second = insertStoreMenu(storeId, "된장찌개", null, null, "active");
+        Long first = insertStoreMenu(storeId, "불고기", insertImage("0", "active"), null, "active");
+        jdbcTemplate.update("update store_menus set display_order = 2 where id = ?", second);
+        jdbcTemplate.update("update store_menus set display_order = 1 where id = ?", first);
+
+        StoreDetailResponse detail = storeDetailService.getDetail(user("ko").getId(), storeId);
+
+        assertThat(detail.menus())
+                .extracting(StoreDetailResponse.Menu::storeMenuId)
+                .containsExactly(first, second, unordered);
+        assertThat(detail.thumbnailUrl()).isEqualTo(storeUrl("0"));
+    }
+
+    @Test
     void countsVisibleReviewsAndVerified() {
         Long storeId = insertStore("DETAIL-6", "active", null);
         jdbcTemplate.update("update stores set verified_at = now() where id = ?", storeId);

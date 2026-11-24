@@ -11,10 +11,14 @@
   · 이미 있는 (가게, 정규화 이름) 행은 건드리지 않음.
   · 표준 메뉴(menus)와 정규화 이름이 같으면 menu_id 연결(name_match).
   · 사진 열은 읽지 않음.
+  · --set-order: 시트에 있는 가게의 표시 순서를 시트 행 순서로 다시 매김. 시트에 없는 메뉴는 NULL(뒤, id 순).
 
 사용 예
   # 적재 결과만 확인하고 롤백
   python3 scripts/load_store_menus.py --menus menus.csv --store-map store_map.csv --dry-run
+
+  # 메뉴 추가 + 표시 순서 반영
+  python3 scripts/load_store_menus.py --menus menus.csv --store-map store_map.csv --set-order --dry-run
 
   # 실행 없이 SQL 만 확인
   python3 scripts/load_store_menus.py --menus menus.csv --store-map store_map.csv --out /tmp/menus.sql
@@ -48,6 +52,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--menus", required=True, type=Path, help="조사 시트 CSV")
     p.add_argument("--store-map", required=True, type=Path, help="음식점 명 → store_no CSV")
     p.add_argument("--dry-run", action="store_true", help="적재 결과 출력 후 롤백")
+    p.add_argument("--set-order", action="store_true", help="시트 행 순서로 가게 메뉴 표시 순서 반영")
     p.add_argument("--psql", help="psql 실행 명령. 미지정 시 자동 탐지")
     p.add_argument("--dsn", default="postgresql://hanspoon:hanspoon@localhost:5432/hanspoon",
                    help="로컬 psql 사용 시 접속 문자열")
@@ -126,7 +131,7 @@ def resolve_rows(menus: list[tuple[str, str]], mapping: dict[str, str]) -> tuple
     return rows, skipped
 
 
-def emit(w: io.TextIOBase, rows: list[list[object]], dry_run: bool) -> None:
+def emit(w: io.TextIOBase, rows: list[list[object]], dry_run: bool, set_order: bool = False) -> None:
     w.write("""\
 \\set ON_ERROR_STOP on
 BEGIN;
@@ -177,7 +182,38 @@ SELECT (SELECT count(*) FROM src)  AS distinct_menus,
 FROM ins;
 
 """)
+    if set_order:
+        w.write(ORDER_SQL)
     w.write("ROLLBACK;\n" if dry_run else "COMMIT;\n")
+
+
+ORDER_SQL = """\
+\\echo '── 표시 순서 ──'
+CREATE TEMP TABLE stg_store_menu_order ON COMMIT DROP AS
+SELECT s.id AS store_id, normalize_food_name(m.display_name) AS name_normalized,
+       row_number() OVER (PARTITION BY s.id ORDER BY min(m.ord)) AS display_order
+FROM stg_store_menu m
+JOIN stores s ON s.sbiz_store_no = m.store_no OR s.localdata_mgmt_no = m.store_no
+WHERE normalize_food_name(m.display_name) <> ''
+GROUP BY s.id, normalize_food_name(m.display_name);
+
+UPDATE store_menus sm
+   SET display_order = NULL, updated_at = now()
+ WHERE sm.store_id IN (SELECT store_id FROM stg_store_menu_order)
+   AND sm.display_order IS NOT NULL;
+
+UPDATE store_menus sm
+   SET display_order = o.display_order, updated_at = now()
+  FROM stg_store_menu_order o
+ WHERE sm.store_id = o.store_id AND sm.name_normalized = o.name_normalized;
+
+SELECT count(DISTINCT store_id)                         AS stores,
+       count(*) FILTER (WHERE display_order IS NOT NULL) AS ordered_menus,
+       count(*) FILTER (WHERE display_order IS NULL)     AS unordered_menus
+FROM store_menus
+WHERE store_id IN (SELECT store_id FROM stg_store_menu_order);
+
+"""
 
 
 def main() -> None:
@@ -185,7 +221,8 @@ def main() -> None:
     menus, notices = read_menus(a.menus)
     rows, skipped = resolve_rows(menus, read_store_map(a.store_map))
     print(f"메뉴 {len(menus):,} · 적재 대상 {len(rows):,} · 안내 행 제외 {len(notices)}"
-          f" · 번호 없는 가게 {len(skipped)}곳{' · dry-run' if a.dry_run else ''}", file=sys.stderr)
+          f" · 번호 없는 가게 {len(skipped)}곳{' · 표시 순서' if a.set_order else ''}"
+          f"{' · dry-run' if a.dry_run else ''}", file=sys.stderr)
     for store, name in notices:
         print(f"  안내 행 제외: {store} / {name}", file=sys.stderr)
     if skipped:
@@ -193,7 +230,7 @@ def main() -> None:
 
     if a.out:
         with a.out.open("w", encoding="utf-8") as fh:
-            emit(fh, rows, a.dry_run)
+            emit(fh, rows, a.dry_run, a.set_order)
         print(f"SQL 기록: {a.out}", file=sys.stderr)
         return
 
@@ -202,7 +239,7 @@ def main() -> None:
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, text=True, encoding="utf-8")
     assert proc.stdin is not None
     try:
-        emit(proc.stdin, rows, a.dry_run)
+        emit(proc.stdin, rows, a.dry_run, a.set_order)
     finally:
         proc.stdin.close()
     if proc.wait() != 0:
