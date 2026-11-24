@@ -251,6 +251,51 @@ class StoreRepositoryIntegrationTest {
     }
 
     @Test
+    void ranksNameThenMenuThenSimilarMatchesOncePerStore() {
+        long menuNearId = insertStore("menu-near", "한스푼", 37.5001, 127.0000, StoreStatus.ACTIVE, false);
+        long nameFarId = insertStore("name-far", "비빔밥천국", 35.1631, 129.1635, StoreStatus.ACTIVE, false);
+        long bothId = insertStore("name-and-menu", "전주비빔밥", 37.5090, 127.0000, StoreStatus.ACTIVE, false);
+        long similarId = insertStore("similar", "비빔빕", 37.5002, 127.0000, StoreStatus.ACTIVE, false);
+        long hiddenMenuId = insertStore("hidden-menu", "두스푼", 37.5003, 127.0000, StoreStatus.ACTIVE, false);
+        long closedId = insertStore("closed-menu", "세스푼", 37.5004, 127.0000, StoreStatus.INACTIVE, false);
+        insertMenu(menuNearId, "돌솥 비빔밥", "active");
+        insertMenu(menuNearId, "비빔밥", "active");
+        insertMenu(bothId, "육회비빔밥", "active");
+        insertMenu(hiddenMenuId, "비빔밥", "hidden");
+        insertMenu(closedId, "비빔밥", "active");
+
+        List<StoreCandidateProjection> candidates =
+                storeRepository.findCandidatesByName("비빔밥", CENTER_LATITUDE, CENTER_LONGITUDE, 10);
+
+        assertThat(candidates)
+                .extracting(StoreCandidateProjection::getStoreId)
+                .containsExactly(bothId, nameFarId, menuNearId, similarId);
+        assertThat(candidates)
+                .extracting(StoreCandidateProjection::getMatchedMenuName)
+                .containsExactly(null, null, "비빔밥", null);
+    }
+
+    @Test
+    void matchesShortQueryMenuAfterNameMatches() {
+        long menuNearId = insertStore("short-menu-near", "한스푼", 37.5001, 127.0000, StoreStatus.ACTIVE, false);
+        long prefixFarId = insertStore("short-prefix-far", "김밥나라", 35.1631, 129.1635, StoreStatus.ACTIVE, false);
+        insertMenu(menuNearId, "참치김밥", "active");
+
+        List<StoreCandidateProjection> nearby =
+                storeRepository.findCandidatesByShortName("김밥", CENTER_LATITUDE, CENTER_LONGITUDE, 3000, 10);
+        List<StoreCandidateProjection> withoutCoordinates =
+                storeRepository.findCandidatesByShortName("김밥", null, null, 3000, 10);
+
+        assertThat(nearby).extracting(StoreCandidateProjection::getStoreId).containsExactly(prefixFarId, menuNearId);
+        assertThat(nearby)
+                .extracting(StoreCandidateProjection::getMatchedMenuName)
+                .containsExactly(null, "참치김밥");
+        assertThat(withoutCoordinates)
+                .extracting(StoreCandidateProjection::getStoreId)
+                .containsExactly(prefixFarId, menuNearId);
+    }
+
+    @Test
     void countsOnlyVisibleReviews() {
         long storeId = insertStore("review-store", "후기 식당", 37.5001, 127.0000, StoreStatus.ACTIVE, false);
         UUID userId = userRepository
@@ -282,6 +327,16 @@ class StoreRepositoryIntegrationTest {
                 userId,
                 storeId,
                 hidden ? Timestamp.from(Instant.now().plusSeconds(1)) : null);
+    }
+
+    private void insertMenu(long storeId, String displayName, String status) {
+        jdbcTemplate.update(
+                "insert into store_menus (store_id, name_normalized, display_name, status) "
+                        + "values (?, normalize_food_name(?), ?, ?)",
+                storeId,
+                displayName,
+                displayName,
+                status);
     }
 
     private void updateBranchName(long storeId, String branchName) {
