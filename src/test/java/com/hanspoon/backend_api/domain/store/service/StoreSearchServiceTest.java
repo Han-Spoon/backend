@@ -47,30 +47,59 @@ class StoreSearchServiceTest {
     }
 
     @Test
-    void trimsNameAndUsesNameSearchWithRequestedBounds() {
+    void searchesNameNationwideIgnoringRequestedRadius() {
         StoreCandidateSearchRequest request = new StoreCandidateSearchRequest(37.4979, 127.0276, "  한스푼  ", 300, 5);
-        when(storeRepository.findNearbyCandidatesByName("한스푼", 37.4979, 127.0276, 300, 5))
-                .thenReturn(List.of());
+        when(storeRepository.normalizeStoreName("한스푼")).thenReturn("한스푼");
+        when(storeRepository.findCandidatesByName("한스푼", 37.4979, 127.0276, 5)).thenReturn(List.of());
 
         StoreCandidateListResponse response = storeSearchService.findCandidates(request);
 
         assertThat(response.items()).isEmpty();
-        verify(storeRepository).findNearbyCandidatesByName("한스푼", 37.4979, 127.0276, 300, 5);
+        verify(storeRepository).normalizeStoreName("한스푼");
+        verify(storeRepository).findCandidatesByName("한스푼", 37.4979, 127.0276, 5);
         verifyNoMoreInteractions(storeRepository);
     }
 
     @Test
     void searchesByNameOnlyWhenCoordinatesAreMissing() {
-        StoreCandidateSearchRequest request = new StoreCandidateSearchRequest(null, null, " 김치찌개 ", 1000, 10);
+        StoreCandidateSearchRequest request = new StoreCandidateSearchRequest(null, null, " 김치 찌개 ", 1000, 10);
         StoreCandidateProjection candidate = candidate();
         when(candidate.getDistanceMeters()).thenReturn(null);
-        when(storeRepository.findCandidatesByName("김치찌개", 10)).thenReturn(List.of(candidate));
+        when(storeRepository.normalizeStoreName("김치 찌개")).thenReturn("김치찌개");
+        when(storeRepository.findCandidatesByName("김치찌개", null, null, 10)).thenReturn(List.of(candidate));
 
         StoreCandidateListResponse response = storeSearchService.findCandidates(request);
 
         assertThat(response.items().getFirst().distanceMeters()).isNull();
         assertThat(response.items().getFirst().matchMethod()).isEqualTo(StoreMatchMethod.NAME_SEARCH);
-        verify(storeRepository).findCandidatesByName("김치찌개", 10);
+        verify(storeRepository).normalizeStoreName("김치 찌개");
+        verify(storeRepository).findCandidatesByName("김치찌개", null, null, 10);
+        verifyNoMoreInteractions(storeRepository);
+    }
+
+    @Test
+    void usesShortNameSearchWithFixedNearbyRadiusBelowThreeCharacters() {
+        StoreCandidateSearchRequest request = new StoreCandidateSearchRequest(37.4979, 127.0276, "이 가", 1000, null);
+        when(storeRepository.normalizeStoreName("이 가")).thenReturn("이가");
+        when(storeRepository.findCandidatesByShortName("이가", 37.4979, 127.0276, 3000, 20))
+                .thenReturn(List.of());
+
+        storeSearchService.findCandidates(request);
+
+        verify(storeRepository).normalizeStoreName("이 가");
+        verify(storeRepository).findCandidatesByShortName("이가", 37.4979, 127.0276, 3000, 20);
+        verifyNoMoreInteractions(storeRepository);
+    }
+
+    @Test
+    void returnsEmptyWithoutSearchWhenNormalizedQueryIsEmpty() {
+        StoreCandidateSearchRequest request = new StoreCandidateSearchRequest(37.4979, 127.0276, "!!!", null, null);
+        when(storeRepository.normalizeStoreName("!!!")).thenReturn("");
+
+        StoreCandidateListResponse response = storeSearchService.findCandidates(request);
+
+        assertThat(response.items()).isEmpty();
+        verify(storeRepository).normalizeStoreName("!!!");
         verifyNoMoreInteractions(storeRepository);
     }
 

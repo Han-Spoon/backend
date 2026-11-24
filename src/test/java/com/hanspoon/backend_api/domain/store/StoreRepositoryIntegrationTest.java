@@ -94,32 +94,160 @@ class StoreRepositoryIntegrationTest {
     }
 
     @Test
-    void normalizesSearchTermAndFiltersCandidatesWithTrigramIndexOperator() {
+    void normalizesSearchTermWithDatabaseFunction() {
+        assertThat(storeRepository.normalizeStoreName("cu 마트 b1")).isEqualTo("cu마트b1");
+        assertThat(storeRepository.normalizeStoreName("이가 뚝배기")).isEqualTo("이가뚝배기");
+        assertThat(storeRepository.normalizeStoreName("!!!")).isEmpty();
+    }
+
+    @Test
+    void matchesNormalizedFullWidthName() {
         long expectedId = insertStore("search-store", "ＣＵ 마트 Ｂ１", 37.5001, 127.0000, StoreStatus.ACTIVE, false);
         insertStore("other-store", "한스푼 식당", 37.5002, 127.0000, StoreStatus.ACTIVE, false);
 
         List<StoreCandidateProjection> candidates =
-                storeRepository.findNearbyCandidatesByName("cu 마트 b1", CENTER_LATITUDE, CENTER_LONGITUDE, 500, 10);
+                storeRepository.findCandidatesByName("cu마트b1", CENTER_LATITUDE, CENTER_LONGITUDE, 10);
 
-        assertThat(candidates).hasSize(1);
-        assertThat(candidates.getFirst().getStoreId()).isEqualTo(expectedId);
+        assertThat(candidates).extracting(StoreCandidateProjection::getStoreId).containsExactly(expectedId);
         assertThat(candidates.getFirst().getName()).isEqualTo("ＣＵ 마트 Ｂ１");
         assertThat(candidates.getFirst().getNameSimilarity()).isEqualTo(1.0);
     }
 
     @Test
-    void searchesByNameWithoutCoordinatesAcrossRegions() {
-        long seoulId = insertStore("seoul-store", "좌표없는검색식당 강남점", 37.5001, 127.0000, StoreStatus.ACTIVE, false);
-        long busanId = insertStore("busan-store", "좌표없는검색식당 해운대점", 35.1631, 129.1635, StoreStatus.ACTIVE, false);
-        insertStore("closed-store", "좌표없는검색식당 휴업점", 35.1632, 129.1635, StoreStatus.INACTIVE, false);
+    void searchesNameNationwideIgnoringRadius() {
+        long nearId = insertStore("near-store", "이가뚝배기", 37.5087, 127.0000, StoreStatus.ACTIVE, false);
+        long busanId = insertStore("busan-store", "이가뚝배기", 35.1631, 129.1635, StoreStatus.ACTIVE, false);
+        insertStore("closed-store", "이가뚝배기", 37.5001, 127.0000, StoreStatus.INACTIVE, false);
 
-        List<StoreCandidateProjection> candidates = storeRepository.findCandidatesByName("좌표없는검색식당", 10);
+        List<StoreCandidateProjection> candidates =
+                storeRepository.findCandidatesByName("이가뚝배기", CENTER_LATITUDE, CENTER_LONGITUDE, 10);
+
+        assertThat(candidates).extracting(StoreCandidateProjection::getStoreId).containsExactly(nearId, busanId);
+        assertThat(candidates.getFirst().getDistanceMeters()).isBetween(950, 980);
+        assertThat(candidates.get(1).getDistanceMeters()).isGreaterThan(300_000);
+    }
+
+    @Test
+    void matchesContainedNameBelowSimilarityThreshold() {
+        long storeId = insertStore("contains-store", "이가뚝배기", 37.5087, 127.0000, StoreStatus.ACTIVE, false);
+
+        List<StoreCandidateProjection> candidates =
+                storeRepository.findCandidatesByName("뚝배기", CENTER_LATITUDE, CENTER_LONGITUDE, 10);
+
+        assertThat(candidates).extracting(StoreCandidateProjection::getStoreId).containsExactly(storeId);
+        assertThat(candidates.getFirst().getNameSimilarity()).isLessThan(0.3);
+    }
+
+    @Test
+    void ranksVerifiedThenContainedThenSimilarWithDistanceInsideEachTier() {
+        long verifiedFarId = insertStore("verified-far", "이가뚝배기", 35.1631, 129.1635, StoreStatus.ACTIVE, true);
+        long containedFarId = insertStore("contained-far", "이가뚝배기", 37.5180, 127.0000, StoreStatus.ACTIVE, false);
+        long containedNearId = insertStore("contained-near", "원조이가뚝배기", 37.5045, 127.0000, StoreStatus.ACTIVE, false);
+        long similarNearId = insertStore("similar-near", "이가뚝베기", 37.5009, 127.0000, StoreStatus.ACTIVE, false);
+
+        List<StoreCandidateProjection> candidates =
+                storeRepository.findCandidatesByName("이가뚝배기", CENTER_LATITUDE, CENTER_LONGITUDE, 10);
 
         assertThat(candidates)
                 .extracting(StoreCandidateProjection::getStoreId)
-                .containsExactlyInAnyOrder(seoulId, busanId);
+                .containsExactly(verifiedFarId, containedNearId, containedFarId, similarNearId);
+    }
+
+    @Test
+    void ranksExactThenPrefixThenShorterContainedNameWithoutCoordinates() {
+        long containedLongId = insertStore("contained-long", "원조이가뚝배기", 37.5001, 127.0000, StoreStatus.ACTIVE, false);
+        long containedId = insertStore("contained", "이가뚝배기", 35.1631, 129.1635, StoreStatus.ACTIVE, false);
+        long prefixId = insertStore("prefix", "뚝배기집", 37.5002, 127.0000, StoreStatus.ACTIVE, false);
+        long exactId = insertStore("exact", "뚝배기", 35.1632, 129.1635, StoreStatus.ACTIVE, false);
+
+        List<StoreCandidateProjection> candidates = storeRepository.findCandidatesByName("뚝배기", null, null, 10);
+
+        assertThat(candidates)
+                .extracting(StoreCandidateProjection::getStoreId)
+                .containsExactly(exactId, prefixId, containedId, containedLongId);
         assertThat(candidates).allSatisfy(candidate -> assertThat(candidate.getDistanceMeters())
                 .isNull());
+    }
+
+    @Test
+    void matchesShortQueryByNearbyContainsOrNationwidePrefix() {
+        long nearContainsId = insertStore("near-contains", "원조이가", 37.5090, 127.0000, StoreStatus.ACTIVE, false);
+        long nearPrefixId = insertStore("near-prefix", "이가뚝배기", 37.5087, 127.0000, StoreStatus.ACTIVE, false);
+        long farPrefixId = insertStore("far-prefix", "이가네", 35.1631, 129.1635, StoreStatus.ACTIVE, false);
+        insertStore("far-contains", "원조이가식당", 35.1632, 129.1635, StoreStatus.ACTIVE, false);
+        insertStore("outside-contains", "할매이가", 37.5300, 127.0000, StoreStatus.ACTIVE, false);
+
+        List<StoreCandidateProjection> candidates =
+                storeRepository.findCandidatesByShortName("이가", CENTER_LATITUDE, CENTER_LONGITUDE, 3000, 10);
+
+        assertThat(candidates)
+                .extracting(StoreCandidateProjection::getStoreId)
+                .containsExactly(nearPrefixId, nearContainsId, farPrefixId);
+    }
+
+    @Test
+    void matchesShortQueryByNationwidePrefixWithoutCoordinates() {
+        long longerPrefixId = insertStore("longer-prefix", "이가뚝배기", 37.5087, 127.0000, StoreStatus.ACTIVE, false);
+        long shorterPrefixId = insertStore("shorter-prefix", "이가네", 35.1631, 129.1635, StoreStatus.ACTIVE, false);
+        insertStore("contains-only", "원조이가", 37.5001, 127.0000, StoreStatus.ACTIVE, false);
+
+        List<StoreCandidateProjection> candidates =
+                storeRepository.findCandidatesByShortName("이가", null, null, 3000, 10);
+
+        assertThat(candidates)
+                .extracting(StoreCandidateProjection::getStoreId)
+                .containsExactly(shorterPrefixId, longerPrefixId);
+        assertThat(candidates).allSatisfy(candidate -> assertThat(candidate.getDistanceMeters())
+                .isNull());
+    }
+
+    @Test
+    void matchesNameWithBranchAheadOfOtherBranches() {
+        long yongsanId = insertStore("yongsan-branch", "본죽", 35.1631, 129.1635, StoreStatus.ACTIVE, false);
+        long myeongdongId = insertStore("myeongdong-branch", "본죽", 37.5001, 127.0000, StoreStatus.ACTIVE, false);
+        updateBranchName(yongsanId, "용산점");
+        updateBranchName(myeongdongId, "명동점");
+
+        List<StoreCandidateProjection> fullName =
+                storeRepository.findCandidatesByName("본죽용산점", CENTER_LATITUDE, CENTER_LONGITUDE, 10);
+        List<StoreCandidateProjection> partialBranch =
+                storeRepository.findCandidatesByName("본죽용산", CENTER_LATITUDE, CENTER_LONGITUDE, 10);
+        List<StoreCandidateProjection> nameOnly =
+                storeRepository.findCandidatesByName("본죽", CENTER_LATITUDE, CENTER_LONGITUDE, 10);
+
+        assertThat(fullName).extracting(StoreCandidateProjection::getStoreId).containsExactly(yongsanId);
+        assertThat(partialBranch)
+                .extracting(StoreCandidateProjection::getStoreId)
+                .containsExactly(yongsanId, myeongdongId);
+        assertThat(nameOnly).extracting(StoreCandidateProjection::getStoreId).containsExactly(myeongdongId, yongsanId);
+    }
+
+    @Test
+    void ranksExactNameWithBranchFirstWithoutCoordinates() {
+        long otherBranchId = insertStore("other-branch", "본죽", 37.5001, 127.0000, StoreStatus.ACTIVE, false);
+        long exactBranchId = insertStore("exact-branch", "본죽", 35.1631, 129.1635, StoreStatus.ACTIVE, false);
+        long longerNameId = insertStore("longer-name", "본죽용산점비빔밥", 37.5002, 127.0000, StoreStatus.ACTIVE, false);
+        updateBranchName(otherBranchId, "용산점앞");
+        updateBranchName(exactBranchId, "용산점");
+
+        List<StoreCandidateProjection> candidates = storeRepository.findCandidatesByName("본죽용산점", null, null, 10);
+
+        assertThat(candidates)
+                .extracting(StoreCandidateProjection::getStoreId)
+                .containsExactly(exactBranchId, otherBranchId, longerNameId);
+    }
+
+    @Test
+    void matchesShortQueryInsideNearbyBranchName() {
+        long nearBranchId = insertStore("near-branch", "본죽", 37.5050, 127.0000, StoreStatus.ACTIVE, false);
+        long farBranchId = insertStore("far-branch", "본죽", 35.1631, 129.1635, StoreStatus.ACTIVE, false);
+        updateBranchName(nearBranchId, "용산점");
+        updateBranchName(farBranchId, "용산점");
+
+        List<StoreCandidateProjection> candidates =
+                storeRepository.findCandidatesByShortName("용산", CENTER_LATITUDE, CENTER_LONGITUDE, 3000, 10);
+
+        assertThat(candidates).extracting(StoreCandidateProjection::getStoreId).containsExactly(nearBranchId);
     }
 
     @Test
@@ -135,7 +263,7 @@ class StoreRepositoryIntegrationTest {
 
         List<StoreCandidateProjection> nearby =
                 storeRepository.findNearbyCandidates(CENTER_LATITUDE, CENTER_LONGITUDE, 500, 10);
-        List<StoreCandidateProjection> byName = storeRepository.findCandidatesByName("후기 식당", 10);
+        List<StoreCandidateProjection> byName = storeRepository.findCandidatesByName("후기식당", null, null, 10);
 
         assertThat(nearby)
                 .filteredOn(c -> c.getStoreId() == storeId)
@@ -154,6 +282,10 @@ class StoreRepositoryIntegrationTest {
                 userId,
                 storeId,
                 hidden ? Timestamp.from(Instant.now().plusSeconds(1)) : null);
+    }
+
+    private void updateBranchName(long storeId, String branchName) {
+        jdbcTemplate.update("update stores set branch_name = ? where id = ?", branchName, storeId);
     }
 
     private long insertStore(
