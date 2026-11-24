@@ -105,6 +105,10 @@
 | 태그·메뉴 연결은 추천 계산에만, 열람 제한 없음 | 10-27 |
 | 글 번호 `issue_no` 는 첫 게시 때 부여, 읽기 시간은 계산 | 번호는 다른 글을 지워도 바뀌면 안 된다 |
 | 기계번역 캐시 `text_translations` (키 `sha256(source_locale:원문)` + 대상 언어) | 기록을 다른 언어로 열 때 |
+| 스캔 결과 메뉴 사진: 가게 메뉴 사진 → 없으면 판정된 표준 메뉴(`menu_analyses.menu_id`) 이미지. 둘 다 `active` 만 | 가게 사진이 실제 메뉴에 가깝다. 판정 안 된 메뉴엔 표준 이미지 없음 |
+| 표준 메뉴 이미지 출처: Wikimedia Commons(CC0·CC BY·CC BY-SA) + 허락받은 사진. 출처 문구는 `attribution_text` | 네이버·블로그 사진은 허락 없음, 가게 허락 사진은 그 가게 메뉴만 |
+| 표준 메뉴 이미지 연결은 메뉴명 기준(`scripts/data/standard_menu_images.csv`). 없는 메뉴명은 대기, 시드 재적재 뒤 `publish_standard_menu_images.py` 다시 실행 | 메뉴 id 는 AI 시드가 정한다. 임시 `menus` 행은 시드 id 와 충돌 |
+| 경로 `menus/standard/<sha256>.jpg`. 이미지 있는 메뉴는 `--replace` 때만 교체 | 내용 주소라 덮어쓰기 없음 |
 
 ### 2-8. 식사 후기 · 신고 (2026-11-15 화면대로 재설계)
 
@@ -218,6 +222,7 @@
 | 백엔드 (후속) | `save_web_search_cache`·`update_source_reliability`·`menu_ingredient_cache` 명령 실행과 Bundle 웹 캐시 조회(지금은 저장 안 하고 `not_found`, 모르는 메뉴는 매번 재검색). 한국어 fuzzy 점수 개선(AI 기준 0.65 는 v1 고정) |
 | 법률·약관 | 원문의 14세 미만 조항 정리(보호자 절차 없음) + 버전 올림, 위치정보 약관 필요 여부(필요하면 문서 ID CHECK 에 추가), 탈퇴 후 동의 기록 보존 여부(지금 CASCADE, R-17) |
 | 인증 | `user_auth_identities` 의 `email_verified` 규칙, `provider` 기본값·CHECK |
+| 표준 메뉴 이미지 | 허락받은 사진 7장(수제비사리·부추사리·두부사리·공기밥·야채튀김·낙곱새·알탕) 작성자·원본 링크(지금 `출처 확인 필요`). 고기사리 사진 교체 검토. 공공누리 1유형 공공데이터(data.go.kr 15151269) 보강은 나중에 |
 
 ---
 
@@ -235,7 +240,7 @@
 | 스캔 진행 단계 컬럼 | 서버가 단계별 진행을 실제로 알게 되면 |
 | 보호자 승인 | 14세 미만 이용 정책이 정해지면 |
 
-**출시 때 비어 있는 테이블** (코드·화면 없음, 그대로 둔다): `knowledge_review_items` · `knowledge_review_sources` · `ingredient_evidence_log` · `source_reliability` · `admin_audit_logs` · `areas` · `curation_articles` · `curation_article_translations` · `curation_article_menus` · `image_assets`
+**출시 때 비어 있는 테이블** (코드·화면 없음, 그대로 둔다): `knowledge_review_items` · `knowledge_review_sources` · `ingredient_evidence_log` · `source_reliability` · `admin_audit_logs` · `areas` · `curation_articles` · `curation_article_translations` · `curation_article_menus`
 
 ---
 
@@ -268,3 +273,4 @@
 | 11-20 | 시연 가게 표시명 = 시트 식당명(회사명 상호 미표시), `verified_at` 기록. 같은 식당 중복 행은 비활성 |
 | 11-22 | Prepare/Judge 연동을 PR 두 개로(전환 → V14 축소). Bundle 확정값은 후보 메뉴 전부에. `recommendation` 보류. AI 문서로 확인: 확정 "있음" + 금지 태그 = DANGER, 가게 prior·출처 신뢰도 `not_found` 허용, fuzzy 라이브러리는 백엔드가 정함, 출처 신뢰도 = `(맞춘 수+1)/(비교한 수+2)`. PR 2: V14 Flyway 적용, 판정 컬럼은 JDBC 전용(엔티티 읽기만), 번역명은 `menus.name_i18n` 만(설명 번역 없음), 사진은 `store_menu_id` 우선 |
 | 11-23 | PR 2 운영 배포(V14). 되돌리기는 스냅샷 복구만. 프론트는 V2 필드 우선 읽기로 같이 배포하지 않음. 사진 품질 판정 수정은 AI 레포에서, Naver 웹 검색 키는 그 뒤로 미룸. 직원 응답 API 구현: 메뉴 위험도 = 겹친 present 있으면 danger 아니면 `ai_risk_level`, 응답 미완이면 SAFE 대신 caution, 표시 순서 유지. 메뉴 찜 API 구현(표시값 조회, 멱등 찜). 식사 후기 API 구현(식단 항목은 현재 프로필, 수정은 줄 전체 교체, 목록은 전체 배열). 원본 사진 조회 API 구현(사진 행 없음은 404, 새 에러 코드는 410만) |
+| 11-25 | 표준 메뉴 대표 이미지(#113): 스캔 결과 사진은 가게 메뉴 사진 → 판정 표준 메뉴 이미지 순. 출처는 Wikimedia Commons + 허락받은 사진, 연결은 메뉴명 기준 |
