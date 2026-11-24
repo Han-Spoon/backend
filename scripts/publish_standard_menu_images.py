@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """
-표준 메뉴 대표 이미지 → 공개 경로(menus/standard/) 게시 + image_assets 등록 + menus 연결
+표준 메뉴 대표 이미지 → 공개 경로(menus/standard/) 게시 + image_assets 등록 + menus 연결(메뉴명 기준)
 
 입력
-  · --list: 이미지 목록 CSV. 열 menu_id, name_ko, file, source_type, author, license_code, source_url,
-    attribution_text. 한 파일을 여러 메뉴가 같이 써도 됨(출처 값은 같아야 함).
+  · --list: 이미지 목록 CSV. 열 name_ko, file, source_type, author, license_code, source_url, attribution_text.
+    아직 menus 에 없는 메뉴명도 가능. 한 파일을 여러 메뉴명이 같이 써도 됨(출처 값은 같아야 함).
   · --image-dir: 목록의 file 이 있는 폴더.
 
 설계 메모
   · 변환·업로드는 publish_menu_photos.py 와 같음(긴 변 1280px JPEG, 파일명 = 변환본 SHA-256).
-  · menu_id 가 없거나 name_ko 가 다르면 중단(시드 id 어긋남 방지).
+  · 목록의 모든 이미지를 게시·등록. 연결은 menus.name_normalized = normalize_food_name(name_ko) 일치 메뉴만,
+    없는 메뉴명은 대기 목록으로 출력. 시드 재적재로 메뉴가 늘면 다시 실행.
   · image_assets: 같은 해시는 건너뜀. menus: 이미지 없는 메뉴만 연결, --replace 면 교체(이전 이미지 행은 남김).
   · 재실행 안전: 같은 파일 = 같은 키·해시라 새 행·새 업로드 없음.
   · --dry-run: 업로드 없이 DB 반영 결과만 출력 후 롤백.
@@ -32,14 +33,13 @@ from pathlib import Path
 
 try:
     from scripts.load_stores import resolve_psql
-    from scripts.publish_menu_photos import Convert, Published, clean, sips_convert, sql_literal, upload
+    from scripts.publish_menu_photos import Convert, Published, clean, sips_convert, upload
 except ImportError:
     from load_stores import resolve_psql
-    from publish_menu_photos import Convert, Published, clean, sips_convert, sql_literal, upload
+    from publish_menu_photos import Convert, Published, clean, sips_convert, upload
 
 DEFAULT_PREFIX = "menus/standard/"
-COLUMNS = ["menu_id", "name_ko", "file", "source_type", "author", "license_code", "source_url",
-           "attribution_text"]
+COLUMNS = ["name_ko", "file", "source_type", "author", "license_code", "source_url", "attribution_text"]
 SOURCE_TYPES = {"team_original", "external_licensed", "public_domain"}
 LICENSED_REQUIRED = ("author", "license_code", "source_url")
 # 같은 파일을 쓰는 행끼리 같아야 하는 출처 값
@@ -48,7 +48,6 @@ SOURCE_FIELDS = ("source_type", "author", "license_code", "source_url", "attribu
 
 @dataclass(frozen=True)
 class MenuImage:
-    menu_id: int
     name_ko: str
     file: str
     source_type: str
@@ -89,21 +88,18 @@ def read_list(path: Path, image_dir: Path) -> list[MenuImage]:
 
     errors: list[str] = []
     images: list[MenuImage] = []
-    seen_ids: set[int] = set()
+    seen_names: set[str] = set()
     by_file: dict[str, MenuImage] = {}
     for line, r in enumerate(rows, start=2):
         if not any(r.values()):
             continue
         where = f"{line}행"
-        if not r["menu_id"].isdigit():
-            errors.append(f"{where}: menu_id 숫자 아님")
-            continue
-        image = MenuImage(int(r["menu_id"]), *(r[c] for c in COLUMNS[1:]))
-        if image.menu_id in seen_ids:
-            errors.append(f"{where}: menu_id {image.menu_id} 중복")
-        seen_ids.add(image.menu_id)
+        image = MenuImage(*(r[c] for c in COLUMNS))
         if not image.name_ko or not image.file or not image.attribution_text:
             errors.append(f"{where}: name_ko·file·attribution_text 필수")
+        elif image.name_ko in seen_names:
+            errors.append(f"{where}: {image.name_ko} 중복")
+        seen_names.add(image.name_ko)
         if image.source_type not in SOURCE_TYPES:
             errors.append(f"{where}: source_type '{image.source_type}' 허용 안 됨")
         if image.source_type == "external_licensed" and not all(r[c] for c in LICENSED_REQUIRED):
@@ -112,7 +108,7 @@ def read_list(path: Path, image_dir: Path) -> list[MenuImage]:
             errors.append(f"{where}: 파일 없음 {image.file}")
         first = by_file.setdefault(image.file, image)
         if any(getattr(first, f) != getattr(image, f) for f in SOURCE_FIELDS):
-            errors.append(f"{where}: {image.file} 출처 값이 menu_id {first.menu_id} 행과 다름")
+            errors.append(f"{where}: {image.file} 출처 값이 {first.name_ko} 행과 다름")
         images.append(image)
     if errors:
         sys.exit("목록 오류\n  " + "\n  ".join(errors))
@@ -142,7 +138,7 @@ def emit(w: io.TextIOBase, images: list[MenuImage], published: dict[str, Publish
 \\set ON_ERROR_STOP on
 BEGIN;
 CREATE TEMP TABLE stg_menu_image (
-  menu_id bigint, name_ko text, sha256 text, storage_key text, width int, height int, file_size bigint,
+  name_ko text, sha256 text, storage_key text, width int, height int, file_size bigint,
   source_type text, author text, license_code text, source_url text, attribution_text text, ord int
 ) ON COMMIT DROP;
 
@@ -152,25 +148,24 @@ CREATE TEMP TABLE stg_menu_image (
     for order, i in enumerate(images):
         pub = published[i.file]
         # 빈 값은 NULL(csv 기본)
-        out.writerow([i.menu_id, i.name_ko, pub.sha256, pub.storage_key, pub.width, pub.height, pub.size,
+        out.writerow([i.name_ko, pub.sha256, pub.storage_key, pub.width, pub.height, pub.size,
                       i.source_type, i.author, i.license_code, i.source_url, i.attribution_text, order])
     link_scope = "" if replace else "\n       AND m.image_asset_id IS NULL"
     w.write(f"""\
 \\.
 
-DO $menu_image_check$
+DO $menu_image_names$
 DECLARE
-    bad TEXT := (
-        SELECT string_agg(p.menu_id || ' ' || p.name_ko || COALESCE(' ≠ ' || m.name_ko, ' (없음)'), ', ' ORDER BY p.menu_id)
-        FROM stg_menu_image p
-        LEFT JOIN menus m ON m.id = p.menu_id
-        WHERE m.id IS NULL OR m.name_ko <> p.name_ko);
+    dup TEXT := (
+        SELECT string_agg(names, ' / ')
+        FROM (SELECT string_agg(name_ko, ', ' ORDER BY ord) AS names
+              FROM stg_menu_image GROUP BY normalize_food_name(name_ko) HAVING count(*) > 1) d);
 BEGIN
-    IF bad IS NOT NULL THEN
-        RAISE EXCEPTION 'menu_id 또는 name_ko 불일치: %', bad;
+    IF dup IS NOT NULL THEN
+        RAISE EXCEPTION '정규화하면 같은 메뉴명: %', dup;
     END IF;
 END
-$menu_image_check$;
+$menu_image_names$;
 
 \\echo '── 이미지 등록 ──'
 WITH ins AS (
@@ -191,19 +186,25 @@ WITH linked AS (
        SET image_asset_id = ia.id, updated_at = now()
       FROM stg_menu_image p
       JOIN image_assets ia ON ia.content_sha256 = p.sha256
-     WHERE m.id = p.menu_id
+     WHERE m.name_normalized = normalize_food_name(p.name_ko)
        AND m.image_asset_id IS DISTINCT FROM ia.id{link_scope}
     RETURNING m.id
 )
 SELECT count(*) AS linked_menus FROM linked;
 
 \\echo '── 다른 이미지가 이미 있어 건너뛴 메뉴 ──'
-SELECT m.id, m.name_ko
+SELECT m.id, m.name_ko, p.name_ko AS list_name
 FROM stg_menu_image p
-JOIN menus m ON m.id = p.menu_id
+JOIN menus m ON m.name_normalized = normalize_food_name(p.name_ko)
 JOIN image_assets ia ON ia.content_sha256 = p.sha256
 WHERE m.image_asset_id IS DISTINCT FROM ia.id
 ORDER BY m.id;
+
+\\echo '── 대기: 아직 menus 에 없는 메뉴명 ──'
+SELECT p.name_ko
+FROM stg_menu_image p
+WHERE NOT EXISTS (SELECT 1 FROM menus m WHERE m.name_normalized = normalize_food_name(p.name_ko))
+ORDER BY p.ord;
 
 \\echo '── 이미지 없는 표준 메뉴 ──'
 SELECT id, name_ko FROM menus WHERE image_asset_id IS NULL ORDER BY id;
@@ -216,7 +217,7 @@ def main() -> None:
     a = parse_args()
     images = read_list(a.list, a.image_dir)
     published = convert_all(images, a.image_dir, a.work_dir, a.prefix)
-    print(f"메뉴 {len(images)} · 게시 파일 {len({v.sha256 for v in published.values()})}"
+    print(f"메뉴명 {len(images)} · 게시 파일 {len({v.sha256 for v in published.values()})}"
           f"{' · 교체' if a.replace else ''}{' · dry-run (업로드 안 함)' if a.dry_run else ''}", file=sys.stderr)
 
     if not a.dry_run:
