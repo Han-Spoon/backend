@@ -11,7 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 public interface StoreMenuRepository extends JpaRepository<StoreMenu, Long> {
 
     /**
-     * 가게 상세 메뉴. 숨김 제외, id 순.
+     * 가게 상세 메뉴. 숨김 제외, 표시 순서(없으면 뒤) → id 순.
      * 이미지: 가게 메뉴 사진, 없으면 연결 표준 메뉴 이미지. 번역 이름은 locale 이 null 이면 null.
      */
     @Query(
@@ -37,7 +37,7 @@ public interface StoreMenuRepository extends JpaRepository<StoreMenu, Long> {
                     LEFT JOIN image_assets mia ON mia.id = m.image_asset_id AND mia.status = 'active'
                     WHERE sm.store_id = :storeId
                       AND sm.status = 'active'
-                    ORDER BY sm.id
+                    ORDER BY sm.display_order NULLS LAST, sm.id
                     """,
             nativeQuery = true)
     List<StoreMenuDetailProjection> findActiveMenusWithImages(
