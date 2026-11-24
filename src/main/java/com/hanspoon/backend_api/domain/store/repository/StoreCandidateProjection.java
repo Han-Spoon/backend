@@ -28,4 +28,7 @@ public interface StoreCandidateProjection {
     Boolean getVerified();
 
     Integer getReviewCount();
+
+    /** 메뉴 매칭으로 걸린 가게의 메뉴 표시명. 이름 매칭·반경 검색은 null. */
+    String getMatchedMenuName();
 }

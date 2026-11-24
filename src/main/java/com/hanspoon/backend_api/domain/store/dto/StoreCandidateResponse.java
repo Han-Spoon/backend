@@ -19,4 +19,5 @@ public record StoreCandidateResponse(
         @Schema(description = "공개 후기 수(숨김 제외). 정렬에는 미사용", example = "3") int reviewCount,
         @Schema(description = "서비스 검증 완료 여부", example = "true") boolean verified,
         @Schema(description = "후보 검색 경로", example = "gps_candidate") StoreMatchMethod matchMethod,
-        @Schema(description = "대표 사진 주소. 가게 사진, 없으면 사진 있는 첫 메뉴, 없으면 null") String thumbnailUrl) {}
+        @Schema(description = "대표 사진 주소. 가게 사진, 없으면 사진 있는 첫 메뉴, 없으면 null") String thumbnailUrl,
+        @Schema(description = "메뉴명으로 찾은 가게의 걸린 메뉴 표시명. 이름 매칭·반경 검색은 null", example = "참치김밥") String matchedMenuName) {}

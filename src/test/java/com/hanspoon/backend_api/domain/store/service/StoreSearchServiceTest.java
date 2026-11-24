@@ -71,6 +71,7 @@ class StoreSearchServiceTest {
         StoreCandidateSearchRequest request = new StoreCandidateSearchRequest(null, null, " 김치 찌개 ", 1000, 10);
         StoreCandidateProjection candidate = candidate();
         when(candidate.getDistanceMeters()).thenReturn(null);
+        when(candidate.getMatchedMenuName()).thenReturn("김치찌개");
         when(storeRepository.normalizeStoreName("김치 찌개")).thenReturn("김치찌개");
         when(storeRepository.findCandidatesByName("김치찌개", null, null, 10)).thenReturn(List.of(candidate));
 
@@ -78,6 +79,7 @@ class StoreSearchServiceTest {
 
         assertThat(response.items().getFirst().distanceMeters()).isNull();
         assertThat(response.items().getFirst().matchMethod()).isEqualTo(StoreMatchMethod.NAME_SEARCH);
+        assertThat(response.items().getFirst().matchedMenuName()).isEqualTo("김치찌개");
         verify(storeRepository).normalizeStoreName("김치 찌개");
         verify(storeRepository).findCandidatesByName("김치찌개", null, null, 10);
         verifyNoMoreInteractions(storeRepository);

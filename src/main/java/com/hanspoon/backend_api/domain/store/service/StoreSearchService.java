@@ -43,7 +43,7 @@ public class StoreSearchService {
         return toListResponse(findByName(query, request), StoreMatchMethod.NAME_SEARCH);
     }
 
-    /** 전국 이름 검색. 좌표는 거리 계산·정렬에만 사용하고 요청 반경은 무시. */
+    /** 전국 이름·메뉴명 검색. 좌표는 거리 계산·정렬에만 사용하고 요청 반경은 무시. */
     private List<StoreCandidateProjection> findByName(String query, StoreCandidateSearchRequest request) {
         String normalized = storeRepository.normalizeStoreName(query);
         if (normalized == null || normalized.isEmpty()) {
@@ -86,6 +86,7 @@ public class StoreSearchService {
                 candidate.getReviewCount() == null ? 0 : candidate.getReviewCount(),
                 Boolean.TRUE.equals(candidate.getVerified()),
                 matchMethod,
-                thumbnailUrl);
+                thumbnailUrl,
+                candidate.getMatchedMenuName());
     }
 }
