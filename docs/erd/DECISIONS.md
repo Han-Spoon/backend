@@ -1,11 +1,11 @@
 # 스키마 v2 결정 문서
 
-- **스키마의 원본은 Flyway 파일이다.** `src/main/resources/db/migration/V1~V14`. 테이블·컬럼·제약 목록은 [`ERD.md`](ERD.md), 그림은 [`ERD.svg`](ERD.svg).
-- Flyway 번호: V1~V6 = MVP(스키마 v1), V7 = 약관 동의(2026-11-14 배포), **V8~V13 = 스키마 v2 확장 단계**, V13.1 = LOCALDATA 가게 식별자(2026-11-20), V14 = 축소 단계(Prepare/Judge 단일 경로, 2026-11-22). 이후 변경은 V15 부터.
+- **스키마의 원본은 Flyway 파일이다.** `src/main/resources/db/migration/V1~V15`. 테이블·컬럼·제약 목록은 [`ERD.md`](ERD.md), 그림은 [`ERD.svg`](ERD.svg).
+- Flyway 번호: V1~V6 = MVP(스키마 v1), V7 = 약관 동의(2026-11-14 배포), **V8~V13 = 스키마 v2 확장 단계**, V13.1 = LOCALDATA 가게 식별자(2026-11-20), V14 = 축소 단계(Prepare/Judge 단일 경로, 2026-11-22), V15 = 가게 이름+지점명 검색 인덱스(2026-11-25). 이후 변경은 V16 부터.
 - 상태: 2026-11-15 설계 확정. V8~V14 운영 적용 (V14 는 2026-11-23).
 - 기준: 프론트 화면(`frontend-webapp-demo`), Notion **API 명세서_V2 (AWS)**, AI 설계 문서 hanspoon-ai `docs/`(schema_version 3.0). 사장님 페이지는 만들지 않는다(11-01).
 
-| 규모 | 테이블 51 (+ VIEW 1) · 컬럼 475 · FK 80 · UNIQUE 45 · CHECK 183 · 인덱스 154 (V14 적용 후) |
+| 규모 | 테이블 51 (+ VIEW 1) · 컬럼 475 · FK 80 · UNIQUE 45 · CHECK 183 · 인덱스 155 (V15 적용 후) |
 |---|---|
 
 ---
@@ -14,9 +14,9 @@
 
 | 시점 | 방법 |
 |---|---|
-| 변경 | 새 파일을 추가한다(`V15__…sql` 부터). 이미 적용된 파일은 고치지 않는다 |
+| 변경 | 새 파일을 추가한다(`V16__…sql` 부터). 이미 적용된 파일은 고치지 않는다 |
 | 코멘트 | 같은 마이그레이션 안에 `COMMENT ON` 으로 단다. 형식 `'논리명 \| 비고'` |
-| 확인 | `./gradlew test` (Testcontainers 로 V1~V14 적용 + JPA `validate` + `SchemaV2MigrationIntegrationTest`) |
+| 확인 | `./gradlew test` (Testcontainers 로 V1~V15 적용 + JPA `validate` + `SchemaV2MigrationIntegrationTest`) |
 
 `ERD.md`·`ERD.svg` 는 2026-11-15 카탈로그에서 만든 스냅샷이다. 스키마를 바꾸면 `ERD.md` 의 해당 테이블 부분만 손으로 고친다. 설계 단계의 생성 도구·전체 무결성 시나리오(303건)·성능 스크립트는 2026-11-16 에 저장소에서 뺐다. 필요하면 백엔드 담당의 로컬 백업에서 꺼낸다.
 
@@ -174,6 +174,7 @@
 | 메뉴 찜 | `/api/v1/saved-menus`(11-23 구현). 요청은 `scanMenuId`(= `menu_analysis_id`) 하나, 서버가 `scan_session_id` 를 채운다. 찜은 내 스캔의 메뉴일 때만 `INSERT … SELECT … ON CONFLICT DO NOTHING`(멱등). 표시값은 스냅샷 없이 조회: 판정은 현재 `risk_level`, 번역명은 결과와 같은 `menus.name_i18n`, 가게는 스캔 가게 → 기록에 연결한 가게. 목록은 전체 배열, 찜한 최신순. 오류: 찜 404 `SCAN_MENU_NOT_FOUND`, 해제 404 `SAVED_MENU_NOT_FOUND` |
 | 원본 사진 | `GET /scans/{scanId}/image`(11-23 구현). 내 스캔만, 사진 행 없음도 404 `SCAN_NOT_FOUND`. `created_at + 90일` 부터 410 `SCAN_IMAGE_EXPIRED`. 15분 presigned GET(`S3_READ_URL_TTL`), `object_version_id` 고정. 분석 중 스캔도 조회 |
 | 동네 가게 | `earth_box` + `earth_distance ≤ 반경`. 위치가 있으면 거리 → 후기 수, 없으면 후기 많은 순 |
+| 가게 이름 검색 | 검색어가 있으면 반경 없이 전국(좌표는 거리에만, `radiusMeters` 무시). 정규형 3글자 이상: 이름+지점명 포함 또는 이름 유사(`%`). 1~2글자: 이름+지점명 전국 접두 또는 반경 3km 안 포함. 빈 정규형은 빈 목록. 정렬: 확인 가게 → 포함 → 유사, 같은 단계는 거리순(좌표 없으면 일치 → 접두 → 포함 → 짧은 이름, 유사는 유사도순) → 출처 → id |
 | 계산 값 | 사진 만료, 큐레이션 읽기 시간, 가게 후기 수 |
 | 검증 가게 | `stores.verified_at` 가게는 공공데이터 재적재 시 `name`·`branch_name`·`status` 유지, 비활성 스윕 제외. 시연 가게 표시명·중복 가게는 `scripts/curate_demo_stores.py` |
 
@@ -193,6 +194,7 @@
 | `V13__comments.sql` | 코멘트 (확장 단계 기준) |
 | `V13_1__store_localdata_identity.sql` | `stores.localdata_mgmt_no`(LOCALDATA 관리번호) UNIQUE·형식·출처 CHECK |
 | `V14__menu_analyses_contract.sql` | `menu_analyses` 이름 변경·삭제·카드 배열 전환·CHECK, `risky_menu_count` 삭제, 제목 30자 CHECK |
+| `V15__store_full_name_search.sql` | `idx_stores_full_name_trgm`(이름+지점명 정규형 GIN trigram, 영업 중만) |
 
 **배포 절차**: 배포 직전 RDS 수동 스냅샷을 만든다. 되돌릴 때는 스냅샷 복구로 한다(R-08).
 
@@ -273,4 +275,4 @@
 | 11-20 | 시연 가게 표시명 = 시트 식당명(회사명 상호 미표시), `verified_at` 기록. 같은 식당 중복 행은 비활성 |
 | 11-22 | Prepare/Judge 연동을 PR 두 개로(전환 → V14 축소). Bundle 확정값은 후보 메뉴 전부에. `recommendation` 보류. AI 문서로 확인: 확정 "있음" + 금지 태그 = DANGER, 가게 prior·출처 신뢰도 `not_found` 허용, fuzzy 라이브러리는 백엔드가 정함, 출처 신뢰도 = `(맞춘 수+1)/(비교한 수+2)`. PR 2: V14 Flyway 적용, 판정 컬럼은 JDBC 전용(엔티티 읽기만), 번역명은 `menus.name_i18n` 만(설명 번역 없음), 사진은 `store_menu_id` 우선 |
 | 11-23 | PR 2 운영 배포(V14). 되돌리기는 스냅샷 복구만. 프론트는 V2 필드 우선 읽기로 같이 배포하지 않음. 사진 품질 판정 수정은 AI 레포에서, Naver 웹 검색 키는 그 뒤로 미룸. 직원 응답 API 구현: 메뉴 위험도 = 겹친 present 있으면 danger 아니면 `ai_risk_level`, 응답 미완이면 SAFE 대신 caution, 표시 순서 유지. 메뉴 찜 API 구현(표시값 조회, 멱등 찜). 식사 후기 API 구현(식단 항목은 현재 프로필, 수정은 줄 전체 교체, 목록은 전체 배열). 원본 사진 조회 API 구현(사진 행 없음은 404, 새 에러 코드는 410만) |
-| 11-25 | 표준 메뉴 대표 이미지(#113): 스캔 결과 사진은 가게 메뉴 사진 → 판정 표준 메뉴 이미지 순. 출처는 Wikimedia Commons + 허락받은 사진, 연결은 메뉴명 기준 |
+| 11-25 | 표준 메뉴 대표 이미지(#113): 스캔 결과 사진은 가게 메뉴 사진 → 판정 표준 메뉴 이미지 순. 출처는 Wikimedia Commons + 허락받은 사진, 연결은 메뉴명 기준 . 가게 이름 검색(#122): 검색어가 있으면 전국 검색 + 포함 매칭, 1~2글자는 전국 접두 + 반경 3km 포함, 같은 단계는 거리 우선. 지점명 포함 매칭은 식 인덱스(V15), OpenSearch·전문 검색 제외 |

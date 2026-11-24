@@ -36,6 +36,19 @@ class StoreDomainMigrationIntegrationTest {
     }
 
     @Test
+    void indexesNormalizedNameWithBranchForActiveStores() {
+        String indexDef = jdbcTemplate.queryForObject(
+                "select indexdef from pg_indexes where indexname = 'idx_stores_full_name_trgm'", String.class);
+
+        assertThat(indexDef)
+                .contains("USING gin")
+                .contains("normalize_store_name")
+                .contains("branch_name")
+                .contains("gin_trgm_ops")
+                .contains("'active'");
+    }
+
+    @Test
     void usesBigintForStoreIdentifiers() {
         String storeIdType = jdbcTemplate.queryForObject(
                 """

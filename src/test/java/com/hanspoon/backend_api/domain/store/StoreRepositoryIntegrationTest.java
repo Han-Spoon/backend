@@ -202,6 +202,55 @@ class StoreRepositoryIntegrationTest {
     }
 
     @Test
+    void matchesNameWithBranchAheadOfOtherBranches() {
+        long yongsanId = insertStore("yongsan-branch", "본죽", 35.1631, 129.1635, StoreStatus.ACTIVE, false);
+        long myeongdongId = insertStore("myeongdong-branch", "본죽", 37.5001, 127.0000, StoreStatus.ACTIVE, false);
+        updateBranchName(yongsanId, "용산점");
+        updateBranchName(myeongdongId, "명동점");
+
+        List<StoreCandidateProjection> fullName =
+                storeRepository.findCandidatesByName("본죽용산점", CENTER_LATITUDE, CENTER_LONGITUDE, 10);
+        List<StoreCandidateProjection> partialBranch =
+                storeRepository.findCandidatesByName("본죽용산", CENTER_LATITUDE, CENTER_LONGITUDE, 10);
+        List<StoreCandidateProjection> nameOnly =
+                storeRepository.findCandidatesByName("본죽", CENTER_LATITUDE, CENTER_LONGITUDE, 10);
+
+        assertThat(fullName).extracting(StoreCandidateProjection::getStoreId).containsExactly(yongsanId);
+        assertThat(partialBranch)
+                .extracting(StoreCandidateProjection::getStoreId)
+                .containsExactly(yongsanId, myeongdongId);
+        assertThat(nameOnly).extracting(StoreCandidateProjection::getStoreId).containsExactly(myeongdongId, yongsanId);
+    }
+
+    @Test
+    void ranksExactNameWithBranchFirstWithoutCoordinates() {
+        long otherBranchId = insertStore("other-branch", "본죽", 37.5001, 127.0000, StoreStatus.ACTIVE, false);
+        long exactBranchId = insertStore("exact-branch", "본죽", 35.1631, 129.1635, StoreStatus.ACTIVE, false);
+        long longerNameId = insertStore("longer-name", "본죽용산점비빔밥", 37.5002, 127.0000, StoreStatus.ACTIVE, false);
+        updateBranchName(otherBranchId, "용산점앞");
+        updateBranchName(exactBranchId, "용산점");
+
+        List<StoreCandidateProjection> candidates = storeRepository.findCandidatesByName("본죽용산점", null, null, 10);
+
+        assertThat(candidates)
+                .extracting(StoreCandidateProjection::getStoreId)
+                .containsExactly(exactBranchId, otherBranchId, longerNameId);
+    }
+
+    @Test
+    void matchesShortQueryInsideNearbyBranchName() {
+        long nearBranchId = insertStore("near-branch", "본죽", 37.5050, 127.0000, StoreStatus.ACTIVE, false);
+        long farBranchId = insertStore("far-branch", "본죽", 35.1631, 129.1635, StoreStatus.ACTIVE, false);
+        updateBranchName(nearBranchId, "용산점");
+        updateBranchName(farBranchId, "용산점");
+
+        List<StoreCandidateProjection> candidates =
+                storeRepository.findCandidatesByShortName("용산", CENTER_LATITUDE, CENTER_LONGITUDE, 3000, 10);
+
+        assertThat(candidates).extracting(StoreCandidateProjection::getStoreId).containsExactly(nearBranchId);
+    }
+
+    @Test
     void countsOnlyVisibleReviews() {
         long storeId = insertStore("review-store", "후기 식당", 37.5001, 127.0000, StoreStatus.ACTIVE, false);
         UUID userId = userRepository
@@ -233,6 +282,10 @@ class StoreRepositoryIntegrationTest {
                 userId,
                 storeId,
                 hidden ? Timestamp.from(Instant.now().plusSeconds(1)) : null);
+    }
+
+    private void updateBranchName(long storeId, String branchName) {
+        jdbcTemplate.update("update stores set branch_name = ? where id = ?", branchName, storeId);
     }
 
     private long insertStore(

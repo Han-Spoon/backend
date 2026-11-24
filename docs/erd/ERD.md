@@ -1,6 +1,6 @@
 # 스키마 v2 ERD
 
-- **원본은 Flyway** `src/main/resources/db/migration/V1~V14`(+V13.1). 이 문서와 [`ERD.svg`](ERD.svg)는 **V14 까지 적용한 상태**를 2026-11-15 DB 카탈로그에서 만든 스냅샷이다. 스키마를 바꾸면 해당 테이블 부분을 손으로 고친다
+- **원본은 Flyway** `src/main/resources/db/migration/V1~V15`(+V13.1). 이 문서와 [`ERD.svg`](ERD.svg)는 **V14 까지 적용한 상태**를 2026-11-15 DB 카탈로그에서 만든 스냅샷이다(V15 인덱스 1개는 손으로 추가). 스키마를 바꾸면 해당 테이블 부분을 손으로 고친다
 - 결정 근거·구현 규칙·배포·미결: [`DECISIONS.md`](DECISIONS.md)
 - 컬럼 설명 형식: `논리명 | N(NOT NULL)/Y(NULL 허용) | 비고`. 비고 끝 `[#n]`은 AI 백엔드 변경 요청 번호(AI 레포 `docs/caution-db-schema.md` §6), `[V5]`는 기존 마이그레이션 번호
 
@@ -11,7 +11,7 @@
 | 관계(FK) | 80 |
 | UNIQUE (제약 + 부분 UNIQUE 인덱스) | 44 |
 | CHECK (테이블) | 181 |
-| 인덱스 (PK·UNIQUE 포함) | 154 |
+| 인덱스 (PK·UNIQUE 포함) | 155 |
 
 | 색 | 도메인 | 테이블 |
 |---|---|---|
@@ -776,7 +776,7 @@ erDiagram
 
 ## 다이어그램 밖 규칙 (카탈로그에서 생성)
 
-CHECK, 부분·식 인덱스, 생성 컬럼, 특수 FK 동작처럼 erDiagram 으로 그릴 수 없는 규칙을 테이블별로 모두 적는다. 원문 SQL 은 해당 Flyway 파일(V1~V14)이다.
+CHECK, 부분·식 인덱스, 생성 컬럼, 특수 FK 동작처럼 erDiagram 으로 그릴 수 없는 규칙을 테이블별로 모두 적는다. 원문 SQL 은 해당 Flyway 파일(V1~V15)이다.
 
 ### 사용자·약관
 
@@ -977,6 +977,7 @@ END)` |
 | CHECK | `ck_stores_status`: `(((status)::text = ANY ((ARRAY['active'::character varying, 'inactive'::character varying])::text[])))` |
 | 인덱스 | `idx_stores_batch`: `btree (last_batch_id)` |
 | 인덱스 | `idx_stores_category`: `btree (category_id) WHERE ((status)::text = 'active'::text)` |
+| 인덱스 | `idx_stores_full_name_trgm`: `gin (normalize_store_name(((name)::text \|\| (branch_name)::text)) gin_trgm_ops) WHERE ((status)::text = 'active'::text)` |
 | 인덱스 | `idx_stores_geo_active`: `gist (ll_to_earth(lat, lng)) WHERE ((status)::text = 'active'::text)` |
 | 인덱스 | `idx_stores_image`: `btree (image_asset_id) WHERE (image_asset_id IS NOT NULL)` |
 | 인덱스 | `idx_stores_name_trgm`: `gin (name_normalized gin_trgm_ops) WHERE ((status)::text = 'active'::text)` |
