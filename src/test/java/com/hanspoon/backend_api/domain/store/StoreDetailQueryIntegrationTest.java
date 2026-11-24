@@ -7,12 +7,15 @@ import static org.assertj.core.api.Assertions.tuple;
 import com.hanspoon.backend_api.TestcontainersConfiguration;
 import com.hanspoon.backend_api.domain.store.dto.StoreDetailResponse;
 import com.hanspoon.backend_api.domain.store.service.StoreDetailService;
+import com.hanspoon.backend_api.domain.store.service.StoreThumbnailResolver;
 import com.hanspoon.backend_api.domain.user.entity.User;
 import com.hanspoon.backend_api.domain.user.repository.UserRepository;
 import com.hanspoon.backend_api.global.exception.BusinessException;
 import com.hanspoon.backend_api.global.exception.ErrorCode;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +31,9 @@ class StoreDetailQueryIntegrationTest {
 
     @Autowired
     private StoreDetailService storeDetailService;
+
+    @Autowired
+    private StoreThumbnailResolver storeThumbnailResolver;
 
     @Autowired
     private UserRepository userRepository;
@@ -120,6 +126,8 @@ class StoreDetailQueryIntegrationTest {
                 .isEqualTo(storeUrl("7"));
         assertThat(storeDetailService.getDetail(user.getId(), standardOnly).thumbnailUrl())
                 .isNull();
+        assertThat(storeThumbnailResolver.find(List.of(withStoreImage, withMenuPhoto, standardOnly)))
+                .containsOnly(Map.entry(withStoreImage, storeUrl("2")), Map.entry(withMenuPhoto, storeUrl("7")));
     }
 
     @Test

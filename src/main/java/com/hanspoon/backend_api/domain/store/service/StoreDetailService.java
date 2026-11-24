@@ -10,6 +10,7 @@ import com.hanspoon.backend_api.domain.user.repository.UserRepository;
 import com.hanspoon.backend_api.global.config.CdnUrls;
 import com.hanspoon.backend_api.global.exception.BusinessException;
 import com.hanspoon.backend_api.global.exception.ErrorCode;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,16 +26,19 @@ public class StoreDetailService {
     private final StoreRepository storeRepository;
     private final StoreMenuRepository storeMenuRepository;
     private final UserRepository userRepository;
+    private final StoreThumbnailResolver storeThumbnailResolver;
     private final CdnUrls cdnUrls;
 
     public StoreDetailService(
             StoreRepository storeRepository,
             StoreMenuRepository storeMenuRepository,
             UserRepository userRepository,
+            StoreThumbnailResolver storeThumbnailResolver,
             CdnUrls cdnUrls) {
         this.storeRepository = storeRepository;
         this.storeMenuRepository = storeMenuRepository;
         this.userRepository = userRepository;
+        this.storeThumbnailResolver = storeThumbnailResolver;
         this.cdnUrls = cdnUrls;
     }
 
@@ -61,7 +65,7 @@ public class StoreDetailService {
                 store.getCategoryName(),
                 Boolean.TRUE.equals(store.getVerified()),
                 store.getReviewCount() == null ? 0 : store.getReviewCount(),
-                cdnUrls.of(store.getThumbnailStorageKey()),
+                storeThumbnailResolver.find(List.of(storeId)).get(storeId),
                 storeMenuRepository.findActiveMenusWithImages(storeId, locale).stream()
                         .map(this::toMenu)
                         .toList());

@@ -135,7 +135,8 @@ class StoreControllerTest {
                         "한식 일반 음식점업",
                         3,
                         true,
-                        StoreMatchMethod.NAME_SEARCH))));
+                        StoreMatchMethod.NAME_SEARCH,
+                        "https://cdn.test/menus/stores/a.jpg"))));
 
         mockMvc.perform(
                         post("/api/v1/stores/candidates")
@@ -155,7 +156,8 @@ class StoreControllerTest {
                 .andExpect(jsonPath("$.items[0].distanceMeters").value(42))
                 .andExpect(jsonPath("$.items[0].reviewCount").value(3))
                 .andExpect(jsonPath("$.items[0].verified").value(true))
-                .andExpect(jsonPath("$.items[0].matchMethod").value("name_search"));
+                .andExpect(jsonPath("$.items[0].matchMethod").value("name_search"))
+                .andExpect(jsonPath("$.items[0].thumbnailUrl").value("https://cdn.test/menus/stores/a.jpg"));
 
         ArgumentCaptor<StoreCandidateSearchRequest> requestCaptor =
                 ArgumentCaptor.forClass(StoreCandidateSearchRequest.class);

@@ -1,6 +1,6 @@
 package com.hanspoon.backend_api.domain.store.repository;
 
-/** 가게 상세 상단 정보. 썸네일은 S3 키. */
+/** 가게 상세 상단 정보. */
 public interface StoreDetailProjection {
 
     Long getStoreId();
@@ -24,6 +24,4 @@ public interface StoreDetailProjection {
     Boolean getVerified();
 
     Integer getReviewCount();
-
-    String getThumbnailStorageKey();
 }
