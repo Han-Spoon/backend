@@ -70,6 +70,16 @@ class LoadStoreMenusTest(unittest.TestCase):
         self.assertIn("ON CONFLICT (store_id, name_normalized) DO NOTHING", self.emit(dry_run=False))
         self.assertIn("s.sbiz_store_no = m.store_no OR s.localdata_mgmt_no = m.store_no", self.emit(dry_run=False))
 
+    def test_display_order_only_with_set_order(self):
+        self.assertNotIn("display_order", self.emit(dry_run=False))
+
+        sql = emit([["MA1", "김치찌개", 0]], dry_run=False, set_order=True)
+
+        self.assertIn("SET display_order = NULL", sql)
+        self.assertIn("row_number() OVER (PARTITION BY s.id ORDER BY min(m.ord))", sql)
+        self.assertLess(sql.index("ON CONFLICT"), sql.index("SET display_order = NULL"))
+        self.assertTrue(sql.endswith("COMMIT;\n"))
+
     def test_menu_name_with_comma_is_quoted(self):
         sql = emit([["MA1", "라면, 우동", 0]], dry_run=True)
 
@@ -79,9 +89,9 @@ class LoadStoreMenusTest(unittest.TestCase):
         return emit([["MA1", "김치찌개", 0]], dry_run)
 
 
-def emit(rows, dry_run: bool) -> str:
+def emit(rows, dry_run: bool, set_order: bool = False) -> str:
     buf = io.StringIO()
-    load_store_menus.emit(buf, rows, dry_run)
+    load_store_menus.emit(buf, rows, dry_run, set_order)
     return buf.getvalue()
 
 

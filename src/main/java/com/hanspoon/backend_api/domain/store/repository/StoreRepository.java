@@ -39,7 +39,7 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
             nativeQuery = true)
     Optional<StoreDetailProjection> findActiveDetail(@Param("storeId") long storeId);
 
-    /** 가게 대표 사진 키. 가게 사진, 없으면 사진 있는 첫 가게 메뉴(id 순). 사진 없는 가게는 행 없음. */
+    /** 가게 대표 사진 키. 가게 사진, 없으면 사진 있는 첫 가게 메뉴(표시 순서 → id 순). 사진 없는 가게는 행 없음. */
     @Query(
             value =
                     """
@@ -55,7 +55,7 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
                                           join image_assets ia on ia.id = sm.image_asset_id and ia.status = 'active'
                                          where sm.store_id = s.id
                                            and sm.status = 'active'
-                                         order by sm.id
+                                         order by sm.display_order nulls last, sm.id
                                          limit 1)
                                    ) as "storageKey"
                               from stores s

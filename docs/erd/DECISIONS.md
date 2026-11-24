@@ -195,6 +195,7 @@
 | `V13_1__store_localdata_identity.sql` | `stores.localdata_mgmt_no`(LOCALDATA 관리번호) UNIQUE·형식·출처 CHECK |
 | `V14__menu_analyses_contract.sql` | `menu_analyses` 이름 변경·삭제·카드 배열 전환·CHECK, `risky_menu_count` 삭제, 제목 30자 CHECK |
 | `V15__store_full_name_search.sql` | `idx_stores_full_name_trgm`(이름+지점명 정규형 GIN trigram, 영업 중만) |
+| `V16__store_menu_display_order.sql` | `store_menus.display_order`(수동 표시 순서, NULL은 id 순) |
 
 **배포 절차**: 배포 직전 RDS 수동 스냅샷을 만든다. 되돌릴 때는 스냅샷 복구로 한다(R-08).
 
