@@ -18,4 +18,5 @@ public record StoreCandidateResponse(
         @Schema(description = "상권업종 소분류명", example = "한식 일반 음식점업") String categoryName,
         @Schema(description = "공개 후기 수(숨김 제외). 정렬에는 미사용", example = "3") int reviewCount,
         @Schema(description = "서비스 검증 완료 여부", example = "true") boolean verified,
-        @Schema(description = "후보 검색 경로", example = "gps_candidate") StoreMatchMethod matchMethod) {}
+        @Schema(description = "후보 검색 경로", example = "gps_candidate") StoreMatchMethod matchMethod,
+        @Schema(description = "대표 사진 주소. 가게 사진, 없으면 사진 있는 첫 메뉴, 없으면 null") String thumbnailUrl) {}
