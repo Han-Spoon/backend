@@ -12,6 +12,45 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
 
     Optional<Store> findByIdAndStatus(Long id, StoreStatus status);
 
+    /** 영업 중 가게 상세. 썸네일: 가게 사진, 없으면 사진 있는 첫 가게 메뉴. */
+    @Query(
+            value =
+                    """
+                    select s.id as "storeId",
+                           s.name as "name",
+                           s.branch_name as "branchName",
+                           s.road_address as "roadAddress",
+                           s.floor_info as "floorInfo",
+                           s.lat as "latitude",
+                           s.lng as "longitude",
+                           c.code as "categoryCode",
+                           c.name as "categoryName",
+                           (s.verified_at is not null) as "verified",
+                           (select cast(count(*) as integer)
+                              from meal_reviews r
+                             where r.store_id = s.id
+                               and r.hidden_at is null) as "reviewCount",
+                           coalesce(
+                               (select ia.storage_key
+                                  from image_assets ia
+                                 where ia.id = s.image_asset_id
+                                   and ia.status = 'active'),
+                               (select ia.storage_key
+                                  from store_menus sm
+                                  join image_assets ia on ia.id = sm.image_asset_id and ia.status = 'active'
+                                 where sm.store_id = s.id
+                                   and sm.status = 'active'
+                                 order by sm.id
+                                 limit 1)
+                           ) as "thumbnailStorageKey"
+                      from stores s
+                      left join store_categories c on c.id = s.category_id
+                     where s.id = :storeId
+                       and s.status = 'active'
+                    """,
+            nativeQuery = true)
+    Optional<StoreDetailProjection> findActiveDetail(@Param("storeId") long storeId);
+
     /** 현재 위치 주변의 영업 중 가게를 검증 여부·공공데이터 출처·거리 순으로 조회. */
     @Query(
             value =

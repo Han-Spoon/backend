@@ -1,6 +1,7 @@
 package com.hanspoon.backend_api.domain.store.repository;
 
 import com.hanspoon.backend_api.domain.store.entity.StoreMenu;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -8,6 +9,39 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
 public interface StoreMenuRepository extends JpaRepository<StoreMenu, Long> {
+
+    /**
+     * 가게 상세 메뉴. 숨김 제외, id 순.
+     * 이미지: 가게 메뉴 사진, 없으면 연결 표준 메뉴 이미지. 번역 이름은 locale 이 null 이면 null.
+     */
+    @Query(
+            value =
+                    """
+                    SELECT sm.id AS storeMenuId,
+                           sm.display_name AS name,
+                           m.name_i18n ->> CAST(:locale AS text) AS translatedName,
+                           sm.description AS description,
+                           sm.price_text AS priceText,
+                           CAST(sm.price_options AS text) AS priceOptions,
+                           sm.menu_id AS menuId,
+                           CASE WHEN sia.id IS NOT NULL THEN sia.storage_key ELSE mia.storage_key END
+                               AS imageStorageKey,
+                           CASE WHEN sia.id IS NOT NULL THEN sia.attribution_text ELSE mia.attribution_text END
+                               AS imageAttribution,
+                           CASE WHEN sia.id IS NOT NULL THEN 'store'
+                                WHEN mia.id IS NOT NULL THEN 'standard'
+                           END AS imageSource
+                    FROM store_menus sm
+                    LEFT JOIN image_assets sia ON sia.id = sm.image_asset_id AND sia.status = 'active'
+                    LEFT JOIN menus m ON m.id = sm.menu_id
+                    LEFT JOIN image_assets mia ON mia.id = m.image_asset_id AND mia.status = 'active'
+                    WHERE sm.store_id = :storeId
+                      AND sm.status = 'active'
+                    ORDER BY sm.id
+                    """,
+            nativeQuery = true)
+    List<StoreMenuDetailProjection> findActiveMenusWithImages(
+            @Param("storeId") long storeId, @Param("locale") String locale);
 
     /**
      * 스캔에서 본 가게 메뉴 upsert. 기존 행은 표시값 유지, 마지막 확인 정보만 갱신.
