@@ -8,7 +8,7 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * 스캔 결과의 메뉴 1건. 사용자 표시용.
- * 메뉴 사진은 스캔 가게의 가게 메뉴 사진만.
+ * 메뉴 사진은 가게 메뉴 사진, 없으면 판정 표준 메뉴 대표 이미지.
  *
  * @param scanMenuId 스캔 메뉴 id
  * @param displayOrder 표시 순서
@@ -17,7 +17,7 @@ import tools.jackson.databind.JsonNode;
  * @param description 메뉴판 설명
  * @param translatedDescription 설명 번역, 미제공(null)
  * @param priceText 가격 문자열
- * @param imageUrl 가게 메뉴 사진 공개 주소, null 가능
+ * @param imageUrl 메뉴 사진 공개 주소, null 가능
  * @param imageAttribution 사진 출처 표기, imageUrl 과 함께 null
  * @param isSpicy 매운맛 감지 시 true, 아니면 null
  * @param riskLevel 위험도 (danger | caution | safe)

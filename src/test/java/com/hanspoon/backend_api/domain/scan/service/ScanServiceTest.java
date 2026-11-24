@@ -284,7 +284,7 @@ class ScanServiceTest {
         when(scanSessionRepository.findByIdAndUserId(scanId, userId)).thenReturn(Optional.of(session));
         when(menuAnalysisRepository.findByScanSessionIdOrderByDisplayOrder(scanId))
                 .thenReturn(List.of(withPhoto, withoutPhoto));
-        when(menuPhotoResolver.find(scanId, 10L))
+        when(menuPhotoResolver.find(scanId))
                 .thenReturn(
                         Map.of(withPhoto.getId(), new MenuPhoto("https://cdn.test/menus/stores/a.jpg", "사진 제공: 기와")));
 

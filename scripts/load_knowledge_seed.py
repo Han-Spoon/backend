@@ -17,6 +17,7 @@ AI 지식 시드 CSV → 지식 테이블 적재(최초·재적재) + 가게 메
   · 재료 번역 → ingredients.name_i18n. 배치는 completed + finished_at = now().
   · recipe_ingredients.review_item_id 는 스키마 v2 에 없음. 값이 있으면 중단.
   · store_menus: mapping_source = none 행 중 정규화 이름 일치 → menu_id 연결(name_match).
+  · menus.image_asset_id 는 건드리지 않음. 새 메뉴 대표 이미지는 적재 뒤 publish_standard_menu_images.py 다시 실행.
 
 사용 예
   python3 crawling/db_seed.py --out ~/hanspoon-seed        # hanspoon-ai 레포에서

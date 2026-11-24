@@ -70,7 +70,7 @@ class MenuPhotoQueryIntegrationTest {
         MenuAnalysis linked = menuAnalysisRepository.save(menu(session.getId(), 3, "불백 정식", storeId, linkedMenuId));
         entityManager.flush();
 
-        Map<UUID, MenuPhoto> photos = menuPhotoResolver.find(session.getId(), storeId);
+        Map<UUID, MenuPhoto> photos = menuPhotoResolver.find(session.getId());
 
         assertThat(photos)
                 .containsOnly(
@@ -80,6 +80,89 @@ class MenuPhotoQueryIntegrationTest {
                         Map.entry(
                                 linked.getId(),
                                 new MenuPhoto("https://cdn.test/menus/stores/" + sha("d") + ".jpg", "사진 제공: 기와")));
+    }
+
+    @Test
+    void fallsBackToActiveStandardMenuImage() {
+        Long categoryId = jdbcTemplate.queryForObject(
+                "insert into store_categories(code, name, level) values ('I2', '음식', 1) returning id", Long.class);
+        Long batchId = jdbcTemplate.queryForObject(
+                "insert into store_import_batches(source, source_version) values ('sbiz', '202609') returning id",
+                Long.class);
+        Long storeId = insertStore("PHOTO-3", categoryId, batchId);
+        insertStoreMenu(storeId, "김치찌개", insertImage("a", "active"));
+        insertStoreMenu(storeId, "된장찌개", insertImage("b", "hidden"));
+        Long kimchiStew = insertMenu("김치찌개", insertStandardImage("e", "active"));
+        Long soybeanStew = insertMenu("된장찌개", insertStandardImage("f", "active"));
+        Long bibimbap = insertMenu("비빔밥", insertStandardImage("1", "active"));
+        Long bulgogi = insertMenu("불고기", insertStandardImage("2", "hidden"));
+
+        User user = userRepository.save(User.create("menu-photo-std@example.com", "menuphotostd", "ko"));
+        ScanSession withStore = scanSessionRepository.save(ScanSession.start(
+                user.getId(), "scans/" + user.getId() + "/a.jpg", storeId, "기와", StoreMatchMethod.NAME_SEARCH));
+        ScanSession withoutStore = scanSessionRepository.save(
+                ScanSession.startWithoutStore(user.getId(), "scans/" + user.getId() + "/b.jpg"));
+        MenuAnalysis storePhoto = menuAnalysisRepository.save(menu(withStore.getId(), 0, "김치찌개", null, null));
+        MenuAnalysis hiddenStorePhoto = menuAnalysisRepository.save(menu(withStore.getId(), 1, "된장찌개", null, null));
+        MenuAnalysis noStoreMenu = menuAnalysisRepository.save(menu(withStore.getId(), 2, "비빔밥", null, null));
+        MenuAnalysis noStore = menuAnalysisRepository.save(menu(withoutStore.getId(), 0, "비빔밥", null, null));
+        MenuAnalysis hiddenStandard = menuAnalysisRepository.save(menu(withoutStore.getId(), 1, "불고기", null, null));
+        menuAnalysisRepository.save(menu(withoutStore.getId(), 2, "잡채", null, null));
+        entityManager.flush();
+        judge(storePhoto, kimchiStew);
+        judge(hiddenStorePhoto, soybeanStew);
+        judge(noStoreMenu, bibimbap);
+        judge(noStore, bibimbap);
+        judge(hiddenStandard, bulgogi);
+
+        assertThat(menuPhotoResolver.find(withStore.getId()))
+                .containsOnly(
+                        Map.entry(
+                                storePhoto.getId(),
+                                new MenuPhoto("https://cdn.test/menus/stores/" + sha("a") + ".jpg", "사진 제공: 기와")),
+                        Map.entry(hiddenStorePhoto.getId(), standardPhoto("f")),
+                        Map.entry(noStoreMenu.getId(), standardPhoto("1")));
+        assertThat(menuPhotoResolver.find(withoutStore.getId()))
+                .containsOnly(Map.entry(noStore.getId(), standardPhoto("1")));
+    }
+
+    private Long insertMenu(String name, Long imageAssetId) {
+        return jdbcTemplate.queryForObject(
+                """
+                insert into menus(name_ko, source, needs_review, image_asset_id)
+                values (?, 'curated', true, ?)
+                returning id
+                """,
+                Long.class,
+                name,
+                imageAssetId);
+    }
+
+    private Long insertStandardImage(String seed, String status) {
+        return jdbcTemplate.queryForObject(
+                """
+                insert into image_assets(storage_key, content_sha256, mime_type, source_type,
+                                         author, license_code, source_url, attribution_text, status)
+                values (?, ?, 'image/jpeg', 'external_licensed',
+                        '작성자', 'CC-BY-SA-4.0', 'https://commons.wikimedia.org/wiki/File:x.jpg',
+                        '대표 이미지', ?)
+                returning id
+                """,
+                Long.class,
+                "menus/standard/" + sha(seed) + ".jpg",
+                sha(seed),
+                status);
+    }
+
+    private void judge(MenuAnalysis analysis, Long menuId) {
+        jdbcTemplate.update(
+                "update menu_analyses set menu_id = ?, menu_match_type = 'exact' where id = ?",
+                menuId,
+                analysis.getId());
+    }
+
+    private static MenuPhoto standardPhoto(String seed) {
+        return new MenuPhoto("https://cdn.test/menus/standard/" + sha(seed) + ".jpg", "대표 이미지");
     }
 
     private Long insertStore(String sbizNo, Long categoryId, Long batchId) {
