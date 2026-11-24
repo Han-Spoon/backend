@@ -21,10 +21,10 @@ public record StoreCandidateSearchRequest(
         @Schema(description = "사용자 현재 경도(query 만 있으면 생략 가능)", example = "127.0276")
                 @DecimalMin(value = "124.0", message = "longitude must be at least 124.0") @DecimalMax(value = "132.0", message = "longitude must be at most 132.0") Double longitude,
         @Schema(description = "상호명 검색어(좌표 없으면 필수)", example = "한스푼") @Size(max = 100) String query,
-        @Schema(description = "검색 반경(m), 기본 100. 좌표 있을 때만", example = "100")
-                @Min(value = 10, message = "radiusMeters must be at least 10") @Max(value = 1000, message = "radiusMeters must be at most 1000") Integer radiusMeters,
-        @Schema(description = "최대 후보 수, 기본·최대 20", example = "20")
-                @Min(value = 1, message = "limit must be at least 1") @Max(value = 20, message = "limit must be at most 20") Integer limit) {
+        @Schema(description = "검색 반경(m), 기본 100·최대 3000. 좌표 있을 때만", example = "100")
+                @Min(value = 10, message = "radiusMeters must be at least 10") @Max(value = 3000, message = "radiusMeters must be at most 3000") Integer radiusMeters,
+        @Schema(description = "최대 후보 수, 기본 20·최대 100", example = "20")
+                @Min(value = 1, message = "limit must be at least 1") @Max(value = 100, message = "limit must be at most 100") Integer limit) {
 
     private static final int DEFAULT_RADIUS_METERS = 100;
     private static final int DEFAULT_LIMIT = 20;

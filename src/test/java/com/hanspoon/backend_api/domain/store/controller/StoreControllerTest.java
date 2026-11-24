@@ -136,8 +136,8 @@ class StoreControllerTest {
                                   "latitude": 40.0,
                                   "longitude": 127.0276,
                                   "query": "%s",
-                                  "radiusMeters": 1001,
-                                  "limit": 21
+                                  "radiusMeters": 3001,
+                                  "limit": 101
                                 }
                                 """
                                         .formatted("가".repeat(101))))
