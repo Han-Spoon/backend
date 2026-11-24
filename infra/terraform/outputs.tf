@@ -50,3 +50,8 @@ output "api_dns_record" {
   description = "2단계: Vercel DNS 에 등록할 API CNAME"
   value       = "${local.api_fqdn}  CNAME  ${aws_cloudfront_distribution.main.domain_name}"
 }
+
+output "github_seed_role_arn" {
+  description = "시드 적재 워크플로의 role-to-assume (secret AWS_SEED_ROLE_ARN)"
+  value       = aws_iam_role.github_seed.arn
+}
