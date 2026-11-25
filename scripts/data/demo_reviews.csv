@@ -141,3 +141,29 @@ MA010120220811803855,1,"소고기(200g,호주산,뉴질랜드산)",소고기很�
 3020000-101-2003-00124,1,골수 뼈구이(2인),Really tasty 골수 뼈구이. Portions were generous.,en,allergy:pork=present,15.67
 3020000-101-2003-00124,1,골수 감자탕(2인),"The 골수 감자탕 is quite spicy, ask for less if you can't handle heat.",en,allergy:pork=present;preference:no-spicy=present,15.67
 3130000-101-1994-00562,1,냉제육 한 접시,용산역 근처라 가기 편하고 냉제육 한 접시 추천해요. 양념 재료는 확실하지 않아서 매장에 확인해 보세요.,ko,allergy:pork=present;preference:no-spicy=present;allergy:wheat=unknown,40.23
+MA010120220813758969,2,뚝배기 불고기,점심에 뚝불 먹었는데 국물이 달큰하면서도 끝맛이 깔끔해요. 당면이 국물을 머금어서 부들부들하고 얇은 소고기라 밥이랑 같이 떠먹기 좋아요. 새콤하게 익은 김치랑 번갈아 먹다 보니 금방 한 그릇 비웠네요. 주변 테이블도 거의 다 뚝불 드시더라고요.,ko,allergy:beef=present;allergy:soybean=present;allergy:wheat=unknown,3.2
+MA010120220813758969,3,명동칼국수,국물 감칠맛이 진짜 진해요. 면은 얇고 부드러운 편이고 다진 고기 고명이 넉넉하게 올라가 있어요. 마늘 향 강한 김치랑 같이 먹으니 딱 생각하던 명동식 칼국수 맛이에요.,ko,allergy:wheat=present,6.7
+MA010120220813758969,3,개성식손만두,만두가 주먹만 하게 커요. 두부랑 숙주가 많이 들어가서 속이 촉촉하고 담백해요. 칼국수 국물에 한 번 담갔다 먹으면 더 맛있어요. 둘이서 칼국수 두 그릇에 만두 한 접시면 충분합니다.,ko,allergy:wheat=present;allergy:soybean=present;allergy:pork=unknown,6.7
+MA010120220813758969,4,제육볶음,"Came here on a chilly evening after walking over from Yongsan Station. The spicy pork arrives still sizzling in a hot earthen pot, so the sauce keeps bubbling and caramelizing while you eat. Sweet and spicy without being overwhelming, with lots of onion and a slightly smoky edge. Perfect with rice and the well-fermented kimchi on the side. Mostly locals here, but pointing at the menu worked just fine.",en,allergy:pork=present;allergy:soybean=present,9.1
+MA010120220813758969,5,옛날불고기1인분,ご飯は頼まずに昔ながらのプルコギだけ注文しましたが、量がたっぷりで十分お腹いっぱいになりました。少なめのスープで薄切りの牛肉、きのこ、長ネギを一緒に煮込むスタイルで、お肉を食べ進めるうちに最後はスープまで飲み干してしまいます。甘めの醤油味なので、子どもにも喜ばれそうです。,ja,allergy:beef=present;allergy:soybean=present,12.4
+MA010120220813758969,6,손만둣국,날이 추워서 손만둣국 시켰어요. 뽀얀 국물에 큼직한 만두가 넉넉하게 들어 있고 계란 지단이랑 김가루가 올라가요. 만두피가 얇은데도 국물 안에서 잘 안 터지고 속이 꽉 차 있어서 몇 알만 먹어도 배불러요. 간이 세지 않아서 부담 없이 먹기 좋아요.,ko,allergy:wheat=present;allergy:egg=present,15.8
+MA010120220813758969,7,제육볶음,회사 동료랑 점심 먹으러 왔어요. 제육이 뚝배기에 자글자글 끓어서 나오니까 마지막 한 숟갈까지 따뜻해요. 고추장 양념이 고기에 잘 배어 있고 불향도 살짝 나요. 매운 걸 잘 못 먹는 편인데 이 정도는 괜찮았어요.,ko,allergy:pork=present,19.3
+MA010120220813758969,7,뚝배기 불고기,같이 시킨 뚝불은 국물이 달짝지근해서 매콤한 제육이랑 번갈아 먹기 좋았어요.,ko,allergy:beef=present,19.3
+MA010120220813758969,8,뚝배기 불고기,"Ttukbaegi bulgogi is the reason to come here: thin slices of beef and glass noodles simmered in a light, slightly sweet soy broth, served bubbling in an earthen pot. Comforting and not too salty.",en,allergy:beef=present;allergy:soybean=present,24.6
+MA010120220813758969,8,개성식손만두,"The Kaesong-style dumplings are huge and juicy, filled with tofu, bean sprouts and minced meat. One plate is plenty to share between two people.",en,allergy:wheat=present;allergy:soybean=present,24.6
+MA010120220813758969,9,명동칼국수,"주택가 골목 안에 있어서 처음엔 조금 헤맸는데 칼국수 먹어 보고 바로 지도에 저장했어요. 진하고 고소한 국물에 면이 잘 어우러지고, 남은 국물에 공깃밥 조금 말아 먹으면 든든해요. 주차는 어려우니 걸어오시는 걸 추천해요.",ko,allergy:wheat=present,31.2
+MA010120220813758969,10,제육볶음,가성비 좋아요. 제육 양이 넉넉하고 기본 반찬도 깔끔하게 나와요. 김치가 특히 맛있어서 리필해서 먹었어요. 점심시간엔 근처 직장인들로 금방 자리가 차니까 12시 전에 가는 게 좋아요.,ko,allergy:pork=present,38.5
+MA010120220813758969,11,옛날불고기1인분,부모님 모시고 저녁 먹으러 왔어요. 옛날불고기는 불판에서 졸여 먹는 스타일이라 육수가 줄어들수록 맛이 진해져요. 아버지가 고기가 연하다고 좋아하셨어요.,ko,allergy:beef=present;allergy:soybean=present,47.9
+MA010120220813758969,11,손만둣국,어머니가 드신 손만둣국은 국물이 담백하고 만두가 커서 반 그릇만 드시고도 배부르다고 하셨어요.,ko,allergy:wheat=present,47.9
+MA010120220800259603,1,제육덮밥,효창공원 산책하고 근처 기사식당이 있길래 들어갔어요. 제육덮밥에 깨가 넉넉하게 뿌려져 나오고 양념이 짜지 않아서 담백하게 먹기 좋아요. 아삭한 양배추를 같이 얹어 비비니까 느끼하지 않고 끝까지 깔끔했어요.,ko,allergy:pork=present,2.6
+MA010120220800259603,2,장어탕,요즘 피곤해서 몸보신하려고 장어탕 먹었어요. 장어를 곱게 갈아 넣은 걸쭉한 남도식 국물인데 비린 맛 없이 구수해요. 산초가루 조금 넣으니 향이 확 살아나요. 한 그릇 먹고 나니 속이 든든하네요.,ko,allergy:soybean=unknown,5.4
+MA010120220800259603,3,낙지덮밥,낙지가 쫄깃하고 탱탱해요. 양념은 매콤달콤한데 자극적이지 않아서 끝까지 맛있게 먹었어요. 같이 나온 찌개 국물 한 숟갈 넣어서 슥슥 비벼 먹으면 더 맛있어요.,ko,,8.2
+MA010120220800259603,3,우렁된장찌개,슴슴하게 끓인 우렁된장찌개라 매콤한 낙지덮밥이랑 같이 먹기 딱이에요. 우렁이가 쫄깃하게 씹히고 국물이 구수해요. 반찬으로 나온 연한 깻잎장아찌도 밥도둑이에요.,ko,allergy:soybean=present;allergy:shellfish=unknown,8.2
+MA010120220800259603,4,제육덮밥,"A classic Korean ""taxi driver restaurant"" — the kind of place drivers pick for fast, filling, honest food. The spicy pork over rice came with plenty of sesame seeds and crunchy cabbage, nicely balanced and not too salty. Side dishes are self-serve, so you can refill as much as you like. Easy parking and a comfortable place to eat alone.",en,allergy:pork=present,11.7
+MA010120220800259603,5,뚝불고기,"뚝불고기는 국물이 맑고 담백한 스타일이에요. 달고 짠 맛을 좋아하시면 조금 싱겁게 느껴질 수 있는데, 저는 오히려 깔끔해서 좋았어요. 사장님이 반찬 더 필요하면 편하게 가져다 드시라고 친절하게 챙겨 주셨어요.",ko,allergy:beef=present;allergy:soybean=present,14.3
+MA010120220800259603,6,우렁된장찌개,很适合一个人来吃饭，独自进店也完全不会觉得尴尬。田螺大酱汤里田螺和豆腐给得很足，汤头醇厚不咸，配上几样小菜就是扎实的一顿。小菜是自助的，想吃多少就夹多少，这点特别好。,zh-CN,allergy:soybean=present,18.9
+MA010120220800259603,7,장어탕,"I'd never had eel soup before and this was a great first try. The eel is ground into a thick, earthy broth with greens, and there's sancho powder on the table for a peppery kick. Not fishy at all, very warming on a cold day. The owner was incredibly kind and showed me how much seasoning to add.",en,allergy:soybean=unknown,23.5
+MA010120220800259603,8,제육덮밥,숙대 쪽 일 보고 차 대기 편한 곳 찾다가 왔어요. 주차하기 편한 게 제일 큰 장점이고 제육덮밥도 맛있어요.,ko,allergy:pork=present,29.1
+MA010120220800259603,8,동태탕,같이 간 친구는 동태탕 먹었는데 국물이 칼칼하고 시원해서 해장으로 딱이래요. 살이 부드럽고 양도 넉넉했어요.,ko,,29.1
+MA010120220800259603,9,알탕,점심시간에 기사님들이 많이 오시는 곳이라 믿고 왔어요. 알탕 시켰는데 알이 톡톡 터지고 곤이도 넉넉해요. 국물이 칼칼해서 속이 확 풀려요. 가격은 근처 식당이랑 비슷한 편이지만 반찬이 푸짐해서 만족해요.,ko,,36.4
+MA010120220800259603,10,장어탕,부모님이랑 같이 갔는데 장어탕을 특히 좋아하셨어요. 진한데 짜지 않아서 어르신들 입맛에 잘 맞아요. 여사장님이 친절하셔서 올 때마다 기분 좋게 먹고 가요.,ko,allergy:soybean=unknown,44.8
